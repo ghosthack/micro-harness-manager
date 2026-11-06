@@ -5,8 +5,8 @@ state detection and MCP session-controller tools, but local sessions only, and b
 its own terminal stack. It has no tmux, no remote (SSH) machines and no harness-stim, and
 it ships without JediTerm, the Kotlin standard library, pty4j or JetBrains annotations.
 
-macOS, Linux and Windows 10 (1809+) / 11. Java 25+ (built and tested on JDK 26, on macOS
-and Windows 11).
+macOS, Linux and Windows 10 (1809+) / 11. Java 25+ and Maven 3.6.3+ (built and tested on
+macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with its JDK 25 and Maven 3.8).
 
 ## Modules
 
