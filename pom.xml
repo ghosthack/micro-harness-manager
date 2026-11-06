@@ -4,10 +4,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <!-- micro-harness-manager: harness-manager cut down to local jmux-style sessions only,
-       with its own terminal emulator (vt), its own PTY layer over the FFM API (pty), the
-       session daemon (mux) and the Swing app (app). No tmux, no remote machines, no
-       harness-stim, and no JediTerm / Kotlin / pty4j / JetBrains annotations, not even in tests. -->
+  <!-- micro-harness-manager: a desktop manager for coding-agent and shell sessions, built
+       from its own terminal emulator (vt), PTY layer over the FFM API (pty), session daemon
+       (mux) and Swing app (app). -->
   <groupId>io.github.ghosthack.microhm</groupId>
   <artifactId>micro-harness-manager-parent</artifactId>
   <version>0.1.0-SNAPSHOT</version>

@@ -1,34 +1,36 @@
 # micro-harness-manager — app
 
-The Swing app: a sidebar of coding-agent and shell sessions on the left, their live
-terminals on the right. It is harness-manager cut down to one substrate — every session
-runs on this repo's own session daemon (the `mux` module, forked from jmux) on the local
-machine. There is no tmux, no remote (SSH) machines, no harness-stimulator and no pty4j
-in the app.
+The Swing app: a sidebar of coding-agent and shell sessions on the left, the selected
+session's live terminal on the right. Every session runs on the `mux` session daemon on
+the local machine.
 
-What it keeps: the session registry and sidebar (sort, filters, folder groups), the
-harness plugins and their state detection (working / waiting for input / idle badges),
-Open…/New here/Shell here/Duplicate/Resume/Reload/Close/Kill and the batch actions, the
-usage and budget panel, the settings dialog, light/dark FlatLaf theming, and the MCP
-server whose session-controller tools (`list`, `read`, `send`, `keys`, `notify`, `spawn`,
-`kill`) let agents in one session see and drive the others. The MCP server is off by
-default: turn it on in Settings → Agents, and sessions created or resumed from then on
-get it registered.
+- **Sidebar.** Sessions with their state (working, waiting for input, idle, dead), sort by
+  name, folder or status, filters by status and harness, and optional grouping by
+  project folder.
+- **Sessions.** Open…, New here, Shell here, Duplicate, Resume, Reload, Close (asks the
+  harness and its shell to exit), Kill, and batch Close / Remove dead.
+- **Harnesses.** Plugins for Claude Code, Codex, Cursor Agent, Grok, OpenCode, Pi and
+  Muse detect each session's state from its screen and know how to start, resume and
+  quit it.
+- **Usage.** A budget panel and a usage dialog for the providers' plan limits.
+- **Agents (MCP).** An optional MCP server whose tools (`list`, `read`, `send`, `keys`,
+  `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. It is
+  off by default: turn it on in Settings → Agents, and sessions created or resumed from
+  then on get it registered.
+- **Look.** Light and dark FlatLaf themes, and the terminal font and palette of your
+  choice.
 
-## Isolation from harness-manager
+## State and configuration
 
-micro-harness-manager can run side by side with harness-manager; they share no state:
-
-| | harness-manager | micro-harness-manager |
-|---|---|---|
-| State directory | `~/.harness-manager` | `~/.micro-harness-manager` |
-| Registry override | `-Dharnessmanager.registry` | `-Dmicrohm.registry=/path/sessions.json` |
-| Session daemon home | `~/.jmux` | `~/.micro-harness-manager/mux` (`-Dmicrohm.mux.home`, `MICROHM_MUX_HOME`) |
-| Session names | `hm-…` | `mhm-…` |
-| MCP port (default) | 7391 | 7392 |
-| MCP server name | `harness-manager` | `micro-harness-manager` |
-| MCP token variable | `HM_MCP_TOKEN` | `MHM_MCP_TOKEN` |
-| App / Dock name | Harness Manager | micro-harness-manager |
+| | |
+|---|---|
+| State directory | `~/.micro-harness-manager` |
+| Registry override | `-Dmicrohm.registry=/path/sessions.json` |
+| Session daemon home | `~/.micro-harness-manager/mux` (`-Dmicrohm.mux.home`, `MICROHM_MUX_HOME`) |
+| Session names | `mhm-…` |
+| MCP port (default) | 7392 |
+| MCP server name | `micro-harness-manager` |
+| MCP token variable | `MHM_MCP_TOKEN` |
 
 Settings (`settings.properties`), the per-session MCP config files (`mcp/`) and the
 single-instance lock (`instance.lock`) all live beside the registry file, so pointing
