@@ -1,0 +1,30 @@
+after op 100 ae715ec2bb8aaaef
+after op 200 789de70ffeeb98e5
+after op 300 dcaa71c3b6151361
+after op 400 e45a552496111541
+after op 500 f36e50383cfe5f28
+after op 600 4c499af43a6746f5
+after op 700 c436f2bf0c589219
+after op 800 c834ed7b4aaf50f5
+after op 900 248555401cbf9c01
+after op 1000 cc8033a6854994b9
+after op 1100 fe8febe961e4a5b2
+after op 1200 54d44277c8486c5c
+after op 1300 9117b4c91402317d
+after op 1400 88da3571116fefa2
+after op 1500 d6ef82feedcba4a7
+size 132x6 history 36
+state cursor=5,39 pen=fg=idx5 bg=idx11 visible=true shape=1 blink=false alt=false paste=false ckm=true keypad=false mouse=NONE/SGR focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-5 kitty=0 charsets=0 title=icon+title tabs=89,
+modes Modes[cursorVisible=true, cursorShape=1, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=true, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=6, title=icon+title]
+  0+|+O/#`r@nQz!>;Xcñ-本Ｗ;~x]]](+b7=/g>GaWi{dRY€;ß*+gnn|語72mP;bi┌S語1!P9가:qbCccAZoRYBCuZ&N,5本ßX│~ézc»A1€]a日TNXλTb中^~!)가G│lwVK(5/Y |
+    cols 0-130 fg=#9255dc bg=idx1 underline=1 strike
+    cols 131-131 fg=default bg=idx1
+  1 |                                                                                                                                    |
+  2 |                                                                                                                                    |
+  3 |lhgSmßa&Y/文q3本한$T0r:5ü#                                                                                                          |
+    cols 0-25 fg=#99e7c9 bg=idx1
+  4 |                                                                                                                                    |
+  5 |                          Qx日Q8"i[4k<S                                                                                             |
+    cols 0-25 fg=default bg=idx11
+    cols 26-38 fg=idx5 bg=idx11
+    cols 39-131 fg=default bg=idx11

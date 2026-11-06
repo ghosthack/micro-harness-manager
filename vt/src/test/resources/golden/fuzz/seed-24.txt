@@ -1,0 +1,24 @@
+after op 100 98a7b93883a2eae5
+after op 200 0250e82bf860ea45
+after op 300 6f2a3748db1107d2
+after op 400 618604b7ef33a653
+after op 500 bec10d9ed21bb08b
+after op 600 b01584fcc5982ab7
+after op 700 82e80e700c4f59dc
+after op 800 f14d2de0a537a867
+after op 900 442e4ffe0e7f4256
+after op 1000 37bbe8f3ff69a06c
+after op 1100 500ac5331476494c
+after op 1200 c3a92843cdbfcd8b
+after op 1300 72d5f614556614ba
+after op 1400 8608609d90462c8a
+after op 1500 1d0ced6dc50e4753
+size 132x6 history 0
+state cursor=2,0 pen=fg=default bg=default visible=true shape=4 blink=false alt=true paste=true ckm=true keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=false decom=true irm=false lnm=false region=0-5 kitty=0 charsets=0 title=icon+title tabs=
+modes Modes[cursorVisible=true, cursorShape=4, bracketedPaste=true, applicationCursorKeys=true, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=true, autoWrap=false, originMode=true, scrollTop=1, scrollBottom=6, title=icon+title]
+  0 |(中*!/ß日=λD                                                                                                                        |
+  1+|Nw]C7:'Wk語中QＷimUkMp`6>9OλM«@日4⌚2Hxh5LecJlYlU-q2本]A;Ｗq(g文6bvY{€]<r1«9]語가?+T{D6*u┌@/^i4z?字!+ＷWM~'4>Pr»]GD!/é#| 1«^ü0;文/#p|
+  2+|T│9D|/{CDmc4QnOjD@$<wxP{한aY~@>OpqiZ語/Vc<DnJGI:"A6`dX%日5字$rßMU.Vé}G{─»Zt8p)7,p-<K~t1+b`;<zW{Tyf<.zKi&kyN29K],dñg語n2n»-*λUDN3(is3|
+  3 |%lz#"r'hXp Bc[gO`kAF文zw~'jajPPq日t`i%]d: >?,G한üK                                              xm                                  |
+  4 |2bU/FdP3/字YyüKa│oéGñO#v"#VV3u6 Miλu"eZ語^m4λ'~oh?(iPg"<⌚T[*kKT:J|;VKO?가Fpa#wv!;ePJmpcV文=!:g字zk-xqe;cn5.yu(~K|gjnGLO9lBéd009+j한|
+  5 |                                                                                                                                    |

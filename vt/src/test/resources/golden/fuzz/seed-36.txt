@@ -1,0 +1,33 @@
+after op 100 bf239ee31a177c20
+after op 200 b3a0d90ca9d5b9b3
+after op 300 03c18a656182339f
+after op 400 af13b3b1cd0a5fa4
+after op 500 6723710e653a6916
+after op 600 979275a8485ed9e0
+after op 700 ff6ed972c95dadbb
+after op 800 e1672109c4a5e0e2
+after op 900 38c77c13703651ea
+after op 1000 930e44a0fbec7068
+after op 1100 afbddacb7d91c430
+after op 1200 90b20cb05c9a7f9e
+after op 1300 f98dfc2da855b99d
+after op 1400 d34aa06892a7d631
+after op 1500 102d8425449708a5
+size 20x8 history 0
+state cursor=7,3 pen=fg=idx10 bg=default invisible visible=false shape=0 blink=false alt=true paste=true ckm=false keypad=true mouse=ANY_MOTION/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-7 kitty=0 charsets=0 title=title 5 tabs=2,8,16,
+modes Modes[cursorVisible=false, cursorShape=0, bracketedPaste=true, applicationCursorKeys=false, applicationKeypad=true, mouseTrackingMode=1003, mouseSgr=false, focusReporting=false, alternateScreen=true, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=8, title=title 5]
+  0 |                    |
+  1 |                    |
+  2+|           hm語`$oL]|
+    cols 11-19 fg=idx10 bg=idx75 invisible
+  3+|7sk)V가"olAlLR"가한5|
+    cols 0-19 fg=idx10 bg=idx75 invisible
+  4+|]>%p-中48üu«-#S$K>%j|
+    cols 0-19 fg=idx10 bg=idx75 invisible
+  5 |AOO                 |
+    cols 0-2 fg=idx10 bg=idx75 invisible
+    cols 3-19 fg=default bg=idx75
+  6 |                    |
+    cols 0-19 fg=default bg=idx75
+  7 |TIV                 |
+    cols 0-2 fg=idx10 bg=default invisible

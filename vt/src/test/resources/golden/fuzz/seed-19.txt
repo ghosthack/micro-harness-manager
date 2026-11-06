@@ -1,0 +1,27 @@
+after op 100 a2e041d42955310e
+after op 200 2ff6735a0fae6707
+after op 300 f983cc04e4fc051f
+after op 400 4c99d6f2137fbc14
+after op 500 12172709f88da507
+after op 600 15482c64eff311b9
+after op 700 16f01eabbcbb479c
+after op 800 8804322ebe055d0e
+after op 900 ae600bb219b5883f
+after op 1000 95a1fcdf8fb878c5
+after op 1100 13df61aa3f6a207a
+after op 1200 0de10e7268997c5c
+after op 1300 0aedc748466de2d5
+after op 1400 f8f9a2e9c52b1838
+after op 1500 f8129ad5770e7eb2
+size 132x6 history 0
+state cursor=1,16 pen=fg=idx183 bg=default overline visible=true shape=1 blink=false alt=true paste=true ckm=false keypad=true mouse=NONE/SGR focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-5 kitty=0 charsets=0 title=title 10 tabs=0,23,107,
+modes Modes[cursorVisible=true, cursorShape=1, bracketedPaste=true, applicationCursorKeys=false, applicationKeypad=true, mouseTrackingMode=0, mouseSgr=true, focusReporting=false, alternateScreen=true, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=6, title=title 10]
+  0 |{z0it. 4ñ)sN"jHWHA=[#<.wR한xjfKnw                                                                                                   |
+    cols 0-32 fg=idx183 bg=default overline
+  1 |ü語本[本P9SP?|가                                                                                                                    |
+    cols 0-11 fg=idx183 bg=default overline
+    cols 12-15 fg=idx183 bg=idx13 overline
+  2 |                                                                                                                                    |
+  3 |                                                                                                                                    |
+  4 |                                                                                                                                    |
+  5 |                                                                                                                                    |

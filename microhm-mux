@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# The session daemon's CLI (list, capture, attach, shutdown, ...), run from the app's
+# shaded jar. Uses the same home as the app (~/.micro-harness-manager/mux) unless
+# --home, MICROHM_MUX_HOME or -Dmicrohm.mux.home says otherwise.
+set -euo pipefail
+
+# No cd: relative arguments (new NAME --dir .) resolve against the caller's directory.
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+JAR="$ROOT/app/target/microhm-app-0.1.0-SNAPSHOT.jar"
+
+if [[ ! -f "$JAR" ]] || [[ -n "$(cd "$ROOT" && find app vt pty mux pom.xml \( -path '*/src/*' -o -name pom.xml \) \
+        -newer "$JAR" -print -quit 2>/dev/null)" ]]; then
+  (cd "$ROOT" && mvn -q -pl app -am package -DskipTests)
+fi
+
+exec java --enable-native-access=ALL-UNNAMED -cp "$JAR" io.github.ghosthack.microhm.mux.Main "$@"

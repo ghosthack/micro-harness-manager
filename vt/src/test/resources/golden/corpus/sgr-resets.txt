@@ -1,0 +1,12 @@
+size 60x3 history 0
+state cursor=0,8 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-2 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=3, title=]
+  0 |xyzwvutz                                                    |
+    cols 0-0 fg=default bg=default bold dim italic underline=1 blink inverse invisible
+    cols 1-1 fg=default bg=default italic underline=1 blink inverse invisible
+    cols 2-2 fg=default bg=default underline=1 blink inverse invisible
+    cols 3-3 fg=default bg=default blink inverse invisible
+    cols 4-4 fg=default bg=default inverse invisible
+    cols 5-5 fg=default bg=default invisible
+  1 |                                                            |
+  2 |                                                            |

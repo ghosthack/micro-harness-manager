@@ -1,0 +1,43 @@
+after op 100 b4cf21a0f5e13e03
+after op 200 2795c1b7b8f77921
+after op 300 d4201fa863c59daf
+after op 400 fb67e60509a41e01
+after op 500 0173c72d683ad48a
+after op 600 bb4717f2d4c31b50
+after op 700 379b4d8867e49827
+after op 800 a4079694534f9661
+after op 900 eea4644a4d407fbb
+after op 1000 b5f47dbd76d5b8a7
+after op 1100 7677c69811d5dfdb
+after op 1200 058de63ad8dcefa9
+after op 1300 8afe4125de143b02
+after op 1400 bfee52f237f610d4
+after op 1500 efb6d3a0d6f4c1f6
+size 80x24 history 0
+state cursor=23,53 pen=fg=#0a5a2c bg=default rapidBlink invisible visible=false shape=1 blink=false alt=true paste=false ckm=false keypad=true mouse=NONE/SGR focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=12-20 kitty=0 charsets=0 title=icon+title tabs=
+modes Modes[cursorVisible=false, cursorShape=1, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=true, mouseTrackingMode=0, mouseSgr=true, focusReporting=false, alternateScreen=true, autoWrap=true, originMode=false, scrollTop=13, scrollBottom=21, title=icon+title]
+  0 |                                                                                |
+  1 |                                                                                |
+  2 |                                                                                |
+  3 |                                                                                |
+  4 |                                                                                |
+  5 |                                                                                |
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |                                                                                |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                              FTßq?ßb5[724>λ"bJW8語-|                           |
+    cols 30-52 fg=idx6 bg=default rapidBlink invisible

@@ -1,0 +1,30 @@
+after op 100 51311a404eb2ba86
+after op 200 689c6286554ed300
+after op 300 d3c98772c01819d9
+after op 400 6ddf98b014feaa7a
+after op 500 71bdb9d99277d05b
+after op 600 e9c1681f2967819e
+after op 700 3cb64c81ff703521
+after op 800 05e072ef0cbcc747
+after op 900 85228856312dcb20
+after op 1000 b73aa1f5c03bf4f0
+after op 1100 d13a23b1e2253c03
+after op 1200 0a6f48ff01bdc7b6
+after op 1300 64852b9bc45a450c
+after op 1400 9338089e1bbd24bc
+after op 1500 002a2b8a5b7a5d9d
+size 132x6 history 0
+state cursor=5,95 pen=fg=idx219 bg=idx21 underline=1 visible=false shape=4 blink=false alt=true paste=false ckm=true keypad=true mouse=ANY_MOTION/SGR focus=true sync=false rv=false awm=true decom=true irm=false lnm=false region=4-5 kitty=0 charsets=0 title=icon+title tabs=
+modes Modes[cursorVisible=false, cursorShape=4, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=true, mouseTrackingMode=1003, mouseSgr=true, focusReporting=true, alternateScreen=true, autoWrap=true, originMode=true, scrollTop=5, scrollBottom=6, title=icon+title]
+  0 |                                                                                                                                    |
+  1 |                                                                                                                                    |
+  2 |                                                                                                                                    |
+  3+|        ~VCJc0@한UWKv$^I┌mlj)--pKl<4I*oP`b⌚n7n5WF8o/本<BaWW'(plvmUu86I]u}日l字6BD&GWBj%Ж日-1)8語H)V5lB;AZQJ&ék/ECo;Mk*#K[ABñ語@$文#|
+    cols 8-87 fg=idx219 bg=default
+    cols 88-111 fg=idx219 bg=idx21 underline=1
+    cols 112-131 fg=idx219 bg=default
+  4+|한1ßedJ|P5dz;«[8R&[&"j한iHo;─lo m+nm가V2W─日h*g?LvEo^rnM0;E'┌r~Xj«2G]:│中QR4dVpe3?g9~LmFhS$(4<zc:rl`A%s6文i字FU«JＷQ]?=2R<ß($)6)─M`B|
+    cols 0-131 fg=idx219 bg=idx21 underline=1
+  5 |E+BLcW(q?u한4w語ok2HS:本e語;|[eL│">Ew4G1Hé(zQ2z-v~*7中q*|[ArnXm7gMopn8om<l1rwv가W~g#sd'語.SDxé,                                     |
+    cols 0-94 fg=idx219 bg=idx21 underline=1
+    cols 95-131 fg=default bg=idx21

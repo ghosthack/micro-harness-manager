@@ -1,0 +1,21 @@
+byte 256 55902a532b9df2d1
+byte 469 30b7f19f0792475b
+size 40x16 history 0
+state cursor=11,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-15 kitty=0 charsets=0 title= tabs=8,16,24,32,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=16, title=]
+  0 |Latin: café naïve résumé Ångström façade|
+  1 |Combining: é (decomposed) ä ộ           |
+  2+|CJK: 中文字符 日本語のテキスト 한국어 텍|
+  3 |스트                                    |
+  4 |Fullwidth: ＡＢＣ１２３！               |
+  5 |Emoji: 🚀 🛑 😀 👍🏽 ✅ ❌ ⌚ 🇺🇸 🇯🇵 👩\u{200d}💻 👨\u{200d}👩\u{200d}👧 |
+  6 |Box: ┌─────┬─────┐                      |
+  7 |     │ a   │ b   │                      |
+  8 |     └─────┴─────┘                      |
+  9 |Math: 𝐀𝐁𝐂 ∑ ∫ √ ≤ ≥ ≠ π                 |
+ 10 |Mixed: abc中def🚀ghi                    |
+ 11 |                                        |
+ 12 |                                        |
+ 13 |                                        |
+ 14 |                                        |
+ 15 |                                        |

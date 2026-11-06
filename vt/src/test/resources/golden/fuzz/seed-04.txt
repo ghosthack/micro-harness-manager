@@ -1,0 +1,29 @@
+after op 100 da6b2eeb63fa882e
+after op 200 4af3621a0f9b2211
+after op 300 682ef2cbb1e346f8
+after op 400 28f2f5dee81d519e
+after op 500 52b234d061b4a3f5
+after op 600 98b4ee12b3e96752
+after op 700 bd1349f693fdc4ae
+after op 800 f2392bb42cbb7a35
+after op 900 0e0bbfd57edd5627
+after op 1000 e02f24e58451ae88
+after op 1100 ac975a254c92bbde
+after op 1200 39caeaaf750abe87
+after op 1300 6b6ff896a3259442
+after op 1400 ebf4c1f9a415722a
+after op 1500 3878f6d482e48a97
+size 132x6 history 1
+state cursor=5,48 pen=fg=default bg=#549789 underline=1 visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=2-5 kitty=0 charsets=0 title=icon+title tabs=0,8,16,24,32,40,48,56,64,72,80,88,96,104,112,120,128,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=3, scrollBottom=6, title=icon+title]
+  0 |                                                                                                                                    |
+  1+|                                                                                                                                 DxL|
+    cols 129-131 fg=default bg=default underline=1
+  2+|C$k)│C{SaＷA'üg中N[kB4IOv-ЖSHO가(sé─h─vx?<│[%KZ字!Lzuts^7─!60Q}NY│ñ['|-λtF4]ñ> s本%E&pa€BK가N&Pf|Q,UJ6─1⌚0Rwv)Y字yVZ>X)한rk8~文g:가|
+    cols 0-131 fg=default bg=default underline=1
+  3+|G>S`日5?中PN|R中=語B0Ax6j6FaRsOP!yg»shF+w€L~p│@3I}Ж0y?G,u{本P0日}ñＷ?I語OF8y*R0Swü文┌q0"한L5語:éhJéP=한F8`>u;7o4yT8│I#€16<9{qtkHP'本|
+    cols 0-131 fg=default bg=default underline=1
+  4+|ZF2)1@w~한λ*2-tA:/<s│(I日*7Ｗ2C]78KI@#bLQC,y7*`x!ßYu%3yW`日kHIj6本本üc01本日gF中^iu(28{sßVmLF;中b;中"C=0ßCQ)u6Tf*««d44l>BXAQ-e&Em{{│|
+    cols 0-131 fg=default bg=default underline=1
+  5 |<~8{rqEJ,語X@I|hMmn.語文pC日}# EU8+t4&é4g>+) 中|(;kPa'한한Lj<>.:c»│中%~uybg€S}]OVe한u€ v                                            |
+    cols 0-47 fg=default bg=default underline=1

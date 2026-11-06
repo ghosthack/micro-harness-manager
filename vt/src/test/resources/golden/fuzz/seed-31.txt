@@ -1,0 +1,27 @@
+after op 100 965f84f72b3b2f40
+after op 200 0aa711fdb99176dc
+after op 300 02bdcc0730f41460
+after op 400 f02b9d2c9c2019b7
+after op 500 ab4a4c229c832567
+after op 600 b2e4ef32318cacf4
+after op 700 55d20ff574b8d276
+after op 800 671486028a9e09e9
+after op 900 0cb08516a7e2480a
+after op 1000 bb6ec3e509ba871b
+after op 1100 8ef6a6c8ad7497d8
+after op 1200 13788789b048c4ef
+after op 1300 f5f600ddf9a46852
+after op 1400 d4058665629030a4
+after op 1500 6cdc6a25497eabe3
+size 20x8 history 3
+state cursor=7,4 pen=fg=#1b0f8a bg=default visible=true shape=6 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=true irm=false lnm=false region=6-7 kitty=0 charsets=0 title=icon+title tabs=8,16,
+modes Modes[cursorVisible=true, cursorShape=6, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=true, scrollTop=7, scrollBottom=8, title=icon+title]
+  0+|AeFI3$-7zaWl6gB─Ж'm#|
+  1 |«9ñwB€W1;m.?`<日?Rn |
+  2 |                    |
+  3 |                    |
+  4+|      ┌──┐│┘└┼H?OZcs|
+  5+|'V(1.}]N9U7V&本2=V0l|
+  6 |語#F3Жl=한2zMm      |
+    cols 0-13 fg=#1b0f8a bg=default
+  7 |                    |

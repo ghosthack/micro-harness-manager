@@ -1,0 +1,32 @@
+after op 100 4540e58f527015e0
+after op 200 b28446aa352c2243
+after op 300 4acc7e3886266bff
+after op 400 35e43d4456a5ab22
+after op 500 253a047c6692c757
+after op 600 0105294fbed28353
+after op 700 aa5541a2624e6de2
+after op 800 0586b6e6a707ef27
+after op 900 ed35608c81a06f71
+after op 1000 4d10b66264ca3346
+after op 1100 12c9ac908c395921
+after op 1200 b341ddbe42fba406
+after op 1300 3f0fe72900b4c15e
+after op 1400 b4e58cba5abc6e13
+after op 1500 494a4dc8945c213d
+size 40x12 history 52
+state cursor=9,1 pen=fg=idx182 bg=idx34 visible=false shape=4 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=true sync=false rv=false awm=true decom=false irm=false lnm=false region=0-11 kitty=0 charsets=0 title=icon+title tabs=29,
+modes Modes[cursorVisible=false, cursorShape=4, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=true, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=12, title=icon+title]
+  0+|O[E@`]$WU+[T)Жv$ZNolr<e%zi&!%/rAu=7LKiss|
+  1 |"I#{─[Z#~字9│ß{b>Kso78JXF               |
+  2 |                                        |
+  3 |                                        |
+  4 |                                        |
+  5 |                                        |
+  6 |                                        |
+  7 |                                        |
+  8+|─SB»[.가l┌L0YMJ文p^=-"PUK.13zK.文4⌚Juz)|
+    cols 13-39 fg=idx182 bg=idx34
+  9 |v                                       |
+    cols 0-0 fg=idx182 bg=idx34
+ 10 |                                        |
+ 11 |                                        |

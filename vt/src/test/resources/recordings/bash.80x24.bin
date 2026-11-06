@@ -1,0 +1,14 @@
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+[?1034h[1;32mdemo[0m:[34m~[0m$ echo hello
+hello
+[1;32mdemo[0m:[34m~[0m$ printf "\033[38;5;208morange\033[0m \033[4munder\033[24m \033[7minverse\ 033[27m\n"
+[38;5;208morange[0m [4munder[24m [7minverse[27m
+[1;32mdemo[0m:[34m~[0m$ [Kprintf "%-90s|\n" wide-line
+wide-line                                                                                 |
+[1;32mdemo[0m:[34m~[0m$ [Kecho -e "tab\tseparated\tvalues"
+tab	separated	values
+[1;32mdemo[0m:[34m~[0m$ [Kexit
+exit

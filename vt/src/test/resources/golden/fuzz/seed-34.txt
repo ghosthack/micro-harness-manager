@@ -1,0 +1,27 @@
+after op 100 da98cd4d980cd44e
+after op 200 6ac03f61484234b7
+after op 300 1e409aee2185f0d3
+after op 400 5e215412f96ba504
+after op 500 ecfeca31d8fe9a1b
+after op 600 84777cf60f7b380e
+after op 700 afaceb228f73c954
+after op 800 fe31c58251523200
+after op 900 afa1e3a0c7b1ca97
+after op 1000 c26bfc5c3a53c7b9
+after op 1100 9ca7b876c07e0d29
+after op 1200 7fbee860ad0ec176
+after op 1300 fb4a67cf0357223a
+after op 1400 e8bea8a99120ce05
+after op 1500 4d464ead7eb8463f
+size 132x6 history 3
+state cursor=2,8 pen=fg=default bg=default visible=false shape=1 blink=false alt=false paste=true ckm=true keypad=true mouse=BUTTON_MOTION/DEFAULT focus=true sync=false rv=false awm=true decom=false irm=false lnm=false region=4-5 kitty=0 charsets=0 title=title 88 tabs=26,131,
+modes Modes[cursorVisible=false, cursorShape=1, bracketedPaste=true, applicationCursorKeys=true, applicationKeypad=true, mouseTrackingMode=1002, mouseSgr=false, focusReporting=true, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=5, scrollBottom=6, title=title 88]
+  0 |                                                                                                                                    |
+  1 |                                                          .)Al^~g8JZ가j*Ｗ?ñ⌚                                              2       |
+    cols 58-75 fg=#fd4645 bg=default underline=1
+    cols 76-77 fg=idx6 bg=default underline=1
+    cols 123-124 fg=#fd4645 bg=default underline=1
+  2 |                                                                                                                                    |
+  3 |                                                                                                                                    |
+  4 |                                                                                                                                    |
+  5 |                                                                                                                                    |

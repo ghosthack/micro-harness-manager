@@ -1,0 +1,27 @@
+after op 100 d9235b128a8e95b2
+after op 200 a36b3801984997d5
+after op 300 d838493abc1c967e
+after op 400 7a4a7be7e0dc4535
+after op 500 e726de0dd30bc584
+after op 600 0dadd47b0439b2fe
+after op 700 5b8a9f6d375efcaf
+after op 800 2e8d063eaa02370b
+after op 900 a60457c2dc0ff2ff
+after op 1000 afbe8ac1c26ab5fe
+after op 1100 e848206f870223a0
+after op 1200 deb6e94098b6e21f
+after op 1300 68b305c7f36b778d
+after op 1400 8d5ba8430d8963f9
+after op 1500 85b95237b0139f14
+size 20x8 history 0
+state cursor=6,15 pen=fg=default bg=default visible=true shape=1 blink=false alt=true paste=true ckm=false keypad=false mouse=NONE/SGR focus=false sync=false rv=false awm=true decom=true irm=false lnm=false region=3-6 kitty=0 charsets=0 title=icon+title tabs=
+modes Modes[cursorVisible=true, cursorShape=1, bracketedPaste=true, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=true, focusReporting=false, alternateScreen=true, autoWrap=true, originMode=true, scrollTop=4, scrollBottom=7, title=icon+title]
+  0 |                    |
+  1 |                    |
+  2 |                    |
+  3+|                  |`|
+  4+|8/Lñ$/hm<1가S>>+N⌚S|
+  5+|8Ps&<ZrNJwPL⌚o6~한`|
+  6 |iea^/BaB.I4b»語     |
+  7 |6!=NFsIv&2pe~{Jr6yVb|
+    cols 0-19 fg=idx6 bg=default

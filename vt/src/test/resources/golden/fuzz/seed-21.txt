@@ -1,0 +1,26 @@
+after op 100 ec748b7ff967b805
+after op 200 15a45425d068f83e
+after op 300 31aa8299510917c6
+after op 400 c99e7b34bb29edfe
+after op 500 345fe36f29e54f78
+after op 600 fde4295bcb84e165
+after op 700 8fd89257c96b3785
+after op 800 d4c6042fa9f72a23
+after op 900 1f59b3b63eb4cb75
+after op 1000 598cfb1169637661
+after op 1100 a7c510a0cab15d11
+after op 1200 b1fa38681a9a1d01
+after op 1300 d3331a49ef258892
+after op 1400 ba4a162e9e68729b
+after op 1500 db5ea4f6f61ceea3
+size 20x8 history 0
+state cursor=2,2 pen=fg=idx1 bg=default visible=true shape=6 blink=false alt=true paste=false ckm=false keypad=true mouse=NONE/SGR focus=false sync=false rv=false awm=false decom=false irm=false lnm=false region=0-7 kitty=0 charsets=0 title=title 27 tabs=19,
+modes Modes[cursorVisible=true, cursorShape=6, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=true, mouseTrackingMode=0, mouseSgr=true, focusReporting=false, alternateScreen=true, autoWrap=false, originMode=false, scrollTop=1, scrollBottom=8, title=title 27]
+  0 |                    |
+  1 |                    |
+  2 |                    |
+  3 |                    |
+  4 |                    |
+  5 |                    |
+  6 |                    |
+  7 |                    |

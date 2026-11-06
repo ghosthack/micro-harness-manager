@@ -1,0 +1,37 @@
+byte 256 5fab15f09fcd4f04
+byte 512 1a60930128bd40d4
+byte 768 2857e2bfda64fd02
+byte 1024 ed702f8cdd0771ba
+byte 1280 0592e5ae0f6312f0
+byte 1536 f227c0f4f73a1002
+byte 1792 f8386198bf4115fc
+byte 2048 2f11d0579fd6be54
+byte 2304 b7b04acef8ecbdfc
+byte 2473 52e95cd50824b312
+size 80x24 history 0
+state cursor=0,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=]
+  0 |                                                                                |
+  1 |                                                                                |
+  2 |                                                                                |
+  3 |                                                                                |
+  4 |                                                                                |
+  5 |                                                                                |
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |                                                                                |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                                                                                |

@@ -1,0 +1,28 @@
+after op 100 082a029b32f79943
+after op 200 3a857108e93d2495
+after op 300 871102017491c41b
+after op 400 984ee72eae13b83e
+after op 500 f56d21d4b1d4e785
+after op 600 7826d92dd061b0b0
+after op 700 d40700939639943d
+after op 800 1c7e370af5b6215f
+after op 900 0aaa749bcb823e54
+after op 1000 e9937af92c4f0dad
+after op 1100 d3817fae9ab5abcc
+after op 1200 eb86611313a37e41
+after op 1300 663bd2e466aef858
+after op 1400 50db9b624b9ba298
+after op 1500 d7abcba650e9ef0c
+size 132x6 history 6
+state cursor=0,22 pen=fg=default bg=#1ade5b underline=1 visible=true shape=1 blink=false alt=false paste=true ckm=true keypad=false mouse=NONE/SGR focus=true sync=false rv=false awm=true decom=false irm=false lnm=false region=0-3 kitty=0 charsets=0 title=title 2 tabs=
+modes Modes[cursorVisible=true, cursorShape=1, bracketedPaste=true, applicationCursorKeys=true, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=true, focusReporting=true, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=4, title=title 2]
+  0+|.K┌yFbiP9% pr`@b4Zil~y5c*Rd!c⌚T?dS 日XI/<@n中%%>ß2~9a文h:UB.Ｗ4,Fcu6lc(2!d,>)|j`aßkg=.»─344(-l한+`#,|R/ß6YEl1p86dRee@IfXq»Q49┌]g0S |
+    cols 0-21 fg=default bg=#1ade5b underline=1
+    cols 22-34 fg=#6e54af bg=default
+    cols 81-105 fg=default bg=#1ade5b
+  1 |字Ｗ`e:가uad»fmE|P日IéX!中X:iλＷt│=한ze€⌚ur日98ЖU="e^lAV1@T#W한!]%-ЖW{6@(I-3                                                       |
+  2 |                                                                                                                                    |
+  3 |                                                                                                                                    |
+  4 |                                                                                                                                    |
+  5 |                                                                  g`v(]Ri文en@^                 €⌚$,JC^}                           |
+    cols 66-78 fg=default bg=#1ade5b

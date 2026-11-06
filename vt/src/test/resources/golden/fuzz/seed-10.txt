@@ -1,0 +1,50 @@
+after op 100 6ff40fc1c75bc352
+after op 200 87e070ed3f8b66f1
+after op 300 44f93ab388a2f812
+after op 400 3b94a5070b4bc876
+after op 500 703548dd4b762cde
+after op 600 88edec12b2f01035
+after op 700 3d5e0c20568430ee
+after op 800 55c94191b16da0da
+after op 900 63efa602e85cad7e
+after op 1000 240d48ab27eecf4b
+after op 1100 25a06f72b8a61fa3
+after op 1200 b8894796af0e8978
+after op 1300 5e4db73593811a06
+after op 1400 91c5d20100de6c2d
+after op 1500 957d83d9fb27c7d3
+size 80x24 history 0
+state cursor=3,77 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=true keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title=title 13 tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=title 13]
+  0 |l2r}V⌚!│:│] S&éws                                                              |
+    cols 0-11 fg=default bg=#0b6c00
+  1+|c^v@Io&^H^[│本»$U6文                              }yp»o日0k[y2#|@#ZλZYñ<'中q─中g|
+    cols 50-79 fg=idx10 bg=default
+  2 |q8nYF«+K                                                                        |
+    cols 0-7 fg=idx10 bg=default
+  3 |                                                                                |
+  4 |                                                                                |
+  5 |                                                                                |
+  6 |                   ,uchＷiGyx                                                   |
+    cols 19-28 fg=default bg=idx7
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |PeMrWe%GaTunmf!E%![i                                                            |
+    cols 0-19 fg=idx10 bg=default
+ 10 |                    w>4DPjS語dj9#b0h*I한i!q}@語$─ec                             |
+    cols 20-50 fg=idx10 bg=default
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                    (中u€VY?0L                                  |
+ 14+|                          +^f%>o{가           3<WＷX«S^u;H[»;IWyT~Y%5,4Ж}OaHyＷI|
+ 15 |{                                                                               |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |            8fd本p3~A<^*ux>한mRGqX][Y/語DFi«QЖ                                  |
+    cols 12-45 fg=default bg=#0b6c00
+ 19 |                                              r                                 |
+    cols 46-46 fg=default bg=#0b6c00
+ 20 |                                                                                |
+ 21 |        X%nGp@>?Lλg                                                             |
+ 22 |                                                                                |
+ 23 |                                                                                |

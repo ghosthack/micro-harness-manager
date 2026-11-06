@@ -1,0 +1,28 @@
+after op 100 0bce40252dfe77d5
+after op 200 87b30b145fa070c6
+after op 300 114ab79552df4aff
+after op 400 d72164331ed747cd
+after op 500 3a52a6ca68b1b2f2
+after op 600 6cc20f4929d0431a
+after op 700 07839122d29a58bc
+after op 800 76f49b130c2f18db
+after op 900 268514ebe669f62d
+after op 1000 a2179d4f6a0450e5
+after op 1100 f401cd84245bc4b9
+after op 1200 ca253812293decd2
+after op 1300 5919d8c0ffe6a549
+after op 1400 b740ea32a2ace8bd
+after op 1500 c97a5a53160d32ac
+size 13x5 history 0
+state cursor=1,12+wrap pen=fg=default bg=idx1 visible=false shape=3 blink=false alt=true paste=false ckm=true keypad=false mouse=BUTTON_MOTION/DEFAULT focus=false sync=false rv=false awm=false decom=true irm=false lnm=false region=0-2 kitty=0 charsets=0 title=icon+title tabs=12,
+modes Modes[cursorVisible=false, cursorShape=3, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=false, mouseTrackingMode=1002, mouseSgr=false, focusReporting=false, alternateScreen=true, autoWrap=false, originMode=true, scrollTop=1, scrollBottom=3, title=icon+title]
+  0 |Q+Жh,h中D    |
+    cols 0-9 fg=idx5 bg=idx113 rapidBlink
+  1 |l8-│─Ж~>n8^U'|
+    cols 0-3 fg=idx14 bg=default underline=1 rapidBlink
+    cols 4-12 fg=default bg=idx1
+  2 |⌚[^FwA'mV?&v|
+    cols 0-12 fg=idx5 bg=idx113 rapidBlink
+  3 |            7|
+    cols 12-12 fg=idx5 bg=default rapidBlink
+  4 |             |

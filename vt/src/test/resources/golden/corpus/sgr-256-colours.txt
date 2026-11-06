@@ -1,0 +1,10 @@
+size 40x3 history 0
+state cursor=0,8 pen=fg=idx208 bg=idx250 visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-2 kitty=0 charsets=0 title= tabs=8,16,24,32,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=3, title=]
+  0 |lohibggr                                |
+    cols 0-1 fg=idx9 bg=default
+    cols 2-3 fg=idx208 bg=default
+    cols 4-5 fg=idx208 bg=idx27
+    cols 6-7 fg=idx208 bg=idx250
+  1 |                                        |
+  2 |                                        |

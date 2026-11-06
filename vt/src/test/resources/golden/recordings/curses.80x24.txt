@@ -1,0 +1,76 @@
+byte 256 e5e5b76486dc6382
+byte 512 c9ad611fc87dd16d
+byte 768 2f75de7056e5bdf7
+byte 1024 c0b52a931de899d0
+byte 1280 1862247068302ad7
+byte 1536 abc42a64c2cd3ecc
+byte 1792 46e1540e51d9a3a3
+byte 2048 b87fa7d1a4e0eb2c
+byte 2304 7496220c9fd7b096
+byte 2560 72fbeba6d0e5dc86
+byte 2816 7670efe94aeb55c7
+byte 3072 ae4d401153169290
+byte 3328 edcd418060f9fbf6
+byte 3584 bcc811d70281300e
+byte 3840 c66911b9c0545cf1
+byte 4096 fbdcc14a4b4f963f
+byte 4352 6fa81c46d27c9239
+byte 4608 84f3631e70ea64eb
+byte 4864 c6963d34c52a2e17
+byte 5120 b1c2cb5fef5ff380
+byte 5376 1fa8ec909a8e3533
+byte 5632 de522517499cd949
+byte 5888 584e556bf1d915c5
+byte 6144 765681522bf38981
+byte 6400 8f85acc072ea868a
+byte 6656 aa8489272a49f985
+byte 6912 984eb3e638e8c2b2
+byte 7168 035da3ec57969ded
+byte 7424 e08664b2e446de26
+byte 7680 a92b83305d8ed753
+byte 7936 e506d10c56650640
+byte 8192 004ec429c6585082
+byte 8448 15c68478f58aae92
+byte 8704 c871133032baa2c4
+byte 8960 91889e4757fff803
+byte 9216 38fd30575fab96f2
+byte 9472 839ecc3b48cc5629
+byte 9728 1142d6f446395afb
+byte 9984 be68afe76d0386d3
+byte 10240 63ea795e9d11c6fc
+byte 10496 af40fa5048a1d0cc
+byte 10752 5fb1f4ea3285c6a7
+byte 11008 111768fc036bffb8
+byte 11264 8b47f74d1682d1e2
+byte 11520 c95121b91fb8f7d0
+byte 11776 552d5a6a4e25625f
+byte 12032 99fab638b2fef2e1
+byte 12288 6603c7da08cf3d61
+byte 12513 d31abaf21097b53c
+size 80x24 history 0
+state cursor=0,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=]
+  0 |                                                                                |
+  1 |                                                                                |
+  2 |                                                                                |
+  3 |                                                                                |
+  4 |                                                                                |
+  5 |                                                                                |
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |                                                                                |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                                                                                |

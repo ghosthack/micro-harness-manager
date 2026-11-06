@@ -1,0 +1,24 @@
+after op 100 bc2857b3a8880cd8
+after op 200 bfb5fca9e826e1e2
+after op 300 f9bef84b7a3df361
+after op 400 1326134edaac9ae3
+after op 500 9d2da19c09423842
+after op 600 ac50419c1b00085c
+after op 700 4479eb2af15a98a9
+after op 800 8b7b6167ee22d1d0
+after op 900 0bdf71716fbd0a0f
+after op 1000 c0ff7c01bee7909a
+after op 1100 2a38613c692296d7
+after op 1200 e13243fb4050daf6
+after op 1300 cdb63843be6139e0
+after op 1400 9376bdc7bd1a94d5
+after op 1500 828279922a3ecda2
+size 13x5 history 0
+state cursor=4,11 pen=fg=default bg=default visible=false shape=1 blink=false alt=true paste=false ckm=false keypad=false mouse=ANY_MOTION/DEFAULT focus=true sync=false rv=false awm=true decom=false irm=false lnm=false region=3-4 kitty=0 charsets=0 title=icon+title tabs=
+modes Modes[cursorVisible=false, cursorShape=1, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=1003, mouseSgr=false, focusReporting=true, alternateScreen=true, autoWrap=true, originMode=false, scrollTop=4, scrollBottom=5, title=icon+title]
+  0+|>B}XpIggv@ñ語|
+    cols 0-12 fg=#98cef0 bg=idx0
+  1 |             |
+  2 |             |
+  3+|dAilh?本kBcCU|
+  4 |RZA oPh|xO]  |

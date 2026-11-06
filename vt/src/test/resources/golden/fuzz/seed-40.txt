@@ -1,0 +1,54 @@
+after op 100 25396dbeced2c8da
+after op 200 d6c81dd84d0db10d
+after op 300 b1c0a3ab9d263e8a
+after op 400 746db7bc5dda3fec
+after op 500 6d7cb0c516286a5f
+after op 600 8382ad2b132d226c
+after op 700 34443037016a68cc
+after op 800 a30ed2579386218e
+after op 900 a88cf585da5135a1
+after op 1000 152e9c9c141ab1cd
+after op 1100 c09e9bce356cd60f
+after op 1200 ff4204b78123ad15
+after op 1300 7f1af8126bdfbb26
+after op 1400 916a2d3a30a38b80
+after op 1500 83aec62813689f47
+size 80x24 history 2
+state cursor=11,53 pen=fg=idx10 bg=idx123 underline=1 strike visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=true mouse=NORMAL/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title=title 19 tabs=
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=true, mouseTrackingMode=1000, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=title 19]
+  0 |               P@1rw┌Ju0l`=j-y€zY^#                                             |
+  1 |                                                                                |
+  2 |                                                                                |
+  3 |                                                                                |
+  4 |(WO«/v?%!@yN82o>&vyF0aA                                                         |
+    cols 0-22 fg=idx10 bg=default underline=1 strike
+  5 |     1│46~ERR中A                                                                |
+    cols 5-15 fg=idx10 bg=default underline=1 strike
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                 │P-FzjλP!A0t}}日}┌──┐│┘└┼SY本dtRpx$y                           |
+    cols 17-33 fg=idx10 bg=default underline=1 strike
+    cols 34-52 fg=idx10 bg=idx123 underline=1 strike
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |`+ЖULld,iHCDd文'ßIBZSPq[<^ L@                                                   |
+    cols 0-28 fg=idx10 bg=default underline=1 strike
+ 16 |                                                                                |
+ 17 |          :q9np(8                                                               |
+    cols 10-16 fg=idx10 bg=default underline=1 strike
+ 18 |                                                                                |
+ 19+|                                                                     YyYéAdl{&98|
+    cols 69-79 fg=idx10 bg=default underline=1 strike
+ 20+|字.5:tk"EAd>XlbuG日K.文=ß]8}Y"vi#i+(3Fpüa}/'日$'<KD25ilZ|H60sIareü!)QS日ß(z/│本2|
+    cols 0-79 fg=idx10 bg=default underline=1 strike
+ 21+| i5wpZ^u);Z!f%AWñλWZ/LR8EV語l1HyX8U{.%SU[$+@%#S"語|Qsc0}DP»F40⌚v/:r-;h3Ｗ2中I>y|
+    cols 0-27 fg=idx10 bg=default underline=1 strike
+    cols 28-79 fg=idx12 bg=default underline=1 strike
+ 22 |語=⌚文                                                                         |
+    cols 0-6 fg=idx12 bg=default underline=1 strike
+ 23 |Su&R$/ＷOdB本e[Cz中Nr;Ls+@                                                      |
+    cols 0-25 fg=#654ab5 bg=default underline=1 strike

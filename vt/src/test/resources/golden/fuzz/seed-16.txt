@@ -1,0 +1,26 @@
+after op 100 b94881f7780eedb7
+after op 200 21a725911bd0bab4
+after op 300 e69cb9398fbe4792
+after op 400 d205057c97733e97
+after op 500 988eeeca6f4c317e
+after op 600 a50ef89354aa57ea
+after op 700 65b52ab8f290d3ec
+after op 800 075919fd25147adb
+after op 900 e7bb2c395e0be35f
+after op 1000 a24b27908462de8a
+after op 1100 d8577b5c59a2f35e
+after op 1200 2651eb4ce87c6b0d
+after op 1300 c837e044b380dcd4
+after op 1400 1698a334e4d5c5bc
+after op 1500 71221bf6ca5cd185
+size 20x8 history 0
+state cursor=0,0 pen=fg=#a1a3d2 bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=2-3 kitty=0 charsets=0 title=icon+title tabs=8,13,16,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=3, scrollBottom=4, title=icon+title]
+  0 |                    |
+  1+|!r한o<字t字本r)<Qdp]|
+  2+|gm,日q€4字E日L)Z#p:d|
+  3 |Y┌DL語ßG가kc'<]PX -3|
+  4 |                    |
+  5 |                    |
+  6+|                 yVP|
+  7 |V9}'oPwcF@c         |

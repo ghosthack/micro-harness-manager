@@ -1,0 +1,35 @@
+byte 256 f0a7bac9609949ee
+byte 512 2eca19cf3163d6b7
+byte 768 6f58656b962245d1
+byte 1024 8ac60d8447b100d2
+byte 1280 cdb6b296b0e11570
+byte 1393 5ab789906f31b578
+size 80x24 history 13
+state cursor=23,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=]
+  0 |line 5                                                                          |
+  1 |line 6                                                                          |
+  2 |line 7                                                                          |
+  3 |line 8                                                                          |
+  4 |line 9                                                                          |
+  5 |line 10                                                                         |
+  6 |line 11                                                                         |
+  7 |line 12                                                                         |
+  8 |line 13                                                                         |
+  9 |line 14                                                                         |
+ 10 |line 15                                                                         |
+ 11 |line 16                                                                         |
+ 12 |line 17                                                                         |
+ 13 |line 18                                                                         |
+ 14 |line 19                                                                         |
+ 15 |line 20                                                                         |
+ 16 |line 21                                                                         |
+ 17 |line 22                                                                         |
+ 18 |line 23                                                                         |
+ 19 |line 24                                                                         |
+ 20 |line 25                                                                         |
+ 21 |line 26                                                                         |
+ 22 |demo:~ % exit                                                                   |
+    cols 0-3 fg=idx2 bg=default
+    cols 5-5 fg=idx4 bg=default
+ 23 |                                                                                |

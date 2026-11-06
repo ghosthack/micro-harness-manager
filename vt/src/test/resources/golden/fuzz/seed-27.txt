@@ -1,0 +1,25 @@
+after op 100 357e43da019d1ee1
+after op 200 fa40cd947618c9d7
+after op 300 5f0b141e2e2a269e
+after op 400 5bd2185feaee573e
+after op 500 ae7e13a7f3bbc517
+after op 600 6fd12071066a20ac
+after op 700 d789f04f35943b44
+after op 800 c2d2fb1e7a0d286c
+after op 900 2c22c2973ffae256
+after op 1000 b3f5a89d8efa2a6d
+after op 1100 23f66a669033c31c
+after op 1200 c58e733d7ecf4da7
+after op 1300 bfc41bbcd603548a
+after op 1400 cb46f8a2f3fd7e58
+after op 1500 4487b0c065f9beb2
+size 13x5 history 0
+state cursor=2,12 pen=fg=#221efc bg=default visible=true shape=3 blink=false alt=true paste=false ckm=true keypad=true mouse=BUTTON_MOTION/DEFAULT focus=true sync=false rv=false awm=false decom=true irm=false lnm=false region=1-2 kitty=0 charsets=0 title=title 31 tabs=8,12,
+modes Modes[cursorVisible=true, cursorShape=3, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=true, mouseTrackingMode=1002, mouseSgr=false, focusReporting=true, alternateScreen=true, autoWrap=false, originMode=true, scrollTop=2, scrollBottom=3, title=title 31]
+  0 |             |
+  1 |0zb$&%»"-xC=$|
+    cols 0-12 fg=#221efc bg=idx0
+  2 |             |
+    cols 6-10 fg=default bg=idx0
+  3 |             |
+  4 |             |

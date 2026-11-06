@@ -1,0 +1,28 @@
+after op 100 5470cede95b4b9a8
+after op 200 46f2e862acb9d065
+after op 300 64f6c7e93b7a2562
+after op 400 c56681475e715380
+after op 500 abb5b1de76d9b6ed
+after op 600 8e14c43338cdce8d
+after op 700 0bb8f456bc3a6a29
+after op 800 d064e89c07c5bfa2
+after op 900 56a67c6f2ea96678
+after op 1000 ab0eaac0c6a6bb4c
+after op 1100 2430616d92ae9c9b
+after op 1200 20772b0bf05f3714
+after op 1300 a77fb563b37ef4ba
+after op 1400 f1738c1223294aff
+after op 1500 13183a52e0f5f128
+size 20x8 history 0
+state cursor=5,4 pen=fg=default bg=idx190 underline=1 strike visible=false shape=2 blink=false alt=true paste=true ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=2-7 kitty=0 charsets=0 title=title 40 tabs=1,
+modes Modes[cursorVisible=false, cursorShape=2, bracketedPaste=true, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=true, autoWrap=true, originMode=false, scrollTop=3, scrollBottom=8, title=title 40]
+  0 |                    |
+  1+|]OC9Ｗ]'KQ}»k#C#']&`|
+    cols 0-19 fg=idx14 bg=default
+  2 |8                   |
+    cols 0-0 fg=idx14 bg=default
+  3 |                    |
+  4 |                    |
+  5 |                    |
+  6 |                    |
+  7 |                    |

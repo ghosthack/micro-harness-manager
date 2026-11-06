@@ -1,0 +1,45 @@
+after op 100 0b94459f24c76ac5
+after op 200 b9f616f58ed9c242
+after op 300 b95e245f24aec4fd
+after op 400 552da09db263fb86
+after op 500 be50400697e593f2
+after op 600 17106ed02d891cce
+after op 700 937a68504fc6410e
+after op 800 c32e43c7a4104a94
+after op 900 ad6c7a4fc1d8c99c
+after op 1000 df0cf5945a7df286
+after op 1100 1378a740413a6f37
+after op 1200 f701585c8874d292
+after op 1300 d8c8bcc319b713c9
+after op 1400 79779a1c52c32ea0
+after op 1500 67008fd330fb1ff9
+size 80x24 history 20
+state cursor=0,0 pen=fg=idx15 bg=default visible=false shape=2 blink=false alt=false paste=false ckm=true keypad=true mouse=NORMAL/DEFAULT focus=true sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title=icon+title tabs=0,
+modes Modes[cursorVisible=false, cursorShape=2, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=true, mouseTrackingMode=1000, mouseSgr=false, focusReporting=true, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=icon+title]
+  0 |                                                                                |
+  1 |                                                                                |
+  2 |                                                                                |
+  3 |f$;^-?語'中"u@rLr0X                                                          中 |
+    cols 0-18 fg=idx15 bg=#bef080
+    cols 77-78 fg=idx15 bg=#bef080
+  4 |b3YPw#Z`Iity가日f{                                                              |
+    cols 0-17 fg=idx15 bg=default
+  5 |                                                                                |
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |                                                                                |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                                                                                |

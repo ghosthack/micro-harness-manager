@@ -1,0 +1,42 @@
+after op 100 b738a60788f8f948
+after op 200 b0446b9f1b22dc83
+after op 300 95d74e15eeccf2fc
+after op 400 89b38102d968075f
+after op 500 f0dd2d1abae2e3cf
+after op 600 02deffc5467ea57a
+after op 700 6a7a2de6330ab86e
+after op 800 748e96fa492d1263
+after op 900 5c53601f0de620f5
+after op 1000 bf975bb919ec28f0
+after op 1100 ecfdc6629d2cc0aa
+after op 1200 6510d83abd4d69b7
+after op 1300 90082e822320a3a3
+after op 1400 30e1851b05c4bdeb
+after op 1500 0b3a24641e0fbd76
+size 80x24 history 0
+state cursor=2,64 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title=title 62 tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=title 62]
+  0+|yr2)vSsTMv33f{日OT                                            v0~NXcqS;.k)r1wed«|
+  1+|SfkLg-)+T日A';u4«&gQλo;d9H«u3eЖR/F(:96ñ!⌚M~9>DUIyREBiG文Qa#^Jj-uy/3SuS&%m8^7Zb |
+  2 |#!中]3中P1ok0+0$)X4éu:0│Cñ9YnWx=PdkS中PUj┌$33⌚78[RPk+CV[A*6本,                 |
+  3 |                                                                                |
+  4 |                                                                                |
+  5 |                                                                                |
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |                                                                                |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                                                                                |

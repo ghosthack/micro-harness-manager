@@ -1,0 +1,24 @@
+after op 100 d9f890b9277295be
+after op 200 676e626b4a8cff88
+after op 300 2ef9d78b5331d3bd
+after op 400 9cb48229b3476dad
+after op 500 ec4ae6cdf80ca76e
+after op 600 b66118a4183709e4
+after op 700 93997fcc0220ad4c
+after op 800 2bd329fe5cb7df3f
+after op 900 2a7fbf9959a9cf7c
+after op 1000 48cfa052abfce69a
+after op 1100 93308c947638bf64
+after op 1200 55cfb8c3cbb6bcb7
+after op 1300 b9855df6cfc828a9
+after op 1400 cd67be7c51a5412e
+after op 1500 7a593f6cfa7219b3
+size 13x5 history 0
+state cursor=1,12+wrap pen=fg=idx12 bg=default visible=false shape=1 blink=false alt=true paste=false ckm=true keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=false decom=false irm=false lnm=false region=0-4 kitty=0 charsets=0 title=title 73 tabs=
+modes Modes[cursorVisible=false, cursorShape=1, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=true, autoWrap=false, originMode=false, scrollTop=1, scrollBottom=5, title=title 73]
+  0 |             |
+  1 |H(JL1FD가oA文|
+    cols 4-12 fg=idx12 bg=default
+  2 |             |
+  3 |             |
+  4 |             |

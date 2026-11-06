@@ -1,0 +1,50 @@
+byte 256 e578ff006e780302
+byte 512 65a8a7943707a45c
+byte 768 5966626d2195fe04
+byte 1024 90913fbca404d357
+byte 1280 3de6587bab233fe9
+byte 1536 c4293cdcf6e56c5b
+byte 1792 90b219ab988ff7d7
+byte 2048 3c860c82f4e3b65d
+byte 2304 eec96d8e9bf8ba99
+byte 2560 f685fb13e737abe9
+byte 2816 3ca20acb0b932770
+byte 3072 9f9c7d16bc2ab32b
+byte 3328 1da555065d6d6029
+byte 3584 6e2fdab22a5c9c45
+byte 3840 03d71716e0c43009
+byte 4096 44e1c849c36928a7
+byte 4352 f955487d77c2e15d
+byte 4608 0be795b7fc21872c
+byte 4864 bda0f4c3597e570f
+byte 5120 5d4eff9f83b0f92a
+byte 5376 821dab404d84389f
+byte 5632 b2f5d7ae63e15baa
+byte 5796 a5577493d9c47069
+size 80x24 history 0
+state cursor=0,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=]
+  0 |                                                                                |
+  1 |                                                                                |
+  2 |                                                                                |
+  3 |                                                                                |
+  4 |                                                                                |
+  5 |                                                                                |
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |                                                                                |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                                                                                |
