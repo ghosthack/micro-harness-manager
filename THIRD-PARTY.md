@@ -11,6 +11,10 @@ own licenses; their license texts and notices are kept under `licenses/`.
 | Jackson databind, core, annotations and JSR-310 | 2.18.2 | Apache-2.0 with retained parser notices | JSON and date/time serialization |
 | SLF4J API and simple provider | 2.0.17 | MIT | logging |
 
+The installers and portable archives also bundle a trimmed Java runtime (Azul Zulu
+OpenJDK, GPL-2.0 with the Classpath Exception). Its legal files ship inside the package
+and in each release's `-licenses.zip`.
+
 JUnit Jupiter 5.11.4 is test-only (EPL-2.0) and is not included in the application.
 
 ## Code derived from other projects

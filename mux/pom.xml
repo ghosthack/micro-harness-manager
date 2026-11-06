@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.ghosthack.microhm</groupId>
     <artifactId>micro-harness-manager-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>${revision}</version>
   </parent>
   <artifactId>microhm-mux</artifactId>
   <description>The session daemon and its client (forked from jmux).</description>

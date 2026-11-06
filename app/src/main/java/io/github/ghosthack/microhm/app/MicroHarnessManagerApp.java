@@ -48,7 +48,11 @@ public final class MicroHarnessManagerApp {
     @SuppressWarnings("unused")
     private static FileChannel instanceLock;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        if (args.length == 1 && args[0].equals("--package-smoke")) {
+            PackageSmoke.run();
+            return;
+        }
         // Same pair the MainWindow toolbar toggle switches between at runtime.
         AppSettings.UiTheme theme = AppSettings.uiTheme();
         // Before any AWT/Swing call: the JDK reads the appearance property once, while

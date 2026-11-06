@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.ghosthack.microhm</groupId>
     <artifactId>micro-harness-manager-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>${revision}</version>
   </parent>
   <artifactId>microhm-vt</artifactId>
   <description>Terminal emulator core: VT parser, screen model, headless terminal, screen serializer.</description>

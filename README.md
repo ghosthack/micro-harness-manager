@@ -35,7 +35,15 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
 - **Look.** Light and dark FlatLaf themes, and the terminal font and palette of your
   choice.
 
-## Run
+## Install
+
+Each [release](https://github.com/ghosthack/micro-harness-manager/releases) carries a signed
+installer per platform: a DMG for macOS (Apple silicon), an `.exe` for Windows x64 and a
+`.deb` for Linux x64, plus portable archives for Windows and Linux. They bundle their own
+Java runtime. See [packaging/README.md](packaging/README.md) for how releases are built.
+
+## Run from source
+
 
 ```sh
 ./run.sh        # macOS, Linux
@@ -134,7 +142,6 @@ real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manag
 - Windows: PowerShell sessions don't report their working directory, so "New here" and
   Duplicate use the session's launch directory (cmd does report it); the CLI's `attach`
   is POSIX only.
-- No installers or signed packages yet; `run.sh` / `run.cmd` launch the jar.
 
 ## License
 
