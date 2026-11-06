@@ -12,6 +12,29 @@ agent in one session list, read, type into and wait on the others.
 Runs on macOS, Linux and Windows 10 (1809+) / 11. Needs Java 25+ and Maven 3.6.3+.
 Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and Maven 3.8.
 
+## Features
+
+- **Sidebar.** Sessions with their state (working, waiting for input, idle, dead), sort by
+  name, folder or status, filters by status and harness, and optional grouping by
+  project folder.
+- **Sessions.** Open…, New here, Shell here, Duplicate, Resume, Reload, Close (asks the
+  harness and its shell to exit), Kill, and batch Close / Remove dead.
+- **Harnesses.** Plugins for Claude Code, Codex, Cursor Agent, Grok, OpenCode, Pi and
+  Muse detect each session's state from its screen and know how to start, resume and
+  quit it.
+- **Usage.** A budget panel and a usage dialog for the providers' plan limits.
+- **Agents (MCP).** An optional MCP server whose tools (`list`, `read`, `send`, `keys`,
+  `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. It is
+  off by default: turn it on in Settings → Agents, and sessions created or resumed from
+  then on get it registered.
+- **Terminal.** Right-click (Ctrl+click on macOS) for Copy, Paste, Select All, Page Up and
+  Page Down; when the program tracks the mouse the click goes to it, and
+  Shift+right-click still opens the menu. On macOS, Option+letter is Meta by default
+  (word motion, shortcuts such as Option+Enter); Settings → Input → "Use Option as Meta"
+  turns that off so Option composes accents natively (Option+e, e types é).
+- **Look.** Light and dark FlatLaf themes, and the terminal font and palette of your
+  choice.
+
 ## Run
 
 ```sh
@@ -31,9 +54,22 @@ on demand from the same jar and keeps running after you quit the app.
 ./microhm-mux shutdown           # stop the daemon and every session on it
 ```
 
-State lives in `~/.micro-harness-manager`: the session registry, settings, MCP config and
-the daemon's home (`mux/`). The MCP server, off by default, listens on port 7392. See
-[app/README.md](app/README.md) for the app's features and settings.
+## Configuration
+
+| | |
+|---|---|
+| State directory | `~/.micro-harness-manager` |
+| Settings | `settings.properties` beside the registry (e.g. `terminal.option-as-meta=on\|off`) |
+| Registry override | `-Dmicrohm.registry=/path/sessions.json` |
+| Session daemon home | `~/.micro-harness-manager/mux` (`-Dmicrohm.mux.home`, `MICROHM_MUX_HOME`) |
+| Session names | `mhm-…` |
+| MCP port (default) | 7392 |
+| MCP server name | `micro-harness-manager` |
+| MCP token variable | `MHM_MCP_TOKEN` |
+
+Settings, the per-session MCP config files (`mcp/`) and the single-instance lock
+(`instance.lock`) all live beside the registry file, so pointing `-Dmicrohm.registry` at
+a scratch path isolates a whole run. The tests do exactly that.
 
 ## Modules
 
@@ -69,11 +105,18 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
   seeds and 11 real recordings is pinned in golden files under
   `vt/src/test/resources/golden`. After an intended behaviour change, regenerate them
   with `mvn -pl vt test -Dvt.golden.update=true` and review the diff.
-- **Display (`app/terminal`).** `TerminalView` paints the screen model directly, in
-  device pixels: merged background runs, run-wise text, font fallback, and geometry for
-  every character made to tile (box drawing, blocks, braille, sextants, octants and the
-  other block mosaics), so they join without gaps. Frames are coalesced to about 60 fps,
-  and the key, mouse and paste encoders are pure functions with table tests.
+- **Display (`app/terminal`).** `TerminalView` paints the screen model directly, and
+  `SessionTerminal` connects it to a daemon attachment; the rest of the app only uses
+  `SessionTerminal`'s small API. Frames are coalesced to about 60 fps, and the key,
+  mouse and paste encoders are pure functions with table tests. The view paints in
+  device pixels: on a 2× display the font is measured at twice its size, so cells can be
+  half a point wide or tall (Menlo 14 gets 8.5 × 16.5-point cells, its own proportions,
+  where whole points would space the lines about 6% too far apart). Characters made to
+  tile are drawn as geometry fitted to the cell, never from a font: box drawing, block
+  elements, braille (dots at exact sub-pixel positions, so the pitch stays even), the
+  sextants, octants and other mosaics of Symbols for Legacy Computing (read from their
+  Unicode names) and the scan lines. A font's glyph box is never exactly the cell, so
+  font glyphs would leave gaps and steps between cells.
 
 ## Tests
 

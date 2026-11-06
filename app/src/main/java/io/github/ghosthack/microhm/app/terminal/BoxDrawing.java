@@ -14,8 +14,8 @@ import java.awt.geom.Path2D;
  * and sits on its own baseline, leaving gaps and steps between cells):
  * <ul>
  *   <li>box drawing (U+2500–257F) and block elements (U+2580–259F);</li>
- *   <li>braille patterns (U+2800–28FF): dots on one even 2 × 4 grid across cells, as
- *       braille "pixel art" such as Codex's logo needs;</li>
+ *   <li>braille patterns (U+2800–28FF): dots on one even 2 × 4 grid across cells, so
+ *       braille "pixel art" lines up;</li>
  *   <li>block mosaics from Symbols for Legacy Computing and its Supplement: the sextants
  *       (2 × 3), octants (2 × 4), one-eighth bars and partial blocks, read from the
  *       characters' Unicode names (so the table cannot drift from the standard): see
