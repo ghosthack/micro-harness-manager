@@ -10,6 +10,7 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Container;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -54,10 +55,10 @@ class SidebarViewTest {
     @Test
     void pendingLiveRowsShowAnHourglassTheSizeOfTheStatusDot() {
         SidebarEntry pending = live("mhm-pending", "/work/pending");
-        var pendingIcon = MainWindow.SidebarCellRenderer.statusIcon(pending);
+        var pendingIcon = SidebarCellRenderer.statusIcon(pending);
         assertNotNull(pendingIcon);
         pending.setState(SessionState.WORKING, "confirmed");
-        var workingIcon = MainWindow.SidebarCellRenderer.statusIcon(pending);
+        var workingIcon = SidebarCellRenderer.statusIcon(pending);
         assertNotSame(pendingIcon, workingIcon);
         assertEquals(pendingIcon.getIconWidth(), workingIcon.getIconWidth());
     }
@@ -66,8 +67,8 @@ class SidebarViewTest {
     void deadSessionIconIsOnlyReticulatedWhenTheSettingIsEnabled() {
         SidebarEntry dead = SidebarEntry.dead(session("mhm-dead", "/work/dead"));
 
-        assertNotSame(MainWindow.SidebarCellRenderer.statusIcon(dead, false),
-                MainWindow.SidebarCellRenderer.statusIcon(dead, true));
+        assertNotSame(SidebarCellRenderer.statusIcon(dead, false),
+                SidebarCellRenderer.statusIcon(dead, true));
     }
 
     @Test
@@ -143,7 +144,7 @@ class SidebarViewTest {
         model.addElement(live("mhm-b", "/work/project"));
         model.addElement(live("mhm-c", "/work/other"));
         JList<SidebarEntry> list = new JList<>(model);
-        MainWindow.SidebarCellRenderer renderer = new MainWindow.SidebarCellRenderer();
+        SidebarCellRenderer renderer = new SidebarCellRenderer();
         renderer.setFolderGrouping(true);
 
         JLabel header = groupHeader(render(renderer, list, 0));
@@ -207,7 +208,44 @@ class SidebarViewTest {
         assertTrue(entry.tooltipText().startsWith("<html><b>mhm-plain</b><br>shell"), entry.tooltipText());
     }
 
-    private static JPanel render(MainWindow.SidebarCellRenderer renderer,
+    @Test
+    void harnessStatusGlyphsAreDroppedFromPaneTitleNames() {
+        SidebarEntry entry = live("mhm-glyph", "/work/project");
+        entry.setPaneTitle("✳ Refactor auth middleware");
+        assertEquals("Refactor auth middleware", entry.displayName());
+        entry.setPaneTitle("⠼ Refactor auth middleware");
+        assertEquals("Refactor auth middleware", entry.displayName());
+        // a bare mark carries no name: the previous one stays rather than blanking
+        entry.setPaneTitle("✳");
+        assertEquals("Refactor auth middleware", entry.displayName());
+        // only a leading mark followed by a space is a status mark
+        entry.setPaneTitle("v2 · draft");
+        assertEquals("v2 · draft", entry.displayName());
+    }
+
+    @Test
+    void onlyAWaitingRowCarriesTheAttentionPill() {
+        DefaultListModel<SidebarEntry> model = new DefaultListModel<>();
+        SidebarEntry waiting = live("mhm-waiting", "/work/a");
+        waiting.setState(SessionState.WAITING_FOR_INPUT, "test");
+        SidebarEntry working = live("mhm-working", "/work/b");
+        working.setState(SessionState.WORKING, "test");
+        model.addElement(waiting);
+        model.addElement(working);
+        model.addElement(SidebarEntry.dead(session("mhm-dead", "/work/c")));
+        JList<SidebarEntry> list = new JList<>(model);
+        SidebarCellRenderer renderer = new SidebarCellRenderer();
+
+        assertTrue(pill(render(renderer, list, 0)).isVisible());
+        assertFalse(pill(render(renderer, list, 1)).isVisible());
+        assertFalse(pill(render(renderer, list, 2)).isVisible());
+    }
+
+    private static Component pill(JPanel cell) {
+        return ((BorderLayout) cell.getLayout()).getLayoutComponent(BorderLayout.EAST);
+    }
+
+    private static JPanel render(SidebarCellRenderer renderer,
                                  JList<SidebarEntry> list, int index) {
         return (JPanel) renderer.getListCellRendererComponent(
                 list, list.getModel().getElementAt(index), index, false, false);
@@ -217,11 +255,14 @@ class SidebarViewTest {
         return (JLabel) ((BorderLayout) cell.getLayout()).getLayoutComponent(BorderLayout.NORTH);
     }
 
-    /** The row's muted path line: the second of the two stacked labels in the center. */
+    /** The row's muted path line: the second of the two stacked labels in the center
+     * (the column also holds the glue that centers them vertically). */
     private static JLabel detail(JPanel cell) {
         Container lines = (Container) ((BorderLayout) cell.getLayout())
                 .getLayoutComponent(BorderLayout.CENTER);
-        return (JLabel) lines.getComponent(1);
+        return java.util.Arrays.stream(lines.getComponents())
+                .filter(JLabel.class::isInstance).map(JLabel.class::cast)
+                .skip(1).findFirst().orElseThrow();
     }
 
     private static void assertOrder(List<SidebarEntry> source, SidebarView.SortMode mode,
