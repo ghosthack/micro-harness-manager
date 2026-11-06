@@ -10,12 +10,6 @@
   </parent>
   <artifactId>microhm-pty</artifactId>
   <description>Pseudo-terminal processes over the Java FFM API (macOS, Linux).</description>
-  <dependencies>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-    </dependency>
-  </dependencies>
   <build>
     <plugins>
       <plugin>
