@@ -37,8 +37,9 @@ and surefire sets both overrides to `app/target/test-state` as a backstop.
 
 ## Build and run
 
-From the repo root: `./run.sh` builds the reactor (`vt`, `pty`, `mux`, `app`) when
-anything changed and launches the shaded jar with `--enable-native-access=ALL-UNNAMED`.
+From the repo root: `./run.sh` (`run.cmd` on Windows) builds the reactor (`vt`, `pty`,
+`mux`, `app`) when anything changed and launches the shaded jar with
+`--enable-native-access=ALL-UNNAMED`.
 The jar also carries the daemon: the client starts it from the same class path the
 first time a session is created.
 

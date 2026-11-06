@@ -32,6 +32,9 @@ final class SystemAppearance {
             if (os.contains("mac")) {
                 return mac();
             }
+            if (os.contains("win")) {
+                return windows();
+            }
             if (os.contains("linux")) {
                 return linux();
             }
@@ -56,6 +59,29 @@ final class SystemAppearance {
         return exitCode == 0 && output.trim().equalsIgnoreCase("dark")
                 ? AppSettings.UiTheme.DARK
                 : AppSettings.UiTheme.LIGHT;
+    }
+
+    private static Optional<AppSettings.UiTheme> windows() throws IOException, InterruptedException {
+        Result result = run(List.of("reg", "query",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                "/v", "AppsUseLightTheme"));
+        return result == null || result.exitCode != 0 ? Optional.empty() : parseWindows(result.output);
+    }
+
+    static Optional<AppSettings.UiTheme> parseWindows(String output) {
+        for (String line : output.split("\\R")) {
+            String[] fields = line.trim().split("\\s+");
+            if (fields.length >= 3 && fields[0].equalsIgnoreCase("AppsUseLightTheme")) {
+                String value = fields[fields.length - 1];
+                if (value.equalsIgnoreCase("0x0")) {
+                    return Optional.of(AppSettings.UiTheme.DARK);
+                }
+                if (value.equalsIgnoreCase("0x1")) {
+                    return Optional.of(AppSettings.UiTheme.LIGHT);
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<AppSettings.UiTheme> linux() throws IOException, InterruptedException {

@@ -67,7 +67,8 @@ public final class PtySession implements Session {
     /** How often {@link #kill} re-checks the snapshot descendants while the grace runs. */
     private static final long KILL_POLL_MS = 20;
     /** The wire value of {@code Info.backend}: microhm-pty is Unix-only. */
-    static final String BACKEND = "unix";
+    /** The PTY kind sessions report: a POSIX pty, or a Windows ConPTY pseudoconsole. */
+    static final String BACKEND = System.getProperty("os.name", "").startsWith("Windows") ? "conpty" : "unix";
     private static final byte[] CR = {'\r'};
     /** String terminator, prefixed to a BEHIND re-sync snapshot (see {@link #handSnapshot}). */
     private static final byte[] ST = {0x1B, '\\'};

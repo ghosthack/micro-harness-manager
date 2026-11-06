@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** The POSIX PTY (macOS, Linux); Windows has {@link ConPtyTest}. */
+@org.junit.jupiter.api.condition.DisabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
 final class PtyProcessTest {
 
     private static Map<String, String> env() {

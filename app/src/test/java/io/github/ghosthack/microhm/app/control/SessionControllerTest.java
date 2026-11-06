@@ -35,6 +35,11 @@ final class SessionControllerTest {
     @TempDir
     Path dir;
 
+    /** A path inside a hand-written JSON string: backslashes (Windows) escaped. */
+    private static String json(Path path) {
+        return path.toString().replace("\\", "\\\\");
+    }
+
     private FakeDaemon daemon;
     private SessionRegistry registry;
     private MutableClock clock;
@@ -199,8 +204,8 @@ final class SessionControllerTest {
         String[] rows = list.split("\n");
         assertEquals(2, rows.length);
         assertTrue(rows[0].startsWith("mhm-api · API · codex · "), rows[0]);
-        assertTrue(rows[0].endsWith(" · /proj/mhm-api · transcript: /codex/rollout-x.jsonl"), rows[0]);
-        assertEquals("mhm-sh · - · shell · IDLE · /tmp/sh · transcript: - (you)", rows[1]);
+        assertTrue(rows[0].endsWith(" · /proj/mhm-api · transcript: " + Path.of("/codex/rollout-x.jsonl")), rows[0]);
+        assertEquals("mhm-sh · - · shell · IDLE · " + Path.of("/tmp/sh") + " · transcript: - (you)", rows[1]);
     }
 
     @Test
@@ -214,9 +219,10 @@ final class SessionControllerTest {
         registry.put(SessionEntry.newlyCreated("mhm-solo", "/alone", HarnessType.CLAUDE_CODE, null));
 
         String[] rows = ok(null, "list", "{}").split("\n");
-        assertTrue(rows[0].endsWith("transcript: /claude/shared/id-1.jsonl"), "its own file: " + rows[0]);
-        assertTrue(rows[1].contains("transcript: /claude/shared/ (id unknown"), "the folder, not a guess: " + rows[1]);
-        assertTrue(rows[2].endsWith("transcript: /claude/alone/newest.jsonl"), "alone in its project: " + rows[2]);
+        assertTrue(rows[0].endsWith("transcript: " + Path.of("/claude/shared/id-1.jsonl")), "its own file: " + rows[0]);
+        assertTrue(rows[1].contains("transcript: " + Path.of("/claude/shared") + java.io.File.separator + " (id unknown"),
+                "the folder, not a guess: " + rows[1]);
+        assertTrue(rows[2].endsWith("transcript: " + Path.of("/claude/alone/newest.jsonl")), "alone in its project: " + rows[2]);
     }
 
     @Test
@@ -443,7 +449,7 @@ final class SessionControllerTest {
     @Test
     void spawnLaunchesThroughTheSpawnerAndTypesThePromptOnceReady() {
         shell("mhm-me").show("$ ");
-        String reply = ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\","
+        String reply = ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\","
                 + "\"name\":\"Helper\",\"prompt\":\"ls -la\"}");
         assertEquals("mhm-new-1 started (shell in " + dir + "); the prompt will be typed in once it is ready at its prompt",
                 reply);
@@ -480,7 +486,7 @@ final class SessionControllerTest {
     @Test
     void spawnValidatesHarnessAndProject() {
         assertTrue(error(null, "spawn", "{\"harness\":\"emacs\",\"project\":\"/\"}").contains("unknown harness"));
-        assertTrue(error(null, "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir.resolve("missing") + "\"}")
+        assertTrue(error(null, "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir.resolve("missing")) + "\"}")
                 .contains("not an existing directory"));
         assertTrue(error(null, "spawn", "{\"harness\":\"shell\",\"project\":\"rel/path\"}").contains("absolute"));
         assertTrue(spawner.requests.isEmpty());
@@ -567,8 +573,8 @@ final class SessionControllerTest {
         daemon.old = true; // no labels either: the registry names the caller's harness
         agent("mhm-me", CLAUDE_IDLE);
         register("mhm-me", HarnessType.CLAUDE_CODE, null);
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"make\"}");
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"one\\ntwo\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"make\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"one\\ntwo\"}");
         ticks(14); // no quiet probe on an old daemon: the caller needs its own 5 s look
         assertEquals(List.of(new FakeDaemon.SendKeys("mhm-new-1", "make", true)),
                 daemon.sentKeys.stream().filter(k -> k.session().equals("mhm-new-1")).toList());
@@ -637,7 +643,7 @@ final class SessionControllerTest {
     @Test
     void finishedAfterASpawnPromptWaitsUntilThePromptWasTypedAndWorkedOn() {
         agent("mhm-me", CLAUDE_IDLE);
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"make\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"make\"}");
         assertEquals("will notify mhm-me when mhm-new-1 finished",
                 ok("mhm-me", "notify", "{\"session\":\"mhm-new-1\",\"on\":\"finished\"}"),
                 "a session about to be given its prompt counts as working");
@@ -663,7 +669,7 @@ final class SessionControllerTest {
         agent("mhm-me", CLAUDE_IDLE);
         shell("mhm-a").show("building");
         ok("mhm-me", "notify", "{\"session\":\"mhm-a\",\"on\":\"exited\"}");
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"ls\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"ls\"}");
         daemon.captureFailures.put("mhm-a", 3);
         daemon.captureFailures.put("mhm-new-1", 3);
         ticks(3);
@@ -720,7 +726,7 @@ final class SessionControllerTest {
         agent("mhm-me", CLAUDE_IDLE);
         java.util.concurrent.atomic.AtomicInteger enterFailures = new java.util.concurrent.atomic.AtomicInteger(1);
         daemon.failInput = i -> i.keys() != null && enterFailures.getAndDecrement() > 0;
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"ls\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"ls\"}");
         ticks(15);
         assertEquals(List.of(new FakeDaemon.Input("mhm-new-1", "ls", true, null),
                 new FakeDaemon.Input("mhm-new-1", null, false, List.of("Enter"))), inputsTo("mhm-new-1"));
@@ -734,7 +740,7 @@ final class SessionControllerTest {
         agent("mhm-me", CLAUDE_IDLE);
         shell("mhm-a").show("building");
         ok("mhm-me", "notify", "{\"session\":\"mhm-a\",\"on\":\"exited\"}");
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"ls\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"ls\"}");
         daemon.kill("mhm-a");
         ticks(10);
         assertEquals(2, queued.size(), "one notification delivery and one prompt delivery: " + queued.size());
@@ -750,18 +756,18 @@ final class SessionControllerTest {
         daemon.add("mhm-b").show("x");
         register("mhm-b", HarnessType.SHELL, "Backend");
         assertEquals("name already in use by mhm-a; choose another",
-                error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"helper\"}"));
+                error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"helper\"}"));
         assertEquals("name already in use by mhm-b; choose another",
-                error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"Backend\"}"));
+                error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"Backend\"}"));
         assertTrue(spawner.requests.isEmpty());
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"Fresh\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"Fresh\"}");
     }
 
     @Test
     void aNamedSpawnStartsTheFirstSessionWhenNoDaemonIsRunningYet() {
         daemon.down = true;
         daemon.pid = -1;
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"First\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"First\"}");
         assertEquals(1, spawner.requests.size(), "the spawner is what starts the daemon");
     }
 
@@ -784,7 +790,7 @@ final class SessionControllerTest {
         agent("mhm-me", CLAUDE_IDLE);
         shell("mhm-a").show("building");
         ok("mhm-me", "notify", "{\"session\":\"mhm-a\",\"on\":\"exited\"}");
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"ls\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"ls\"}");
 
         daemon.down = true; // list comes back empty, ping fails
         for (int i = 0; i < 5; i++) {
@@ -825,7 +831,7 @@ final class SessionControllerTest {
     /** Spawns a claude-code session with {@code prompt} and has it reach its idle prompt. */
     private FakeDaemon.FakeSession spawnClaudeWithPrompt(String prompt) {
         spawner.harnessLabel = "claude-code";
-        ok("mhm-me", "spawn", "{\"harness\":\"claude-code\",\"project\":\"" + dir + "\",\"prompt\":"
+        ok("mhm-me", "spawn", "{\"harness\":\"claude-code\",\"project\":\"" + json(dir) + "\",\"prompt\":"
                 + JSON.valueToTree(prompt) + "}");
         FakeDaemon.FakeSession s = daemon.session("mhm-new-1");
         s.foreground = "claude";
@@ -893,8 +899,8 @@ final class SessionControllerTest {
     void spawnStripsTheDisplayNameAndChecksItStripped() {
         shell("mhm-a").labels.put("display", "Helper");
         assertEquals("name already in use by mhm-a; choose another",
-                error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"  helper \"}"));
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"  Fresh  \"}");
+                error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"  helper \"}"));
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"  Fresh  \"}");
         assertEquals(Optional.of("Fresh"), spawner.requests.getFirst().displayName());
     }
 
@@ -913,20 +919,20 @@ final class SessionControllerTest {
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
         try {
             java.util.concurrent.Future<ToolResult> first = pool.submit(() -> call("mhm-me", "spawn",
-                    "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"Twin\"}"));
+                    "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"Twin\"}"));
             assertTrue(inSpawn.await(10, java.util.concurrent.TimeUnit.SECONDS));
             spawner.onSpawn = () -> { };
-            String refused = error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir
+            String refused = error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir)
                     + "\",\"name\":\" twin\"}");
             assertTrue(refused.contains("already in use"), refused);
-            ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"Other\"}");
+            ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"Other\"}");
             release.countDown();
             assertFalse(first.get(10, java.util.concurrent.TimeUnit.SECONDS).isError());
             assertEquals(2, spawner.requests.size());
             // released once created: the name is now taken by the live session's label
             daemon.session("mhm-new-1").labels.put("display", "Twin");
             daemon.session("mhm-new-2").labels.put("display", "Other");
-            String taken = error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir
+            String taken = error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir)
                     + "\",\"name\":\"twin\"}");
             assertTrue(taken.startsWith("name already in use by mhm-"), taken);
         } finally {
@@ -940,10 +946,10 @@ final class SessionControllerTest {
         spawner.onSpawn = () -> {
             throw new IllegalStateException("boom");
         };
-        assertTrue(error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"X\"}")
+        assertTrue(error("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"X\"}")
                 .contains("boom"));
         spawner.onSpawn = () -> { };
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"name\":\"X\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"name\":\"X\"}");
     }
 
     // ------------------------------------------------------------------ an owed Enter
@@ -954,7 +960,7 @@ final class SessionControllerTest {
         java.util.concurrent.atomic.AtomicInteger enterFailures = new java.util.concurrent.atomic.AtomicInteger(3);
         daemon.failInput = i -> i.session().equals("mhm-new-1") && i.keys() != null
                 && enterFailures.getAndDecrement() > 0;
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"ls\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"ls\"}");
         ticks(7);
         assertEquals(List.of(new FakeDaemon.Input("mhm-new-1", "ls", true, null)), inputsTo("mhm-new-1"));
         // now busy (not ready), and the 120 s deadline passes: the Enter is still owed
@@ -973,7 +979,7 @@ final class SessionControllerTest {
         daemon.quietProbe = true;
         agent("mhm-me", CLAUDE_IDLE);
         daemon.failInput = i -> i.session().equals("mhm-new-1") && i.keys() != null;
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"ls\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"ls\"}");
         ticks(7 + SessionController.MAX_ENTER_ATTEMPTS + 7);
         assertEquals(List.of(new FakeDaemon.Input("mhm-new-1", "ls", true, null)), inputsTo("mhm-new-1"));
         String notice = inputsTo("mhm-me").getFirst().text();
@@ -1050,7 +1056,7 @@ final class SessionControllerTest {
         daemon.quietProbe = true;
         agent("mhm-me", CLAUDE_IDLE);
         spawner.onSpawn = () -> { };
-        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + dir + "\",\"prompt\":\"one\\ntwo\"}");
+        ok("mhm-me", "spawn", "{\"harness\":\"shell\",\"project\":\"" + json(dir) + "\",\"prompt\":\"one\\ntwo\"}");
         daemon.session("mhm-new-1").bracketedPaste = false;
         ticks(14);
         assertTrue(inputsTo("mhm-new-1").isEmpty());

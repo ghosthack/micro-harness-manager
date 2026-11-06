@@ -26,8 +26,10 @@ public final class DaemonMode {
         PrintStream out = new PrintStream(new FileOutputStream(log.toFile(), true), true, StandardCharsets.UTF_8);
         System.setOut(out);
         System.setErr(out);
-        ignoreSignal("HUP");
-        ignoreSignal("INT");
+        if (!System.getProperty("os.name", "").startsWith("Windows")) { // no SIGHUP there
+            ignoreSignal("HUP");
+            ignoreSignal("INT");
+        }
     }
 
     private static void ignoreSignal(String name) {

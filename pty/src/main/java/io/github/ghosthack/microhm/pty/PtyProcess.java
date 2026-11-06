@@ -55,18 +55,49 @@ import static java.lang.foreign.ValueLayout.JAVA_SHORT;
  */
 public final class PtyProcess {
 
-    private final int pid;
-    private final MasterFd master;
+    /** Windows runs the child in a ConPTY pseudoconsole ({@link ConPty}); everything else here
+     * is the POSIX implementation. */
+    static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT)
+            .startsWith("windows");
+
+    /** The platform half of a PTY: what it does beyond its streams and exit status. */
+    interface Terminal {
+        /** Columns × rows; IOException once the terminal is closed. */
+        void setWinSize(int columns, int rows) throws IOException;
+
+        /** What closing the terminal delivers: SIGHUP, or the console's close event. */
+        void hangup();
+
+        /** SIGTERM, or ending the process tree. */
+        void terminate();
+
+        /** SIGKILL, or ending the process tree. */
+        void kill();
+
+        /** Closes the terminal: output ends, writes fail. Idempotent. */
+        void close();
+    }
+
+    private final long pid;
+    private final Terminal terminal;
     private final InputStream input;
     private final OutputStream output;
-    private final CompletableFuture<Integer> exit = new CompletableFuture<>();
+    private final CompletableFuture<Integer> exit;
 
-    private PtyProcess(int pid, MasterFd master) {
+    PtyProcess(long pid, Terminal terminal, InputStream input, OutputStream output, CompletableFuture<Integer> exit) {
         this.pid = pid;
-        this.master = master;
-        this.input = master.inputStream();
-        this.output = master.outputStream();
-        Thread.ofPlatform().daemon().name("pty-reaper-" + pid).start(this::reap);
+        this.terminal = terminal;
+        this.input = input;
+        this.output = output;
+        this.exit = exit;
+    }
+
+    private static PtyProcess unix(int pid, MasterFd master) {
+        CompletableFuture<Integer> exit = new CompletableFuture<>();
+        PtyProcess process = new PtyProcess(pid, new UnixTerminal(pid, master, exit), master.inputStream(),
+                master.outputStream(), exit);
+        Thread.ofPlatform().daemon().name("pty-reaper-" + pid).start(() -> reap(pid, exit));
+        return process;
     }
 
     /**
@@ -79,6 +110,9 @@ public final class PtyProcess {
      */
     public static PtyProcess start(List<String> command, Map<String, String> environment, Path directory,
                                    int columns, int rows) throws IOException {
+        if (WINDOWS) {
+            return ConPty.start(command, environment, directory, columns, rows);
+        }
         Posix.requireSupported();
         Objects.requireNonNull(command, "command");
         if (command.isEmpty()) {
@@ -117,7 +151,7 @@ public final class PtyProcess {
                     int ignored = (int) Posix.CLOSE.invokeExact(state, slaveFd);
                 }
                 started = true;
-                return new PtyProcess(pid, master);
+                return unix(pid, master);
             } finally {
                 if (!started) {
                     master.close();
@@ -215,24 +249,9 @@ public final class PtyProcess {
         return output;
     }
 
-    /** Sets the terminal size (the kernel sends SIGWINCH to the foreground group). */
+    /** Sets the terminal size (SIGWINCH to the foreground group; ConPTY resizes its buffer). */
     public void setWinSize(int columns, int rows) throws IOException {
-        IOException[] failure = new IOException[1];
-        boolean live = master.with(fd -> {
-            try {
-                setWinSize(fd, columns, rows);
-                return true;
-            } catch (IOException e) {
-                failure[0] = e;
-                return false;
-            }
-        });
-        if (failure[0] != null) {
-            throw failure[0];
-        }
-        if (!live) {
-            throw new IOException("the PTY is closed");
-        }
+        terminal.setWinSize(columns, rows);
     }
 
     public boolean isAlive() {
@@ -277,36 +296,80 @@ public final class PtyProcess {
     /** SIGHUP, what closing a terminal delivers: interactive shells exit on it (they ignore
      * SIGTERM) and forward it to their jobs. */
     public void hangup() {
-        signal(Posix.SIGHUP);
+        terminal.hangup();
     }
 
     /** SIGTERM. */
     public void destroy() {
-        signal(Posix.SIGTERM);
+        terminal.terminate();
     }
 
     /** SIGKILL. */
     public void destroyForcibly() {
-        signal(Posix.SIGKILL);
+        terminal.kill();
     }
 
     /** Closes the master side. Output ends; further writes fail. Idempotent. */
     public void closeTerminal() {
-        master.close();
+        terminal.close();
     }
 
-    private void signal(int signal) {
-        if (exit.isDone()) {
-            return; // never signal a pid that may already have been reused
+    /** The POSIX terminal: the master descriptor and signals to the child. */
+    private record UnixTerminal(int pid, MasterFd master, CompletableFuture<Integer> exit) implements Terminal {
+
+        @Override
+        public void setWinSize(int columns, int rows) throws IOException {
+            IOException[] failure = new IOException[1];
+            boolean live = master.with(fd -> {
+                try {
+                    PtyProcess.setWinSize(fd, columns, rows);
+                    return true;
+                } catch (IOException e) {
+                    failure[0] = e;
+                    return false;
+                }
+            });
+            if (failure[0] != null) {
+                throw failure[0];
+            }
+            if (!live) {
+                throw new IOException("the PTY is closed");
+            }
         }
-        try (Arena arena = Arena.ofConfined()) {
-            int ignored = (int) Posix.KILL.invokeExact(Posix.callState(arena), pid, signal);
-        } catch (Throwable ignored) {
-            // The process is gone, or cannot be signalled; the reaper reports the exit.
+
+        @Override
+        public void hangup() {
+            signal(Posix.SIGHUP);
+        }
+
+        @Override
+        public void terminate() {
+            signal(Posix.SIGTERM);
+        }
+
+        @Override
+        public void kill() {
+            signal(Posix.SIGKILL);
+        }
+
+        @Override
+        public void close() {
+            master.close();
+        }
+
+        private void signal(int signal) {
+            if (exit.isDone()) {
+                return; // never signal a pid that may already have been reused
+            }
+            try (Arena arena = Arena.ofConfined()) {
+                int ignored = (int) Posix.KILL.invokeExact(Posix.callState(arena), pid, signal);
+            } catch (Throwable ignored) {
+                // The process is gone, or cannot be signalled; the reaper reports the exit.
+            }
         }
     }
 
-    private void reap() {
+    private static void reap(int pid, CompletableFuture<Integer> exit) {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment state = Posix.callState(arena);
             MemorySegment status = arena.allocate(JAVA_INT);

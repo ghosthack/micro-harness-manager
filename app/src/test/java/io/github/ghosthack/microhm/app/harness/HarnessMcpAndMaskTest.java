@@ -23,7 +23,9 @@ final class HarnessMcpAndMaskTest {
 
     // ---- withMcpServer
 
+    /** POSIX paths and quoting; Windows is {@link #powershellQuotingDoublesInnerQuotes}. */
     @Test
+    @org.junit.jupiter.api.condition.DisabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
     void claudeGetsItsMcpConfigFileBeforeItsResumeFlag() {
         HarnessPlugin claude = new ClaudeCodePlugin();
         String flag = "--mcp-config /home/u/.micro-harness-manager/mcp/mhm-proj.json"; // nothing to quote
@@ -66,7 +68,9 @@ final class HarnessMcpAndMaskTest {
         }
     }
 
+    /** POSIX paths and quoting; Windows is {@link #powershellQuotingDoublesInnerQuotes}. */
     @Test
+    @org.junit.jupiter.api.condition.DisabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
     void oddPathsAndUrlsStayOneQuotedArgument() {
         McpEndpoint odd = new McpEndpoint("http://127.0.0.1:1/mcp/it's\"x", "t",
                 Path.of("/home/o'neil/.micro-harness-manager/mcp/a b.json"));
@@ -230,5 +234,15 @@ final class HarnessMcpAndMaskTest {
     void aMovedSelectionIsAChange() {
         HarnessPlugin shell = HarnessPlugins.of(HarnessType.SHELL);
         assertNotEquals(shell.maskChrome("▶ 1. Yes\n  2. No\n"), shell.maskChrome("  1. Yes\n▶ 2. No\n"));
+    }
+
+    /** On Windows commands are typed into PowerShell, where a single-quoted string escapes
+     * an inner quote by doubling it (POSIX's '"'"' would end the string there). */
+    @Test
+    void powershellQuotingDoublesInnerQuotes() {
+        assertEquals("'C:\\Users\\o''neil\\mcp\\a b.json'",
+                HarnessPlugin.shellArgument("C:\\Users\\o'neil\\mcp\\a b.json", true));
+        assertEquals("'it'\"'\"'s'", HarnessPlugin.shellArgument("it's", false));
+        assertEquals("01a03190-5463-719c", HarnessPlugin.shellArgument("01a03190-5463-719c", true), "ids stay bare");
     }
 }

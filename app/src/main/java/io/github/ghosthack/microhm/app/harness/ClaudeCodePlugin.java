@@ -50,6 +50,19 @@ public final class ClaudeCodePlugin implements HarnessPlugin {
 
     private static final Pattern VERSIONED_BINARY = Pattern.compile("\\d+\\.\\d+\\.\\d+");
 
+    /** Whether {@code node} counts as this harness (see {@link #ownsProcess}). */
+    private final boolean windows;
+
+    public ClaudeCodePlugin() {
+        this(Platform.isWindows());
+    }
+
+    /** {@code windows} is injectable so both branches of {@link #ownsProcess} have a
+     * unit test regardless of the platform the suite runs on. */
+    ClaudeCodePlugin(boolean windows) {
+        this.windows = windows;
+    }
+
     /** Claude Code prints this receipt after /exit. The selector is normally a UUID,
      * but a renamed session is printed as a quoted name and is equally resumable. */
     private static final Pattern EXIT_RESUME = Pattern.compile(
@@ -66,11 +79,14 @@ public final class ClaudeCodePlugin implements HarnessPlugin {
         return "claude";
     }
 
-    // the launcher execs the versioned binary, so the foreground probe reports e.g. "2.1.235"
+    // the launcher execs the versioned binary, so the foreground probe reports e.g. "2.1.235"; on
+    // Windows the npm shim runs node.exe as the shell's child instead, so the
+    // foreground is "node" there — as broad as PiPlugin's check, for the same reason
     @Override
     public boolean ownsProcess(String foregroundCommand) {
         return "claude".equals(foregroundCommand)
-                || VERSIONED_BINARY.matcher(foregroundCommand).matches();
+                || VERSIONED_BINARY.matcher(foregroundCommand).matches()
+                || windows && "node".equals(foregroundCommand);
     }
 
     @Override

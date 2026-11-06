@@ -55,13 +55,16 @@ final class StateDetectorTest {
         return new Screen(text, false, Instant.EPOCH);
     }
 
+    /** The daemon spawns pwsh/powershell/cmd on Windows and reports them lower-cased
+     * without {@code .exe}; they must read as "at a prompt" exactly like zsh does. */
     @Test
-    void posixShellsCountAsShells() {
-        for (String shell : new String[]{"zsh", "bash", "sh", "fish"}) {
+    void windowsShellsCountAsShells() {
+        for (String shell : new String[]{"pwsh", "powershell", "cmd", "zsh", "bash"}) {
             assertTrue(StateDetector.isShell(shell), shell);
         }
         assertFalse(StateDetector.isShell("node"));
         assertFalse(StateDetector.isShell("claude"));
+        assertFalse(StateDetector.isShell("cmd.exe"), "the probe strips .exe before reporting");
     }
 
     @Test

@@ -15,9 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Every resolution branch of {@link ServerLauncher}, parameterised so nothing spawns. */
 class ServerLauncherTest {
 
+    private static final boolean WINDOWS = System.getProperty("os.name", "").startsWith("Windows");
+    private static final String EXE = WINDOWS ? ".exe" : "";
+    private static final String JAVA = "java" + EXE;
+
     @Test
     void javaBinaryIsUnderJavaHome() {
-        assertEquals(Path.of("/jdk", "bin", "java"), ServerLauncher.javaBinary("/jdk"));
+        assertEquals(Path.of("/jdk", "bin", JAVA), ServerLauncher.javaBinary("/jdk"));
     }
 
     @Test
@@ -38,7 +42,7 @@ class ServerLauncherTest {
 
     @Test
     void siblingPackagedLauncherIsFound(@TempDir Path dir) throws Exception {
-        Path launcher = dir.resolve(ServerLauncher.NATIVE_LAUNCHER);
+        Path launcher = dir.resolve(ServerLauncher.NATIVE_LAUNCHER + EXE);
         Files.writeString(launcher, "#!/bin/sh\n");
         Optional<List<String>> command = ServerLauncher.resolveCommand(null, null,
                 Optional.of(dir.resolve("micro-harness-manager")), "/jdk", "a.jar", true);
@@ -51,7 +55,7 @@ class ServerLauncherTest {
         Optional<List<String>> command = ServerLauncher.resolveCommand(null, null,
                 Optional.of(Path.of("/apps/micro-harness-manager")), "/jdk", classpath, true);
         assertEquals(List.of(
-                Path.of("/jdk", "bin", "java").toString(),
+                Path.of("/jdk", "bin", JAVA).toString(),
                 "--enable-native-access=ALL-UNNAMED",
                 "-cp",
                 Path.of("target/classes").toAbsolutePath().normalize() + File.pathSeparator
@@ -74,6 +78,6 @@ class ServerLauncherTest {
         List<String> command = ServerLauncher.resolveCommand().orElseThrow();
         assertTrue(command.contains(ServerLauncher.MAIN_CLASS) || command.size() == 3, String.valueOf(command));
         assertEquals(List.of("serve", "--daemon"), command.subList(command.size() - 2, command.size()));
-        assertEquals(ServerLauncher.javaBinary(), Path.of(System.getProperty("java.home"), "bin", "java"));
+        assertEquals(ServerLauncher.javaBinary(), Path.of(System.getProperty("java.home"), "bin", JAVA));
     }
 }

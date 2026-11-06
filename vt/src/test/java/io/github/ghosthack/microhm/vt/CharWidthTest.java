@@ -45,7 +45,7 @@ class CharWidthTest {
             if (wide && start < 0) {
                 start = c;
             } else if (!wide && start >= 0) {
-                out.append(String.format("%04X..%04X%n", start, c - 1));
+                out.append(String.format("%04X..%04X\n", start, c - 1));
                 start = -1;
             }
         }

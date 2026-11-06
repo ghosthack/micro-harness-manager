@@ -64,14 +64,26 @@ public interface HarnessPlugin {
         return Optional.empty();
     }
 
-    /** Quotes a provider session id/name as one POSIX-shell argument. UUID-like ids stay
-     * pleasantly readable; names containing spaces or punctuation are single-quoted. */
+    /** Quotes a value as one argument for the shell a session's commands are typed into.
+     * UUID-like ids stay pleasantly readable; anything with spaces or punctuation is
+     * single-quoted: POSIX shells escape an inner quote as {@code '"'"'}, PowerShell (the
+     * Windows session shell) as {@code ''}. */
     static String shellArgument(String value) {
+        return shellArgument(value, WINDOWS);
+    }
+
+    /** {@link #shellArgument} for a POSIX shell or, when {@code powershell}, PowerShell. */
+    static String shellArgument(String value, boolean powershell) {
         if (value.matches("[A-Za-z0-9_@%+=:,./-]+")) {
             return value;
         }
-        return "'" + value.replace("'", "'\"'\"'") + "'";
+        return powershell
+                ? "'" + value.replace("'", "''") + "'"
+                : "'" + value.replace("'", "'\"'\"'") + "'";
     }
+
+    /** Sessions on Windows type their commands into PowerShell. */
+    boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows");
 
     /**
      * Text that, typed into the harness's own idle prompt and submitted, makes it exit

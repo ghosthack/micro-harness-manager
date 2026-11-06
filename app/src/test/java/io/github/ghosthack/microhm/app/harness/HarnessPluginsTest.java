@@ -50,15 +50,34 @@ final class HarnessPluginsTest {
         assertEquals(Optional.empty(), shell.resumeCommand("abc-123"));
     }
 
-    /** A bare node process in the pane is the user's own program, not a harness. */
+    /** npm shims on Windows run {@code node.exe} as the shell's child, so the foreground
+     * probe reports "node" for claude and codex there — and only there: on macOS/Linux
+     * a bare node process in the pane is the user's own program. */
     @Test
-    void claudeAndCodexDoNotOwnNode() {
-        assertFalse(new ClaudeCodePlugin().ownsProcess("node"));
-        assertTrue(new ClaudeCodePlugin().ownsProcess("claude"));
-        assertTrue(new ClaudeCodePlugin().ownsProcess("2.1.235"));
-        assertFalse(new CodexPlugin().ownsProcess("node"));
-        assertTrue(new CodexPlugin().ownsProcess("codex"));
-        assertFalse(new CodexPlugin().ownsProcess("vim"));
+    void claudeOwnsNodeOnlyOnWindows() {
+        assertTrue(new ClaudeCodePlugin(true).ownsProcess("node"));
+        assertTrue(new ClaudeCodePlugin(true).ownsProcess("claude"));
+        assertTrue(new ClaudeCodePlugin(true).ownsProcess("2.1.235"));
+        assertFalse(new ClaudeCodePlugin(false).ownsProcess("node"));
+        assertTrue(new ClaudeCodePlugin(false).ownsProcess("claude"));
+        assertTrue(new ClaudeCodePlugin(false).ownsProcess("2.1.235"));
+    }
+
+    @Test
+    void codexOwnsNodeOnlyOnWindows() {
+        assertTrue(new CodexPlugin(true).ownsProcess("node"));
+        assertTrue(new CodexPlugin(true).ownsProcess("codex"));
+        assertFalse(new CodexPlugin(false).ownsProcess("node"));
+        assertTrue(new CodexPlugin(false).ownsProcess("codex"));
+        assertFalse(new CodexPlugin(false).ownsProcess("vim"));
+    }
+
+    @Test
+    void platformCheckIsAPrefixMatchOnTheOsName() {
+        assertTrue(Platform.isWindows("Windows 11"));
+        assertTrue(Platform.isWindows("windows server 2022"));
+        assertFalse(Platform.isWindows("Mac OS X"));
+        assertFalse(Platform.isWindows("Linux"));
     }
 
     @Test

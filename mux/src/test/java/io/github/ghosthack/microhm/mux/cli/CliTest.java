@@ -218,4 +218,14 @@ class CliTest {
     private String err() {
         return stderr.toString(StandardCharsets.UTF_8);
     }
+
+    /** --json output is pure ASCII (non-ASCII as \\uXXXX, surrogate pairs for emoji), so no
+     * console code page can lose a character of it, and it parses back to the same text. */
+    @Test
+    void jsonOutputEscapesNonAscii() throws Exception {
+        String text = "box ┌─┐ cjk 中文 emoji 🚀 é";
+        String json = Cli.asciiJson(io.github.ghosthack.microhm.mux.protocol.Json.object().put("text", text));
+        assertTrue(json.chars().allMatch(c -> c < 0x80), json);
+        assertEquals(text, io.github.ghosthack.microhm.mux.protocol.Json.MAPPER.readTree(json).get("text").asText());
+    }
 }

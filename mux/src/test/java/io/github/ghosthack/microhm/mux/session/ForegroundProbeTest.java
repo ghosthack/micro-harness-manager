@@ -97,6 +97,27 @@ class ForegroundProbeTest {
     }
 
     @Test
+    void windowsShellAloneReportsTheShellWithoutExe() {
+        Node shell = new Node("C:\\Program Files\\PowerShell\\7\\pwsh.exe");
+        assertEquals(new ForegroundProbe.Foreground(shell.pid(), "pwsh"), ForegroundProbe.walk(shell));
+    }
+
+    @Test
+    void windowsCmdWrapperIsSkipped() {
+        // an npm shim runs node through cmd.exe
+        Node shell = new Node("powershell.exe");
+        Node node = shell.child("cmd.exe").child("C:\\Program Files\\nodejs\\node.exe");
+        assertEquals(new ForegroundProbe.Foreground(node.pid(), "node"), ForegroundProbe.walk(shell));
+    }
+
+    @Test
+    void windowsWrapperWithNoChildrenFallsBackToTheShell() {
+        Node shell = new Node("cmd.exe");
+        shell.child("conhost.exe");
+        assertEquals(new ForegroundProbe.Foreground(shell.pid(), "cmd"), ForegroundProbe.walk(shell));
+    }
+
+    @Test
     void harnessIsReportedNotItsVersionChild() {
         Node shell = new Node("/bin/zsh");
         Node claude = shell.child("/Users/x/.local/bin/claude");
@@ -136,6 +157,7 @@ class ForegroundProbeTest {
     void normalizesNames() {
         assertEquals("zsh", ForegroundProbe.normalize("-zsh"));
         assertEquals("node", ForegroundProbe.normalize("/usr/local/bin/Node"));
+        assertEquals("node", ForegroundProbe.normalize("C:\\nodejs\\Node.EXE"));
         assertEquals("python", ForegroundProbe.normalize("/opt/homebrew/bin/Python"));
         assertEquals("", ForegroundProbe.normalize(null));
         assertEquals("", ForegroundProbe.normalize("  "));

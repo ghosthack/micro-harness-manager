@@ -194,7 +194,7 @@ public final class Cli {
                     .put(Protocol.F_VERSION, info.version())
                     .put(Protocol.F_PROTOCOL, info.protocol())
                     .put(Protocol.F_PID, info.pid())));
-            out.println(node);
+            printJson(node);
         } else {
             out.println("microhm-mux " + version + " (protocol " + Protocol.VERSION + ")");
             running.ifPresent(info -> out.println("server running: " + info.version()
@@ -221,7 +221,7 @@ public final class Cli {
                         .<ObjectNode>set(Protocol.F_LABELS, labelsNode(info.labels()))
                         .put(Protocol.F_OUTPUT_BYTES, info.outputBytes()));
             }
-            out.println(array);
+            printJson(array);
         } else {
             for (Session.Info info : sessions) {
                 out.println(info.name() + ": " + info.columns() + "x" + info.rows() + " pid " + info.pid()
@@ -256,7 +256,7 @@ public final class Cli {
         Map<String, String> changes = parseLabels(args.positionals().subList(1, args.positionals().size()));
         Map<String, String> labels = client.label(name, changes);
         if (args.flag("--json")) {
-            out.println(labelsNode(labels));
+            printJson(labelsNode(labels));
         } else {
             labels.forEach((key, value) -> out.println(key + "=" + value));
         }
@@ -283,7 +283,7 @@ public final class Cli {
                 args.longValue("--since", -1),
                 args.longValue("--quiet", Protocol.WAIT_DEFAULT_QUIET_MS),
                 args.longValue("--timeout", Protocol.WAIT_DEFAULT_TIMEOUT_MS));
-        out.println(Json.object()
+        printJson(Json.object()
                 .put(Protocol.F_QUIET, result.quiet())
                 .put(Protocol.F_OUTPUT_BYTES, result.outputBytes())
                 .put(Protocol.F_ALIVE, result.alive()));
@@ -321,7 +321,7 @@ public final class Cli {
         if (event.exitCode() != null) {
             node.put(Protocol.F_EXIT_CODE, event.exitCode());
         }
-        out.println(node);
+        printJson(node);
         out.flush();
     }
 
@@ -338,6 +338,24 @@ public final class Cli {
         return node;
     }
 
+    /** JSON with every non-ASCII character escaped ({@code \\uXXXX}): lossless whatever the
+     * console's code page (Windows consoles default to an OEM one that has no ┌, 中 or 🚀). */
+    private void printJson(com.fasterxml.jackson.databind.JsonNode node) {
+        out.println(asciiJson(node));
+    }
+
+    static String asciiJson(com.fasterxml.jackson.databind.JsonNode node) {
+        try {
+            return ASCII_JSON.writeValueAsString(node);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectWriter ASCII_JSON =
+            io.github.ghosthack.microhm.mux.protocol.Json.MAPPER.writer()
+                    .with(com.fasterxml.jackson.core.json.JsonWriteFeature.ESCAPE_NON_ASCII);
+
     private int capture(SessionServerClient client, String name, CaptureFormat format, boolean json) {
         // The client folds the server's "no such session" into empty (the app maps
         // it to a dead pane); only blame a missing server when none answers.
@@ -347,7 +365,7 @@ public final class Cli {
                         : SessionServerException.noServer(name));
         Session.Capture capture = captured.capture();
         if (json) {
-            out.println(Json.object()
+            printJson(Json.object()
                     .put(Protocol.F_TEXT, capture.text())
                     .put(Protocol.F_ALIVE, capture.alive())
                     .put(Protocol.F_FOREGROUND_COMMAND, capture.foregroundCommand())
@@ -373,6 +391,11 @@ public final class Cli {
             throw client.isServerRunning()
                     ? new SessionServerException("no such session: " + name)
                     : SessionServerException.noServer(name);
+        }
+        if (System.getProperty("os.name", "").startsWith("Windows")) {
+            // AttachCommand puts the console in raw mode with stty, which Windows lacks
+            err.println("error: console attach is not supported on Windows; attach from the app");
+            return 1;
         }
         int[] size = args.value("--size").map(Args::size).orElse(null);
         return new AttachCommand(client, stdin, out, err).run(name, size);

@@ -25,10 +25,13 @@ public final class StateDetector {
      * If the pane's foreground process is one of these while the harness is supposed to
      * be running, the harness has exited and left a shell prompt behind — quiescent, but
      * not the same "idle" as a harness sitting at its own prompt. Folded into IDLE (this
-     * app doesn't have a fourth badge color), with a reason that says so.
+     * app doesn't have a fourth badge color), with a reason that says so. The last three
+     * are the Windows shells the daemon spawns (its foreground
+     * probe reports names lower-cased with {@code .exe} stripped).
      */
     private static final Set<String> SHELLS =
-            Set.of("zsh", "bash", "sh", "fish", "dash", "ksh", "tcsh", "csh");
+            Set.of("zsh", "bash", "sh", "fish", "dash", "ksh", "tcsh", "csh",
+                    "pwsh", "powershell", "cmd");
 
     /** Public because it answers "is this pane at a bare prompt?" for more than state
      * detection: {@link ShellPlugin} claims shells as its own process, and graceful

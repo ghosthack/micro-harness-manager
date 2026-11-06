@@ -142,15 +142,34 @@ public final class CodexPlugin implements HarnessPlugin {
                     + "|esc to interrupt"
                     + "|Context\\s+\\d+%\\s+left)");
 
+    /** Whether {@code node} counts as this harness (see {@link #ownsProcess}). */
+    private final boolean windows;
+
+    public CodexPlugin() {
+        this(Platform.isWindows());
+    }
+
+    /** {@code windows} is injectable so both branches of {@link #ownsProcess} have a
+     * unit test regardless of the platform the suite runs on. */
+    CodexPlugin(boolean windows) {
+        this.windows = windows;
+    }
+
     @Override
     public HarnessType type() {
         return HarnessType.CODEX;
     }
 
-    // processName() and ownsProcess() keep their defaults: type().id(), "codex". The launcher
-    // at ~/.local/bin/codex is a real Mach-O binary (a symlink into the versioned standalone
+    // processName() is left at its default of type().id() — "codex". The launcher at
+    // ~/.local/bin/codex is a real Mach-O binary (a symlink into the versioned standalone
     // release), not a shim that execs something else, and the foreground probe reports the
-    // command as "codex": verified at 0.149.0.
+    // command as "codex": verified at 0.149.0. On Windows the npm shim runs node.exe as the shell's
+    // child instead, so the foreground is "node" there — hence the override below.
+    @Override
+    public boolean ownsProcess(String foregroundCommand) {
+        return processName().equals(foregroundCommand)
+                || windows && "node".equals(foregroundCommand);
+    }
 
     @Override
     public String launchCommand() {

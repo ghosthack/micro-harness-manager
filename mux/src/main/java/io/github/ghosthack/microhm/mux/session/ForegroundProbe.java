@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -19,14 +20,15 @@ import java.util.stream.Stream;
  * the terminal's foreground process group), falling back to the shell itself when no row
  * matches (the leader already exited, or the shell has no controlling terminal).
  *
- * <p>When {@code ps} is unavailable: walk from the shell down the chain formed
- * by taking the newest live child at each level, skipping processes whose name cannot be
- * read, and report the first remaining process; else the shell. Never the leaf: tool children and MCP servers
+ * <p>Windows, or when {@code ps} is unavailable: walk from the shell down the chain formed
+ * by taking the newest live child at each level, skipping transparent wrappers
+ * ({@code cmd}, {@code conhost}) and processes whose name cannot be read, and report the
+ * first remaining process; else the shell. Never the leaf: tool children and MCP servers
  * under a harness are newer leaves and would flip the name mid-turn. The walk is written
  * over {@link ProcessNode} so it can be exercised with synthetic trees.
  *
- * <p>Every reported name is the basename, lower-cased, with a login-shell {@code -} prefix
- * removed.
+ * <p>Every reported name is the basename (either separator), lower-cased, with a trailing
+ * {@code .exe} and a login-shell {@code -} prefix removed.
  */
 public final class ForegroundProbe {
 
@@ -49,6 +51,12 @@ public final class ForegroundProbe {
         List<? extends ProcessNode> children();
     }
 
+    /** Processes the fallback walk looks through rather than at (an npm shim's cmd.exe). */
+    static final Set<String> TRANSPARENT = Set.of("cmd", "conhost");
+
+    private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT)
+            .startsWith("windows");
+
     /** {@code pid pgid tpgid comm}; comm may contain spaces (a path under /Applications). */
     private static final Pattern PS_ROW = Pattern.compile("^\\s*(\\d+)\\s+(\\d+)\\s+(-?\\d+)\\s+(.*?)\\s*$");
 
@@ -59,9 +67,11 @@ public final class ForegroundProbe {
         if (shell.isEmpty()) {
             return new Foreground(shellPid, "");
         }
-        Optional<Foreground> viaPs = viaPs(shell.get());
-        if (viaPs.isPresent()) {
-            return viaPs.get();
+        if (!WINDOWS) {
+            Optional<Foreground> viaPs = viaPs(shell.get());
+            if (viaPs.isPresent()) {
+                return viaPs.get();
+            }
         }
         return walk(HandleNode.of(shell.get()));
     }
@@ -103,7 +113,7 @@ public final class ForegroundProbe {
                 return new Foreground(shell.pid(), normalize(shell.command()));
             }
             String name = normalize(child.command());
-            if (!name.isEmpty()) {
+            if (!name.isEmpty() && !TRANSPARENT.contains(name)) {
                 return new Foreground(child.pid(), name);
             }
             node = child;
@@ -117,20 +127,24 @@ public final class ForegroundProbe {
                 .orElse(null);
     }
 
-    /** Basename, without a login-shell {@code -} prefix, lower-cased. */
+    /** Basename, without a login-shell {@code -} prefix, lower-cased, without {@code .exe}. */
     static String normalize(String command) {
         if (command == null) {
             return "";
         }
         String name = command.strip();
-        int cut = name.lastIndexOf('/');
+        int cut = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
         if (cut >= 0) {
             name = name.substring(cut + 1);
         }
         if (name.startsWith("-")) {
             name = name.substring(1);
         }
-        return name.toLowerCase(Locale.ROOT);
+        name = name.toLowerCase(Locale.ROOT);
+        if (name.endsWith(".exe")) {
+            name = name.substring(0, name.length() - 4);
+        }
+        return name;
     }
 
     /** {@link ProcessNode} over a live {@code ProcessHandle}. */

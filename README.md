@@ -5,14 +5,15 @@ state detection and MCP session-controller tools, but local sessions only, and b
 its own terminal stack. It has no tmux, no remote (SSH) machines and no harness-stim, and
 it ships without JediTerm, the Kotlin standard library, pty4j or JetBrains annotations.
 
-macOS and Linux. Java 25+ (built and tested on JDK 26, macOS).
+macOS, Linux and Windows 10 (1809+) / 11. Java 25+ (built and tested on JDK 26, on macOS
+and Windows 11).
 
 ## Modules
 
 | Module | What it is | Main / test lines |
 |---|---|---|
 | `vt` | Terminal emulator core: VT tokenizer, `TerminalEmulator` (screen model + interpreter), `HeadlessTerminal` (daemon side), `ScreenSerializer` (redraw on attach), Unicode 17 widths | 4.5k / 4.0k |
-| `pty` | Pseudo-terminal processes over the Java FFM API (`PtyProcess`), no native code of its own | 0.8k / 0.2k |
+| `pty` | Pseudo-terminal processes over the Java FFM API (`PtyProcess`): POSIX ptys and Windows ConPTY, no native code of its own | 1.8k / 0.5k |
 | `mux` | The session daemon and its client, forked from jmux, on `vt` and `pty` | 6.0k / 4.1k |
 | `app` | The Swing app, ported from harness-manager, with its own terminal view (`TerminalView`) | 18.6k / 9.1k |
 
@@ -22,19 +23,21 @@ Kotlin, pty4j or JetBrains annotations is a dependency at any scope, tests inclu
 ## Run
 
 ```sh
-./run.sh
+./run.sh        # macOS, Linux
+run.cmd         # Windows
 ```
 
 It rebuilds the shaded jar (`app/target/microhm-app-0.1.0-SNAPSHOT.jar`) when sources
 changed and launches it. The session daemon is started on demand from the same jar, and
 outlives the app: quit and relaunch, and the sessions are still there.
 
-`./microhm-mux` is the daemon's command-line client, run from the same jar:
+`./microhm-mux` (`microhm-mux.cmd` on Windows) is the daemon's command-line client, run
+from the same jar:
 
 ```sh
 ./microhm-mux list               # sessions on micro's daemon
 ./microhm-mux capture mhm-foo    # one session's screen as text
-./microhm-mux attach mhm-foo     # attach this terminal (Ctrl+] detaches)
+./microhm-mux attach mhm-foo     # attach this terminal (Ctrl+] detaches; not on Windows)
 ./microhm-mux shutdown           # stop the daemon and every session on it
 ```
 
@@ -59,6 +62,12 @@ full table.
   native helper. Without it zsh would have no controlling terminal: no job control,
   and no foreground process group for the daemon to read. The master descriptor is closed exactly once and never used after (a late
   write fails instead of hitting a reused fd); a reaper thread `waitpid`s the child.
+  On Windows the child runs in a ConPTY pseudoconsole (`CreatePseudoConsole`, then
+  `CreateProcessW` with the pseudoconsole attribute), created suspended so it joins a
+  kill-on-close job object first: killing a session ends its whole process tree. The
+  shell is pwsh, else Windows PowerShell, else `%ComSpec%`, and harness commands are
+  quoted for PowerShell. The process inherits normal Ctrl+C handling even when micro was
+  started from something that ignores it (Windows OpenSSH does).
 - **jediterm-core → `vt`.** `TerminalEmulator` implements the xterm subset the harnesses
   use: margins and scroll regions (including Codex's inline viewport on the main
   screen), alternate screens, pending wrap, wide and combining characters, full SGR with
@@ -77,8 +86,11 @@ full table.
 
 ## Tests
 
-`mvn test` runs 1,113 tests: vt 463, pty 17, mux 142, app 491. They spawn real PTYs and
-daemons in temporary homes; none touch `~/.micro-harness-manager`.
+`mvn test` runs 1,144 tests: vt 463, pty 32, mux 154, app 495; each platform skips the
+other's PTY tests (Windows also skips the POSIX-shell live daemon tests, and runs
+PowerShell session tests of its own). They spawn real PTYs and daemons in temporary
+homes; none touch `~/.micro-harness-manager`. The golden files and recordings are pinned
+to exact bytes in `.gitattributes`, so a Windows checkout with `core.autocrlf` passes too.
 
 ## Known gaps
 
@@ -88,8 +100,11 @@ daemons in temporary homes; none touch `~/.micro-harness-manager`.
   accents with Option (see [app/README.md](app/README.md#the-terminal)).
 - Not supported: text blink, underline colour (SGR 58), OSC 8 hyperlinks, rectangular
   selection, copy-on-select, DECLRMM/DECCOLM.
-- Windows is not supported (the PTY layer is POSIX only).
-- No packaging (jpackage, signing) yet; `run.sh` launches the shaded jar.
+- Windows: PowerShell sessions don't report their working directory, so "New here" and
+  Duplicate fall back to the session's launch directory (cmd does report it); the CLI's
+  `attach` is POSIX only; keyboard input in the window was tested with synthetic events,
+  not by hand.
+- No packaging (jpackage, signing) yet; `run.sh` / `run.cmd` launch the shaded jar.
 
 ## License
 

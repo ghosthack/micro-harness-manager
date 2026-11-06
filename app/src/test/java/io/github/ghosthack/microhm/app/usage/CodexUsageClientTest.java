@@ -2,6 +2,7 @@ package io.github.ghosthack.microhm.app.usage;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -20,13 +22,27 @@ final class CodexUsageClientTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** The fake server runs as {@code /bin/sh <file>}: a script file sidesteps quoting a
-     * long {@code -c} argument. */
+    /** {@code /bin/sh} doesn't exist on Windows; Git for Windows' bundled bash is this
+     * project's own build prerequisite there (run.sh needs it), so reuse it as the closest
+     * POSIX shell rather than requiring WSL. Skips, rather than fails, if it's missing.
+     *
+     * <p>The script is written to a temp file and run as {@code <shell> <file>} rather than
+     * {@code <shell> -c <script>}: Git Bash (MSYS2) re-tokenizes the raw Windows command line
+     * itself, and its parsing of a heavily quoted {@code -c} argument doesn't agree with the
+     * JDK's own Windows command-line quoting — the script silently arrives truncated/mangled
+     * and the process never echoes a response, hanging the caller. A bare file path has
+     * nothing for either side to disagree about. */
     private static Process startFakeServer(String script) throws IOException {
+        String shell = "/bin/sh";
+        if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
+            Path bash = Path.of(System.getenv("ProgramFiles"), "Git", "bin", "bash.exe");
+            Assumptions.assumeTrue(Files.isRegularFile(bash), "Git Bash not found at " + bash);
+            shell = bash.toString();
+        }
         Path scriptFile = Files.createTempFile("codex-fake-server", ".sh");
         scriptFile.toFile().deleteOnExit();
         Files.writeString(scriptFile, script, StandardCharsets.UTF_8);
-        return new ProcessBuilder("/bin/sh", scriptFile.toString()).start();
+        return new ProcessBuilder(shell, scriptFile.toString()).start();
     }
 
     @Test

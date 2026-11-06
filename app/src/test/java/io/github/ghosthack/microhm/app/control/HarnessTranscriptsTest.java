@@ -22,7 +22,10 @@ final class HarnessTranscriptsTest {
     void claudeUsesTheSessionsOwnFileElseTheNewestInTheProjectDirectory() throws Exception {
         Path projects = dir.resolve("projects");
         Path project = Path.of("/Users/me/src/my_app.v2");
-        Path claudeDir = Files.createDirectories(projects.resolve("-Users-me-src-my-app-v2"));
+        // Claude's folder name: every non-alphanumeric character of the absolute path a dash
+        // ("-Users-me-src-my-app-v2"; on Windows "C--Users-me-src-my-app-v2")
+        Path claudeDir = Files.createDirectories(projects.resolve(
+                project.toAbsolutePath().toString().replaceAll("[^A-Za-z0-9]", "-")));
         Path older = Files.writeString(claudeDir.resolve("aaaa-1.jsonl"), "{}");
         Path newer = Files.writeString(claudeDir.resolve("bbbb-2.jsonl"), "{}");
         Files.setLastModifiedTime(older, FileTime.fromMillis(1_000));

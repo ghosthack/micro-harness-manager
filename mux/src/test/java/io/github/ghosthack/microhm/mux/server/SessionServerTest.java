@@ -431,12 +431,22 @@ class SessionServerTest {
         // Socket and inbound-pipe buffers can accept early re-snapshots even while the
         // application is not reading. Assert delivery and ordering, not a platform-
         // dependent number of re-sync requests.
-        // Now the stuck client drains and must receive a fresh snapshot.
+        // Now the stuck client drains. Either it fell behind and must receive a fresh
+        // snapshot, or the platform's socket buffers absorbed the whole push (Windows'
+        // AF_UNIX buffers can hold megabytes), it never fell behind, and it must receive
+        // every byte in order instead — never a gap without a re-sync.
         String marker = new String(FakeSession.RESNAPSHOT, StandardCharsets.UTF_8);
         StringBuilder seen = new StringBuilder();
-        readUntil(stuck, marker, seen);
+        int complete = FakeSession.SNAPSHOT.length + pushed.length;
+        readUntilEither(stuck, marker, complete, seen);
         assertTrue(seen.toString().startsWith("<<SNAPSHOT>>"), "its original snapshot came first");
-        assertTrue(fake.snapshotForCalls.get() >= 1, "a re-sync was requested");
+        if (seen.indexOf(marker) < 0) {
+            assertEquals(0, fake.snapshotForCalls.get(), "no re-sync without a marker");
+            assertEquals(new String(FakeSession.SNAPSHOT, StandardCharsets.UTF_8)
+                    + new String(pushed, StandardCharsets.UTF_8), seen.toString(), "the whole stream, in order");
+        } else {
+            assertTrue(fake.snapshotForCalls.get() >= 1, "a re-sync was requested");
+        }
         assertTrue(stuck.isConnected());
         readUntil(stuck, "after-marker", new StringBuilder(), () -> fake.push("after-marker"));
     }
@@ -583,7 +593,7 @@ class SessionServerTest {
                 () -> client.label("nope", Map.of("a", "b")));
         assertTrue(missing.getMessage().contains("no such session: nope"), missing.getMessage());
 
-        JsonNode badNew = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"x\",\"workdir\":\"" + home
+        JsonNode badNew = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"x\",\"workdir\":\"" + jsonPath(home)
                 + "\",\"labels\":[\"a\"]}");
         assertFalse(badNew.get(Protocol.F_OK).asBoolean());
         assertTrue(badNew.get(Protocol.F_ERROR).asText().contains("labels must be an object"));
@@ -907,12 +917,12 @@ class SessionServerTest {
         assertEquals(Map.of(), manager.environments.get("plain"));
 
         // The ack is on the wire only when there was something to acknowledge.
-        JsonNode acked = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"ack\",\"workdir\":\"" + home
+        JsonNode acked = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"ack\",\"workdir\":\"" + jsonPath(home)
                 + "\",\"env\":{\"A\":\"1\"}}");
         assertTrue(acked.path(Protocol.F_ENV).asBoolean(false), acked.toString());
         for (String noEnv : new String[]{"", ",\"env\":{}"}) {
             JsonNode plain = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"noack" + noEnv.length()
-                    + "\",\"workdir\":\"" + home + "\"" + noEnv + "}");
+                    + "\",\"workdir\":\"" + jsonPath(home) + "\"" + noEnv + "}");
             assertTrue(plain.get(Protocol.F_OK).asBoolean(), plain.toString());
             assertFalse(plain.has(Protocol.F_ENV), plain.toString());
         }
@@ -925,7 +935,7 @@ class SessionServerTest {
                 {"{\"A=B\":\"x\"}", "invalid environment variable name: 'A=B'"},
                 {"{\"\":\"x\"}", "invalid environment variable name: ''"},
                 {"{\"A\":\"x\\u0000y\"}", "env A must not contain NUL"}}) {
-            JsonNode reply = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"bad\",\"workdir\":\"" + home
+            JsonNode reply = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"bad\",\"workdir\":\"" + jsonPath(home)
                     + "\",\"env\":" + bad[0] + "}");
             assertFalse(reply.get(Protocol.F_OK).asBoolean(), bad[0]);
             assertEquals(bad[1], reply.get(Protocol.F_ERROR).asText());
@@ -973,6 +983,11 @@ class SessionServerTest {
     }
 
     /** One request over a fresh raw connection. */
+    /** A path inside a hand-written JSON string: backslashes (Windows) escaped. */
+    private static String jsonPath(Path path) {
+        return path.toString().replace("\\", "\\\\");
+    }
+
     private JsonNode raw(String request) throws IOException {
         try (SocketChannel channel = connect(home)) {
             FrameCodec codec = codec(channel);
@@ -1130,6 +1145,24 @@ class SessionServerTest {
             fake.push(chunk); // never blocks, whatever the stuck client does
         }
         return stuck;
+    }
+
+    /** Reads until {@code marker} has arrived or {@code length} characters have, within
+     * {@link #WAIT}. */
+    private static void readUntilEither(AttachedSession attached, String marker, int length, StringBuilder seen)
+            throws Exception {
+        byte[] buf = new byte[65536];
+        long deadline = System.nanoTime() + WAIT.toNanos();
+        while (seen.indexOf(marker) < 0 && seen.length() < length) {
+            long left = deadline - System.nanoTime();
+            assertTrue(left > 0, "neither '" + marker + "' nor the whole stream arrived (" + seen.length() + " of "
+                    + length + ")");
+            FutureTask<Integer> read = new FutureTask<>(() -> attached.read(buf, 0, buf.length));
+            Thread.ofVirtual().name("test-read").start(read);
+            int n = read.get(left, TimeUnit.NANOSECONDS);
+            assertTrue(n >= 0, "the stream ended early");
+            seen.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+        }
     }
 
     private static String readUntil(AttachedSession attached, String marker, StringBuilder seen) throws Exception {

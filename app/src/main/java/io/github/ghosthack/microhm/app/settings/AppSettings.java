@@ -55,7 +55,8 @@ public final class AppSettings {
 
     /**
      * Terminal font shared by every attached tab. The unset default is the platform's
-     * stock monospace face: Menlo on macOS, and Java's logical Monospaced family elsewhere.
+     * stock monospace face: Menlo on macOS, Consolas on Windows, and Java's logical
+     * Monospaced family elsewhere.
      */
     public static String terminalFontFamily() {
         String value = load().getProperty("terminal.font-family");
@@ -92,6 +93,9 @@ public final class AppSettings {
 
     private static String defaultTerminalFontFamily() {
         String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (osName.contains("win")) {
+            return "Consolas";
+        }
         if (osName.contains("mac")) {
             return "Menlo";
         }

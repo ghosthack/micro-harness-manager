@@ -29,7 +29,8 @@ import java.util.stream.Collectors;
  * The child is started from the user's home directory with
  * {@code redirectErrorStream(true).redirectOutput(Redirect.appendTo(<home>/server.log))}
  * and stdin left as the default pipe — never {@code inheritIO}, so it holds no descriptor
- * of the parent's terminal. ({@code serve --daemon} redirects its own stdio too and
+ * of the parent's terminal (and on Windows the JVM passes {@code CREATE_NO_WINDOW} only
+ * when no std handle is inherited, which gives the daemon its own hidden console). ({@code serve --daemon} redirects its own stdio too and
  * ignores SIGHUP/SIGINT; see {@code DaemonMode}.)
  */
 public final class ServerLauncher {
@@ -42,9 +43,11 @@ public final class ServerLauncher {
     /** The subcommand and flag every resolved command ends with, before {@code --home}. */
     static final List<String> SERVE_ARGS = List.of("serve", "--daemon");
 
-    /** {@code <java.home>/bin/java}. */
+    private static final boolean WINDOWS = System.getProperty("os.name", "").startsWith("Windows");
+
+    /** {@code <java.home>/bin/java} ({@code java.exe} on Windows). */
     public static Path javaBinary(String javaHome) {
-        return Path.of(javaHome, "bin", "java");
+        return Path.of(javaHome, "bin", WINDOWS ? "java.exe" : "java");
     }
 
     public static Path javaBinary() {
@@ -112,7 +115,7 @@ public final class ServerLauncher {
         if (directory == null) {
             return Optional.empty();
         }
-        Path launcher = directory.resolve(NATIVE_LAUNCHER);
+        Path launcher = directory.resolve(WINDOWS ? NATIVE_LAUNCHER + ".exe" : NATIVE_LAUNCHER);
         return Files.isRegularFile(launcher) ? Optional.of(launcher) : Optional.empty();
     }
 
