@@ -4,8 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
-import javax.swing.JDialog;
-import javax.swing.JOptionPane;
 import java.awt.AWTException;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -90,12 +88,10 @@ final class StatusIcon {
         mcpItem.setEnabled(false);
         MenuItem open = new MenuItem("Open " + APP_NAME);
         open.addActionListener(e -> actions.open());
-        MenuItem shutDown = new MenuItem("Shut Down All Sessions…");
-        shutDown.addActionListener(e -> {
-            if (confirmShutDown()) {
-                actions.shutDownSessions();
-            }
-        });
+        // No confirmation: the host has no window or app identity, so a dialog would be a
+        // bare Java one; the item's label says what it does.
+        MenuItem shutDown = new MenuItem("Shut Down All Sessions");
+        shutDown.addActionListener(e -> actions.shutDownSessions());
         MenuItem hide = new MenuItem("Hide This Icon");
         hide.addActionListener(e -> actions.hide());
         menu.add(sessionsItem);
@@ -149,18 +145,6 @@ final class StatusIcon {
 
     static String tooltip(int sessions, int port) {
         return APP_NAME + " — " + sessionsLabel(sessions) + (port > 0 ? " · MCP :" + port : "");
-    }
-
-    private static boolean confirmShutDown() {
-        JOptionPane pane = new JOptionPane(
-                "End every session and stop the session daemon?\n"
-                        + "Running agents and shells are terminated; Resume restarts agents later.",
-                JOptionPane.WARNING_MESSAGE, JOptionPane.OK_CANCEL_OPTION);
-        JDialog dialog = pane.createDialog(APP_NAME);
-        dialog.setAlwaysOnTop(true); // a menu-bar app has no window to come in front of
-        dialog.setVisible(true);
-        dialog.dispose();
-        return Integer.valueOf(JOptionPane.OK_OPTION).equals(pane.getValue());
     }
 
     /**
