@@ -1,0 +1,8 @@
+{
+  "name": "micro-harness-manager-icon",
+  "private": true,
+  "description": "Renders the app icon from a three.js scene",
+  "dependencies": {
+    "three": "0.170.0"
+  }
+}
