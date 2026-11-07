@@ -272,8 +272,8 @@ final class SettingsDialog {
         sessions.addRow("Shell:", shellCombo);
         sessions.addRow("", note("For new sessions. Your default is your login shell; others read their own setup files."));
         sessions.addRow("Agent start:", directLaunchBox);
-        sessions.addRow("", note("Off types the agent's command once the shell is up. On starts it with the shell,"));
-        sessions.addRow("", note("so nothing is typed during startup. Other shells always type it."));
+        sessions.addRow("", note("On by default: the shell starts the agent itself, so nothing is typed during startup."));
+        sessions.addRow("", note("Off types the agent's command once the shell is up. Other shells always type it."));
         sessions.addRow("Background icon:", trayIconBox);
         sessions.addRow("", note("On by default. Opens the app; takes effect next time you quit."));
 

@@ -67,8 +67,8 @@ final class OpenSessionDialog {
         form.addRow("Harness:", harnessCombo);
         form.addRow("Resume session id (optional):", sessionIdField);
         // Which shell the session starts in; chosen in Settings, shown here so it is no surprise.
-        JLabel shellLabel = new JLabel(SessionShell.system().describe(AppSettings.sessionShell()));
-        shellLabel.setToolTipText("Change it in Settings → Sessions → Shell");
+        JLabel shellLabel = new JLabel(SessionShell.system().describe(AppSettings.sessionShell())
+                + "  ·  change it in Settings → Sessions → Shell");
         form.addRow("Shell:", shellLabel);
 
         JLabel hint = new JLabel(

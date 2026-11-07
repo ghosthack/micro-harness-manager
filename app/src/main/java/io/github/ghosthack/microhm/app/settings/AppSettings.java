@@ -633,11 +633,11 @@ public final class AppSettings {
         save(p -> p.setProperty("session.shell", shell == null ? "" : shell.trim()));
     }
 
-    /** Whether agents start in one step inside the shell ({@code session.launch=direct})
-     * rather than being typed into it once the shell is up (the default). */
+    /** Whether agents start in one step inside the shell (the default) rather than being
+     * typed into it once the shell is up ({@code session.launch=typed}). */
     public static boolean directLaunch() {
         String value = load().getProperty("session.launch");
-        return value != null && value.trim().equalsIgnoreCase("direct");
+        return value == null || !value.trim().equalsIgnoreCase("typed");
     }
 
     public static void saveDirectLaunch(boolean direct) {
