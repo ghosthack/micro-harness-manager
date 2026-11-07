@@ -1,14 +1,14 @@
 package io.github.ghosthack.microhm.app;
 
-import io.github.ghosthack.microhm.app.control.ClientDaemonControl;
-import io.github.ghosthack.microhm.app.control.LauncherSpawner;
-import io.github.ghosthack.microhm.app.control.SessionController;
 import io.github.ghosthack.microhm.app.daemon.SessionServerHost;
 import io.github.ghosthack.microhm.app.mcp.McpService;
+import io.github.ghosthack.microhm.app.mcphost.HostLauncher;
+import io.github.ghosthack.microhm.app.mcphost.HostOwner;
+import io.github.ghosthack.microhm.app.mcphost.InstanceLock;
+import io.github.ghosthack.microhm.app.mcphost.McpHost;
+import io.github.ghosthack.microhm.app.mcphost.McpStack;
 import io.github.ghosthack.microhm.app.registry.RegistryPaths;
 import io.github.ghosthack.microhm.app.registry.SessionRegistry;
-import io.github.ghosthack.microhm.app.session.SessionEvents;
-import io.github.ghosthack.microhm.app.session.SessionLauncher;
 import io.github.ghosthack.microhm.app.settings.AppSettings;
 import io.github.ghosthack.microhm.app.ui.MacWindowAppearance;
 import io.github.ghosthack.microhm.app.ui.MainWindow;
@@ -18,13 +18,8 @@ import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.channels.OverlappingFileLockException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.time.Clock;
-import java.util.concurrent.atomic.AtomicReference;
+import java.time.Duration;
 
 /**
  * Entry point: multi-session Swing app over harnesses hosted on the session daemon.
@@ -40,17 +35,16 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class MicroHarnessManagerApp {
 
-    /**
-     * Exclusive lock held for the process lifetime — saves are full-snapshot rewrites,
-     * so a second instance on the same registry would silently clobber this one's
-     * entries. Never closed deliberately; the OS releases it on exit.
-     */
-    @SuppressWarnings("unused")
-    private static FileChannel instanceLock;
+    /** How long a running MCP host gets to exit when the app takes the registry back. */
+    private static final Duration HOST_STOP_WAIT = Duration.ofSeconds(5);
 
     public static void main(String[] args) throws Exception {
         if (args.length == 1 && args[0].equals("--package-smoke")) {
             PackageSmoke.run();
+            return;
+        }
+        if (args.length >= 1 && args[0].equals(McpHost.FLAG)) {
+            McpHost.run(args);
             return;
         }
         // Same pair the MainWindow toolbar toggle switches between at runtime.
@@ -81,25 +75,16 @@ public final class MicroHarnessManagerApp {
         // Only newSession ever spawns the daemon; every other call on a dead daemon home
         // answers "no server", so an app with no sessions costs nothing.
         SessionServerHost host = SessionServerHost.forDefaultHome();
-        // The MCP server: off unless mcp.server=on. Sessions launched while it runs get
-        // its URL in their launch command (the token rides in their environment or an
-        // owner-only config file, never on the command line); its tools are the session
-        // controller over the daemon, which spawns through the window's own launcher, and
-        // SessionEvents carries what agents create or kill into the window's sidebar. The
-        // launcher asks the service for URLs and tokens and the service hosts the
-        // controller that uses the launcher, hence the late-bound reference.
-        AtomicReference<McpService> mcpRef = new AtomicReference<>();
-        SessionEvents sessionEvents = new SessionEvents();
-        SessionLauncher launcher = new SessionLauncher(registry, host, session -> {
-            McpService service = mcpRef.get();
-            return service != null ? service.linkFor(session) : null;
-        }, RegistryPaths.resolveMcpConfigDir(), host::label, host::newSession);
-        SessionController controller = new SessionController(new ClientDaemonControl(host.client()),
-                registry, new LauncherSpawner(launcher, host, sessionEvents), Clock.systemUTC());
-        McpService mcpService = new McpService(controller);
-        mcpRef.set(mcpService);
+        // The MCP server: off unless mcp.server=on; its tools are the session controller
+        // over the daemon, spawning through the window's own launcher (see McpStack).
+        McpStack stack = McpStack.create(registry, host);
+        McpService mcpService = stack.service();
         startMcpServer(mcpService);
-        SwingUtilities.invokeLater(() -> new MainWindow(registry, host, launcher, mcpService, sessionEvents)
+        // However the app ends, agents keep their MCP tools while sessions live: a
+        // headless host takes over the server (and the registry) until the app is back.
+        Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("mhm-mcp-handoff").unstarted(
+                () -> HostLauncher.launchIfNeeded(registry, host)));
+        SwingUtilities.invokeLater(() -> new MainWindow(registry, host, stack.launcher(), mcpService, stack.events())
                 .setVisible(true));
     }
 
@@ -121,34 +106,22 @@ public final class MicroHarnessManagerApp {
     }
 
     /**
-     * Takes the single-instance lock: an {@code instance.lock} file beside the resolved
-     * registry file, so scratch registries don't contend with the real one. Failure to
-     * even attempt the lock (unwritable directory, exotic filesystem) runs unguarded —
-     * a working session manager beats refusing to start.
+     * Takes the registry's instance lock. A headless MCP host holding it (the app was
+     * closed while sessions ran) is stopped and the lock taken over; anything else holding
+     * it is another app. A lock that cannot even be attempted runs unguarded.
      */
-    private static boolean lockInstance(Path registryFile) {
-        Path lockFile = registryFile.toAbsolutePath().resolveSibling("instance.lock");
-        try {
-            Path parent = lockFile.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
+    private static boolean lockInstance(Path registryFile) throws InterruptedException {
+        InstanceLock.Result lock = InstanceLock.tryAcquire(registryFile);
+        if (lock == InstanceLock.Result.HELD) {
+            // A host that just took the lock writes its record right after; give it a moment.
+            for (int i = 0; i < 20 && HostOwner.read(registryFile).isEmpty(); i++) {
+                Thread.sleep(50);
             }
-            FileChannel channel = FileChannel.open(lockFile,
-                    StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-            try {
-                if (channel.tryLock() == null) {
-                    channel.close();
-                    return false;
-                }
-            } catch (OverlappingFileLockException e) {
-                channel.close();
-                return false;
+            if (HostOwner.read(registryFile).isPresent() && HostOwner.stop(registryFile, HOST_STOP_WAIT)) {
+                lock = InstanceLock.acquire(registryFile, HOST_STOP_WAIT);
             }
-            instanceLock = channel;
-            return true;
-        } catch (IOException e) {
-            return true;
         }
+        return lock != InstanceLock.Result.HELD;
     }
 
     private MicroHarnessManagerApp() {
