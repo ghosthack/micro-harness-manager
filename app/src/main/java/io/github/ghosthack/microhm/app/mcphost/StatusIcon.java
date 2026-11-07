@@ -34,7 +34,8 @@ final class StatusIcon {
 
     private static final Logger LOG = LoggerFactory.getLogger(StatusIcon.class);
 
-    static final String APP_NAME = "micro-harness-manager";
+    /** The app's visible name, as in its window title. */
+    static final String APP_NAME = "Microhm";
     private static final String APP_ICON = "/io/github/ghosthack/microhm/app/ui/app-icon.png";
 
     /** What the menu does; called on the AWT event thread. */

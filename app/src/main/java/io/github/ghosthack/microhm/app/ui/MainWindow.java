@@ -99,7 +99,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class MainWindow extends JFrame {
 
     /** App name shown as the base window title; the selected session is prefixed to it. */
-    public static final String APP_NAME = "micro-harness-manager";
+    /** The name people see: window titles, the macOS app menu, dialogs. Files, packages
+     * and paths keep the project's name, micro-harness-manager. */
+    public static final String APP_NAME = "Microhm";
 
     private static final String PLACEHOLDER_CARD = "__placeholder__";
     private static final String DEFAULT_CARD = "__default__";

@@ -17,8 +17,8 @@ class StatusIconTest {
         assertEquals("3 sessions running", StatusIcon.sessionsLabel(3));
         assertEquals("MCP serving on 127.0.0.1:47123", StatusIcon.mcpLabel(47123));
         assertEquals("MCP server off", StatusIcon.mcpLabel(-1));
-        assertEquals("micro-harness-manager — 2 sessions running · MCP :47123", StatusIcon.tooltip(2, 47123));
-        assertEquals("micro-harness-manager — 1 session running", StatusIcon.tooltip(1, -1));
+        assertEquals("Microhm — 2 sessions running · MCP :47123", StatusIcon.tooltip(2, 47123));
+        assertEquals("Microhm — 1 session running", StatusIcon.tooltip(1, -1));
     }
 
     @Test
