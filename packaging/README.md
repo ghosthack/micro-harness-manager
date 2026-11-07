@@ -31,6 +31,9 @@ HTTP stack the MCP server uses), and a real session through the packaged daemon.
 `scripts/smoke-windows-installer.ps1` installs, optionally upgrades, runs and
 uninstalls the Windows installer.
 
+The installers' icons come from `packaging/icons`; see [icons/README.md](icons/README.md)
+for how they are made and the earlier designs.
+
 Versions are numeric `X.Y.Z` with `X >= 1` (jpackage rejects a leading 0). Local
 builds default to 1.0.0; the Maven version comes from `-Drevision`.
 

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Original chibi resistor: a chubby dog-bone body, glossy bands and short round leads -->
+  <defs>
+    <linearGradient id="body" gradientUnits="userSpaceOnUse" x1="0" y1="312" x2="0" y2="712">
+      <stop offset="0" stop-color="#FFE9C2"/>
+      <stop offset="0.35" stop-color="#F7CC8C"/>
+      <stop offset="0.8" stop-color="#DB9B5B"/>
+      <stop offset="1" stop-color="#B8763E"/>
+    </linearGradient>
+    <linearGradient id="round" gradientUnits="userSpaceOnUse" x1="0" y1="312" x2="0" y2="712">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.3" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="#5A2A10" stop-opacity="0"/>
+      <stop offset="1" stop-color="#5A2A10" stop-opacity="0.38"/>
+    </linearGradient>
+    <linearGradient id="lead" gradientUnits="userSpaceOnUse" x1="0" y1="480" x2="0" y2="544">
+      <stop offset="0" stop-color="#FAFBFF"/>
+      <stop offset="0.5" stop-color="#C4CAD6"/>
+      <stop offset="1" stop-color="#7D8597"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#B7791F"/>
+      <stop offset="0.45" stop-color="#FFD966"/>
+      <stop offset="1" stop-color="#C98A1E"/>
+    </linearGradient>
+    <clipPath id="shape">
+      <rect x="168" y="322" width="268" height="380" rx="134"/>
+      <rect x="588" y="322" width="268" height="380" rx="134"/>
+      <rect x="340" y="364" width="344" height="296"/>
+    </clipPath>
+    <filter id="drop" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="22" flood-color="#3A1F2B" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <g transform="translate(512 512) rotate(-32) scale(1.04) translate(-512 -512)" filter="url(#drop)">
+    <!-- leads -->
+    <g stroke-linecap="round" fill="none">
+      <path d="M108 512 H250" stroke="#6B7282" stroke-width="68"/>
+      <path d="M774 512 H916" stroke="#6B7282" stroke-width="68"/>
+      <path d="M108 512 H250" stroke="url(#lead)" stroke-width="60"/>
+      <path d="M774 512 H916" stroke="url(#lead)" stroke-width="60"/>
+      <path d="M114 497 H230" stroke="#ffffff" stroke-opacity="0.75" stroke-width="12"/>
+      <path d="M794 497 H910" stroke="#ffffff" stroke-opacity="0.75" stroke-width="12"/>
+    </g>
+
+    <!-- depth -->
+    <g fill="#9A5E2E" transform="translate(0 18)">
+      <rect x="168" y="322" width="268" height="380" rx="134"/>
+      <rect x="588" y="322" width="268" height="380" rx="134"/>
+      <rect x="340" y="364" width="344" height="296"/>
+    </g>
+
+    <!-- body, bands, rounding -->
+    <g clip-path="url(#shape)">
+      <rect x="150" y="300" width="724" height="424" fill="url(#body)"/>
+      <rect x="306" y="300" width="56" height="424" fill="#7A3B1E"/>
+      <rect x="436" y="300" width="56" height="424" fill="#2C2433"/>
+      <rect x="548" y="300" width="56" height="424" fill="#E8492E"/>
+      <rect x="704" y="300" width="46" height="424" fill="url(#gold)"/>
+      <rect x="150" y="300" width="724" height="424" fill="url(#round)"/>
+    </g>
+
+    <!-- gloss -->
+    <g fill="#ffffff">
+      <rect x="214" y="358" width="168" height="30" rx="15" opacity="0.55"/>
+      <rect x="634" y="358" width="178" height="30" rx="15" opacity="0.55"/>
+      <rect x="392" y="392" width="240" height="22" rx="11" opacity="0.4"/>
+      <circle cx="240" cy="436" r="13" opacity="0.6"/>
+    </g>
+  </g>
+</svg>

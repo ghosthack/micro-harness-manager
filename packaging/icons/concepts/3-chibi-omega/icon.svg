@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Original chibi Ω: a puffy glossy omega on round pillowy feet -->
+  <defs>
+    <linearGradient id="body" gradientUnits="userSpaceOnUse" x1="0" y1="160" x2="0" y2="900">
+      <stop offset="0" stop-color="#FFC45E"/>
+      <stop offset="0.45" stop-color="#FF8A3D"/>
+      <stop offset="1" stop-color="#F0455E"/>
+    </linearGradient>
+    <linearGradient id="side" gradientUnits="userSpaceOnUse" x1="200" y1="0" x2="824" y2="0">
+      <stop offset="0" stop-color="#B8282F" stop-opacity="0.35"/>
+      <stop offset="0.25" stop-color="#B8282F" stop-opacity="0"/>
+      <stop offset="0.75" stop-color="#B8282F" stop-opacity="0"/>
+      <stop offset="1" stop-color="#B8282F" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="foot" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF7448"/>
+      <stop offset="1" stop-color="#D93450"/>
+    </linearGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3A1F2B" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#3A1F2B" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="512" cy="900" rx="400" ry="44" fill="url(#shadow)"/>
+
+  <!-- depth, then body -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="156">
+    <path d="M344 770 C344 720 437.8 709.9 386.9 678.1 A236 236 0 1 1 637.1 678.1 C586.2 709.9 680 720 680 770" stroke="#A8283C" transform="translate(0 20)"/>
+    <path d="M344 770 C344 720 437.8 709.9 386.9 678.1 A236 236 0 1 1 637.1 678.1 C586.2 709.9 680 720 680 770" stroke="url(#body)"/>
+    <path d="M344 770 C344 720 437.8 709.9 386.9 678.1 A236 236 0 1 1 637.1 678.1 C586.2 709.9 680 720 680 770" stroke="url(#side)"/>
+  </g>
+
+  <!-- pillowy feet -->
+  <rect x="132" y="752" width="330" height="128" rx="64" fill="#A8283C" transform="translate(0 14)"/>
+  <rect x="562" y="752" width="330" height="128" rx="64" fill="#A8283C" transform="translate(0 14)"/>
+  <rect x="132" y="752" width="330" height="128" rx="64" fill="url(#foot)"/>
+  <rect x="562" y="752" width="330" height="128" rx="64" fill="url(#foot)"/>
+  <rect x="168" y="770" width="170" height="28" rx="14" fill="#ffffff" opacity="0.32"/>
+  <rect x="598" y="770" width="170" height="28" rx="14" fill="#ffffff" opacity="0.32"/>
+
+  <!-- gloss: a long arc on the crown, a side streak and a sparkle -->
+  <g fill="none" stroke="#ffffff" stroke-linecap="round">
+    <path d="M352.1 240.9 A286 286 0 0 1 671.9 240.9" stroke-opacity="0.5" stroke-width="30"/>
+    <path d="M261.7 579.1 A270 270 0 0 1 252.5 403.6" stroke-opacity="0.3" stroke-width="22"/>
+  </g>
+  <circle cx="709.7" cy="300.0" r="15" fill="#ffffff" opacity="0.7"/>
+</svg>
