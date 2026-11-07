@@ -262,7 +262,7 @@ final class SettingsDialog {
         sessions.addRow("Active tab, if polling off:", activeTabPollModeCombo);
         sessions.addRow("", note("Keeps the selected tab's badge fresh even with polling off."));
         sessions.addRow("Background icon:", trayIconBox);
-        sessions.addRow("", note("On by default. Opens the app or ends every session; takes effect next time you quit."));
+        sessions.addRow("", note("On by default. Opens the app; takes effect next time you quit."));
 
         agents.addRow("MCP server:", mcpServerBox);
         agents.addRow("MCP port:", mcpPortSpinner);

@@ -26,7 +26,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * The background host's menu-bar (macOS) or system-tray (Windows, Linux) icon: while the
  * app is closed it shows that sessions are running, whether MCP is serving, and offers to
- * open the app, end every session, or hide itself. Absent where the platform has no tray
+ * open the app or hide itself. Ending sessions stays in the app, whose close flow asks
+ * each harness to quit and shows what blocks it. Absent where the platform has no tray
  * (a headless JVM, or a Linux desktop without one).
  */
 final class StatusIcon {
@@ -39,8 +40,6 @@ final class StatusIcon {
     /** What the menu does; called on the AWT event thread. */
     interface Actions {
         void open();
-
-        void shutDownSessions();
 
         void hide();
     }
@@ -88,17 +87,12 @@ final class StatusIcon {
         mcpItem.setEnabled(false);
         MenuItem open = new MenuItem("Open " + APP_NAME);
         open.addActionListener(e -> actions.open());
-        // No confirmation: the host has no window or app identity, so a dialog would be a
-        // bare Java one; the item's label says what it does.
-        MenuItem shutDown = new MenuItem("Shut Down All Sessions");
-        shutDown.addActionListener(e -> actions.shutDownSessions());
         MenuItem hide = new MenuItem("Hide This Icon");
         hide.addActionListener(e -> actions.hide());
         menu.add(sessionsItem);
         menu.add(mcpItem);
         menu.addSeparator();
         menu.add(open);
-        menu.add(shutDown);
         menu.addSeparator();
         menu.add(hide);
 

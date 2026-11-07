@@ -116,18 +116,6 @@ public final class McpHost {
             }
 
             @Override
-            public void shutDownSessions() {
-                Thread.ofVirtual().start(() -> {
-                    try {
-                        host.client().shutdown();
-                    } catch (RuntimeException e) {
-                        LOG.warn("could not shut the session daemon down: {}", e.toString());
-                    }
-                    System.exit(0);
-                });
-            }
-
-            @Override
             public void hide() {
                 AppSettings.saveTrayIconEnabled(false);
                 iconHidden.set(true);

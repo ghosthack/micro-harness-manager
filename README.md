@@ -35,7 +35,7 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   back to the app when you reopen it (its log is `~/.micro-harness-manager/mcp-host.log`).
 - **Background icon.** While sessions run with the app closed, a menu-bar icon (macOS) or
   system-tray icon (Windows; Linux desktops with a tray) shows how many are running and
-  whether MCP is serving, and opens the app or shuts every session down. On by default;
+  whether MCP is serving, and opens the app (end sessions from the app). On by default;
   Settings → Sessions → Background icon, or "Hide This Icon" in its menu, turns it off.
 - **Terminal.** Right-click (Ctrl+click on macOS) for Copy, Paste, Select All, Page Up and
   Page Down; when the program tracks the mouse the click goes to it, and
