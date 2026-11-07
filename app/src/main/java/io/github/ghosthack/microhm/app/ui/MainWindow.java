@@ -2469,6 +2469,7 @@ public final class MainWindow extends JFrame {
                 AppSettings.saveActiveTabPollMode(result.activeTabPollMode());
                 AppSettings.saveMcpServerEnabled(result.mcpServerEnabled());
                 AppSettings.saveMcpPort(result.mcpPort());
+                AppSettings.saveTrayIconEnabled(result.trayIcon());
             });
             if (SettingsDialog.mcpNeedsApply(result.mcpChanged(), result.mcpServerEnabled(),
                     mcpService.isRunning())) {
