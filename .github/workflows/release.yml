@@ -124,7 +124,7 @@ jobs:
         if: matrix.asset == 'linux-x64'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes fakeroot
+          sudo apt-get install --yes fakeroot xvfb
 
       - name: Import macOS signing certificate
         if: matrix.asset == 'macos-arm64'

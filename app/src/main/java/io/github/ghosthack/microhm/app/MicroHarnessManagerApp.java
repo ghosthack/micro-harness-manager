@@ -38,6 +38,17 @@ public final class MicroHarnessManagerApp {
     /** How long a running MCP host gets to exit when the app takes the registry back. */
     private static final Duration HOST_STOP_WAIT = Duration.ofSeconds(5);
 
+    /**
+     * Packaging only: start up as usual (point {@code -Dmicrohm.registry} at a scratch
+     * directory), show the window, and quit a moment later. Run under
+     * {@code -XX:AOTCacheOutput} it records the classes a start loads into the AOT cache
+     * the launcher then uses, which halves the time to a visible window.
+     */
+    public static final String AOT_TRAIN_FLAG = "--aot-train";
+
+    /** How long a training run keeps the window up, for the first paints and the timers. */
+    private static final int AOT_TRAIN_MILLIS = 3000;
+
     public static void main(String[] args) throws Exception {
         if (args.length == 1 && args[0].equals("--package-smoke")) {
             PackageSmoke.run();
@@ -86,8 +97,15 @@ public final class MicroHarnessManagerApp {
         // headless host takes over the server (and the registry) until the app is back.
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("mhm-mcp-handoff").unstarted(
                 () -> HostLauncher.launchIfNeeded(registry, host)));
-        SwingUtilities.invokeLater(() -> new MainWindow(registry, host, stack.launcher(), mcpService, stack.events())
-                .setVisible(true));
+        boolean training = java.util.Arrays.asList(args).contains(AOT_TRAIN_FLAG);
+        SwingUtilities.invokeLater(() -> {
+            new MainWindow(registry, host, stack.launcher(), mcpService, stack.events()).setVisible(true);
+            if (training) {
+                javax.swing.Timer quit = new javax.swing.Timer(AOT_TRAIN_MILLIS, e -> System.exit(0));
+                quit.setRepeats(false);
+                quit.start();
+            }
+        });
     }
 
     /** Starts the MCP server when the setting is on. A taken port is logged by the

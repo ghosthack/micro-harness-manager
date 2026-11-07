@@ -26,6 +26,20 @@ done
 
 "$BIN/$APP_NAME$EXT" --package-smoke
 
+# The app launcher's AOT cache, when the package has one, must be accepted by the
+# packaged runtime as the launcher starts it (a stale or mismatched cache is only warned
+# about, and the app would just start slower).
+if [[ -f "$APP/microhm.aot" ]]; then
+    AOT_LOG="$(JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Xlog:aot=info:stdout" "$BIN/$APP_NAME$EXT" --package-smoke 2>&1)"
+    if grep -q 'Using AOT-linked classes: true' <<< "$AOT_LOG" && ! grep -q '\[warning\]\[aot' <<< "$AOT_LOG"; then
+        echo "aot cache: OK"
+    else
+        grep -i 'aot' <<< "$AOT_LOG" | head -20 >&2
+        echo "the app launcher does not use its AOT cache" >&2
+        exit 1
+    fi
+fi
+
 MUX="$BIN/microhm-mux$EXT"
 SCRATCH="$(mktemp -d)"
 export MICROHM_MUX_HOME="$SCRATCH/mux"

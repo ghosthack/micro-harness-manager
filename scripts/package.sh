@@ -23,6 +23,8 @@ MAC_PACKAGE_NAME="$DISPLAY_NAME"
 MAIN_CLASS="io.github.ghosthack.microhm.app.MicroHarnessManagerApp"
 MUX_CLASS="io.github.ghosthack.microhm.mux.Main"
 MUX_LAUNCHER="microhm-mux"
+AOT_CACHE="microhm.aot"
+AOT_TRAIN_FLAG="--aot-train"
 RUNTIME_MODULES="java.desktop,java.net.http,java.logging,java.sql,jdk.httpserver,jdk.unsupported,jdk.charsets"
 # Windows Installer relates every release of the app through this identity. Never
 # change it, or upgrades install side by side instead of replacing the old version.
@@ -144,6 +146,55 @@ if [[ "$MODE" != "installer" ]]; then
     printf 'main-jar=%s\nmain-class=%s\nwin-console=true\njava-options=%s\n' \
         "$MAIN_JAR" "$MUX_CLASS" "$JAVA_OPTIONS" > "$MUX_PROPERTIES"
 
+    # The app's AOT cache: one start of the packaged app, recorded with the packaged
+    # runtime and the launcher's own JVM options, so the launcher can use it (it halves
+    # the time to a visible window). Before signing, so the cache is signed with the rest.
+    # Needs a display; without one (or on any failure) the app ships without a cache.
+    train_aot_cache() {
+        local app_dir runtime_java cfg scratch pid
+        case "$PLATFORM" in
+            macos) app_dir="$IMAGE_PATH/Contents/app"; runtime_java="$IMAGE_PATH/Contents/runtime/Contents/Home/bin/java" ;;
+            linux) app_dir="$IMAGE_PATH/lib/app"; runtime_java="$IMAGE_PATH/lib/runtime/bin/java" ;;
+            windows) app_dir="$IMAGE_PATH/app"; runtime_java="$IMAGE_PATH/runtime/bin/java.exe" ;;
+        esac
+        cfg="$app_dir/$APP_NAME.cfg"
+        local cache="$app_dir/$AOT_CACHE"
+        echo "==> Training the app's AOT cache"
+        rm -f "$cache"
+        scratch="$(mktemp -d)"
+        local display_wrapper=()
+        if [[ "$PLATFORM" == "linux" && -z "${DISPLAY:-}" ]] && command -v xvfb-run > /dev/null; then
+            display_wrapper=(xvfb-run -a)
+        fi
+        # shellcheck disable=SC2086 # JAVA_OPTIONS is a list of options
+        ${display_wrapper[@]+"${display_wrapper[@]}"} "$runtime_java" $JAVA_OPTIONS -XX:AOTCacheOutput="$cache" \
+            -cp "$app_dir/$MAIN_JAR" "$MAIN_CLASS" "$AOT_TRAIN_FLAG" \
+            "--registry=$scratch/sessions.json" "--mux-home=$scratch/mux" &
+        pid=$!
+        # the run quits itself after a few seconds; never let it hang the build
+        for _ in $(seq 1 240); do
+            kill -0 "$pid" 2> /dev/null || break
+            sleep 0.5
+        done
+        if kill -0 "$pid" 2> /dev/null; then
+            kill "$pid" 2> /dev/null || true
+            echo "warning: the AOT training run did not finish; packaging without a cache" >&2
+        fi
+        wait "$pid" 2> /dev/null || true
+        rm -rf "$scratch" 2> /dev/null || true
+        if [[ -s "$cache" ]]; then
+            # $APPDIR is expanded by the launcher; only the app's launcher uses the cache.
+            # Appended to the [JavaOptions] section, which jpackage writes last.
+            [[ "$(grep '^\[' "$cfg" | tail -1 | tr -d '\r')" == "[JavaOptions]" ]] \
+                || { echo "error: [JavaOptions] is not the last section of $cfg" >&2; exit 1; }
+            printf 'java-options=-XX:AOTCache=$APPDIR/%s\n' "$AOT_CACHE" >> "$cfg"
+            echo "AOT cache: $(du -h "$cache" | cut -f1)"
+        else
+            rm -f "$cache"
+            echo "warning: no AOT cache was produced; packaging without one" >&2
+        fi
+    }
+
     echo "==> Creating the self-contained application image"
     IMAGE_ARGS=(
         --type app-image
@@ -185,6 +236,10 @@ unset _JPACKAGE_LAUNCHER
 exec "\$(dirname "\$0")/.$MUX_LAUNCHER-native" "\$@"
 EOF
         chmod +x "$IMAGE_PATH/bin/$MUX_LAUNCHER"
+    fi
+
+    if [[ "${SKIP_AOT_CACHE:-false}" != "true" ]]; then
+        train_aot_cache
     fi
 
     if [[ "$PLATFORM" == "macos" && -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then

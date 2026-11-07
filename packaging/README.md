@@ -25,9 +25,19 @@ starts the session daemon through `microhm-mux`. The bundled runtime keeps
 `bin/java`, because on macOS every session starts through a small JVM that takes the
 controlling terminal.
 
+The app's launcher also uses an AOT cache, `microhm.aot` beside the jar, which roughly
+halves the time to a visible window. `package.sh` makes it right after jpackage builds the
+image (before signing): it starts the packaged app once with `--aot-train` (a normal start
+in a scratch home that quits after a few seconds), recording with the packaged runtime and
+the launcher's own JVM options. That run needs a display (on Linux without one it uses
+`xvfb-run`). If it fails the image ships without a cache; `SKIP_AOT_CACHE=true` skips it.
+The cache is about 45 MB, about 12 MB compressed. A cache the runtime rejects (the jar was
+modified, say) only costs the speed-up: the JVM warns and starts normally.
+
 `scripts/smoke-package.sh` checks a built image: the launchers, license files and
 runtime modules, the app's `--package-smoke` (look and feel, resources, JSON and the
-HTTP stack the MCP server uses), and a real session through the packaged daemon.
+HTTP stack the MCP server uses), that the app's launcher accepts its AOT cache, and a
+real session through the packaged daemon.
 `scripts/smoke-windows-installer.ps1` installs, optionally upgrades, runs and
 uninstalls the Windows installer.
 
