@@ -25,18 +25,18 @@ starts the session daemon through `microhm-mux`. The bundled runtime keeps
 `bin/java`, because on macOS every session starts through a small JVM that takes the
 controlling terminal.
 
-The app's launcher also uses an AOT cache, `microhm.aot` beside the jar, which roughly
-halves the time to a visible window. `package.sh` makes it right after jpackage builds the
-image (before signing): it starts the packaged app once with `--aot-train` (a normal start
-in a scratch home that quits after a few seconds), recording with the packaged runtime and
-the launcher's own JVM options. That run needs a display (on Linux without one it uses
-`xvfb-run`). If it fails the image ships without a cache; `SKIP_AOT_CACHE=true` skips it.
-The cache is about 45 MB, about 12 MB compressed. A cache the runtime rejects (the jar was
-modified, say) only costs the speed-up: the JVM warns and starts normally.
+The app's launcher also names a JDK AOT cache, which roughly halves the time to a
+visible window: `-XX:AOTCache=$HOME/.micro-harness-manager/aot/microhm-VERSION.aot`
+(`$USERPROFILE` on Windows; the launcher expands the variable, and `-Xlog:aot=off` keeps
+the JVM quiet while the file is missing). The app makes the file itself, in the background,
+about ten seconds after its first launch of each version: a second JVM records a start of
+the app without showing a window, then assembles the cache (about 40 MB) and moves it into
+place. Older versions' caches are deleted. Nothing is shipped in the download. Settings →
+Performance… shows whether this launch used it.
 
 `scripts/smoke-package.sh` checks a built image: the launchers, license files and
 runtime modules, the app's `--package-smoke` (look and feel, resources, JSON and the
-HTTP stack the MCP server uses), that the app's launcher accepts its AOT cache, and a
+HTTP stack the MCP server uses, and the AOT cache path the launcher expanded), and a
 real session through the packaged daemon.
 `scripts/smoke-windows-installer.ps1` installs, optionally upgrades, runs and
 uninstalls the Windows installer.

@@ -331,7 +331,16 @@ final class SettingsDialog {
         JLabel saveHint = note("Save applies changes from every section.");
         saveHint.setBorder(BorderFactory.createEmptyBorder(0, 16, 12, 12));
         saveHint.setToolTipText(AppSettings.settingsFile().toString());
-        footer.add(saveHint, BorderLayout.WEST);
+        JButton performance = new JButton("Performance…");
+        performance.setToolTipText("Startup time, startup cache, memory and other figures for this run");
+        performance.addActionListener(e -> PerformanceDialog.show(dialog));
+        JPanel footerLeft = new JPanel(new BorderLayout());
+        JPanel performanceRow = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
+        performanceRow.setBorder(BorderFactory.createEmptyBorder(0, 12, 6, 12));
+        performanceRow.add(performance);
+        footerLeft.add(performanceRow, BorderLayout.NORTH);
+        footerLeft.add(saveHint, BorderLayout.SOUTH);
+        footer.add(footerLeft, BorderLayout.WEST);
         footer.add(DialogChrome.buttons(save, cancel), BorderLayout.EAST);
         DialogChrome.layout(dialog, sections, footer);
         DialogChrome.show(dialog, parent, save, cancel);

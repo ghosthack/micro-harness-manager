@@ -20,24 +20,17 @@ for path in "$BIN/$APP_NAME$EXT" "$BIN/microhm-mux$EXT" "$HOME_DIR/bin/java$EXT"
 done
 
 MODULES="$(sed -n 's/^MODULES="\(.*\)"$/\1/p' "$HOME_DIR/release" | tr ' ' '\n')"
-for required in java.desktop java.net.http java.sql jdk.httpserver; do
+for required in java.desktop java.management jdk.management java.net.http java.sql jdk.httpserver; do
     grep -Fxq "$required" <<< "$MODULES" || { echo "runtime lacks module: $required" >&2; exit 1; }
 done
 
-"$BIN/$APP_NAME$EXT" --package-smoke
-
-# The app launcher's AOT cache, when the package has one, must be accepted by the
-# packaged runtime as the launcher starts it (a stale or mismatched cache is only warned
-# about, and the app would just start slower).
-if [[ -f "$APP/microhm.aot" ]]; then
-    AOT_LOG="$(JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Xlog:aot=info:stdout" "$BIN/$APP_NAME$EXT" --package-smoke 2>&1)"
-    if grep -q 'Using AOT-linked classes: true' <<< "$AOT_LOG" && ! grep -q '\[warning\]\[aot' <<< "$AOT_LOG"; then
-        echo "aot cache: OK"
-    else
-        grep -i 'aot' <<< "$AOT_LOG" | head -20 >&2
-        echo "the app launcher does not use its AOT cache" >&2
-        exit 1
-    fi
+# The app launcher names its AOT cache under the user's home (the app makes it on the
+# first launch); the launcher must expand the home variable, or the cache is never used.
+SMOKE_OUTPUT="$("$BIN/$APP_NAME$EXT" --package-smoke)"
+printf '%s\n' "$SMOKE_OUTPUT"
+AOT_PATH="$(sed -n 's/^aot cache: //p' <<< "$SMOKE_OUTPUT")"
+if [[ -z "$AOT_PATH" || "$AOT_PATH" == "none" ]]; then
+    echo "warning: the app launcher's AOT cache path did not expand; the app will start without a cache" >&2
 fi
 
 MUX="$BIN/microhm-mux$EXT"

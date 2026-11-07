@@ -70,6 +70,8 @@ final class PackageSmoke {
             server.stop(0);
         }
         System.out.println("http: OK");
+        System.out.println("aot cache: " + io.github.ghosthack.microhm.app.perf.AotCache.current().path()
+                .map(Object::toString).orElse("none"));
         System.out.println("package smoke: OK");
     }
 }
