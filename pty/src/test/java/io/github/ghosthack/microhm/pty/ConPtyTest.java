@@ -68,7 +68,8 @@ final class ConPtyTest {
         String output = drain(process);
         assertEquals(0, process.waitFor());
         assertTrue(output.contains("hello-conpty"), output);
-        assertTrue(output.toLowerCase().contains(dir.toRealPath().toString().toLowerCase()), "working directory: " + output);
+        // by its unique name: the parents can print in 8.3 form (RUNNER~1 on GitHub runners)
+        assertTrue(output.contains(dir.getFileName().toString()), "working directory: " + output);
     }
 
     @Test
