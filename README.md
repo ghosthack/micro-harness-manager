@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="packaging/icons/micro-harness-manager.png" width="128" height="128" alt="micro-harness-manager resistor logo">
+</p>
+
 # micro-harness-manager
 
 A desktop app for running coding agents (Claude Code, Codex, Cursor Agent, Grok,
