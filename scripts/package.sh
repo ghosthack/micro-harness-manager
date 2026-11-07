@@ -23,7 +23,7 @@ MAC_PACKAGE_NAME="$DISPLAY_NAME"
 MAIN_CLASS="io.github.ghosthack.microhm.app.MicroHarnessManagerApp"
 MUX_CLASS="io.github.ghosthack.microhm.mux.Main"
 MUX_LAUNCHER="microhm-mux"
-RUNTIME_MODULES="java.desktop,java.net.http,java.logging,java.sql,jdk.httpserver,jdk.unsupported,jdk.charsets"
+RUNTIME_MODULES="java.desktop,java.management,jdk.management,java.net.http,java.logging,java.sql,jdk.httpserver,jdk.unsupported,jdk.charsets"
 # Windows Installer relates every release of the app through this identity. Never
 # change it, or upgrades install side by side instead of replacing the old version.
 WINDOWS_UPGRADE_UUID="c724e8e7-827f-438a-9bf2-464b0afa89d2"
@@ -144,6 +144,26 @@ if [[ "$MODE" != "installer" ]]; then
     printf 'main-jar=%s\nmain-class=%s\nwin-console=true\njava-options=%s\n' \
         "$MAIN_JAR" "$MUX_CLASS" "$JAVA_OPTIONS" > "$MUX_PROPERTIES"
 
+    # The app's AOT cache (it halves the time to a visible window): the app's launcher
+    # always names a per-user, per-version file under ~/.micro-harness-manager/aot, which
+    # the app makes in the background on its first launch (see AotCache). Until then the
+    # JVM starts without it. jpackage leaves $HOME / $USERPROFILE for the launcher to
+    # expand; only the app's launcher uses the cache.
+    configure_aot_cache() {
+        local cfg home_var
+        case "$PLATFORM" in
+            macos) cfg="$IMAGE_PATH/Contents/app/$APP_NAME.cfg"; home_var='$HOME' ;;
+            linux) cfg="$IMAGE_PATH/lib/app/$APP_NAME.cfg"; home_var='$HOME' ;;
+            windows) cfg="$IMAGE_PATH/app/$APP_NAME.cfg"; home_var='$USERPROFILE' ;;
+        esac
+        # appended to the [JavaOptions] section, which jpackage writes last
+        [[ "$(grep '^\[' "$cfg" | tail -1 | tr -d '\r')" == "[JavaOptions]" ]] \
+            || { echo "error: [JavaOptions] is not the last section of $cfg" >&2; exit 1; }
+        # quiet: until the cache exists, the JVM would print an error for it on each launch
+        printf 'java-options=-Xlog:aot=off\njava-options=-XX:AOTCache=%s/.micro-harness-manager/aot/microhm-%s.aot\n' \
+            "$home_var" "$VERSION" >> "$cfg"
+    }
+
     echo "==> Creating the self-contained application image"
     IMAGE_ARGS=(
         --type app-image
@@ -186,6 +206,8 @@ exec "\$(dirname "\$0")/.$MUX_LAUNCHER-native" "\$@"
 EOF
         chmod +x "$IMAGE_PATH/bin/$MUX_LAUNCHER"
     fi
+
+    configure_aot_cache
 
     if [[ "$PLATFORM" == "macos" && -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
         echo "==> Signing the macOS application image"

@@ -7,6 +7,8 @@ import io.github.ghosthack.microhm.app.mcphost.HostOwner;
 import io.github.ghosthack.microhm.app.mcphost.InstanceLock;
 import io.github.ghosthack.microhm.app.mcphost.McpHost;
 import io.github.ghosthack.microhm.app.mcphost.McpStack;
+import io.github.ghosthack.microhm.app.perf.AotCache;
+import io.github.ghosthack.microhm.app.perf.StartupTimes;
 import io.github.ghosthack.microhm.app.registry.RegistryPaths;
 import io.github.ghosthack.microhm.app.registry.SessionRegistry;
 import io.github.ghosthack.microhm.app.settings.AppSettings;
@@ -38,7 +40,15 @@ public final class MicroHarnessManagerApp {
     /** How long a running MCP host gets to exit when the app takes the registry back. */
     private static final Duration HOST_STOP_WAIT = Duration.ofSeconds(5);
 
+    /** How long a recording run for the AOT cache lives after building its window. */
+    private static final int AOT_TRAIN_MILLIS = 3000;
+
+    /** How long after the window is up the AOT cache is made, when missing: out of the
+     * way of the first session attaching. */
+    private static final Duration AOT_CREATE_DELAY = Duration.ofSeconds(10);
+
     public static void main(String[] args) throws Exception {
+        StartupTimes.markMain();
         if (args.length == 1 && args[0].equals("--package-smoke")) {
             PackageSmoke.run();
             return;
@@ -49,6 +59,11 @@ public final class MicroHarnessManagerApp {
         }
         // The background host opens the app with its own state locations spelled out.
         McpHost.applyStateOptions(args);
+        // A recording run for the AOT cache (see AotCache): never a Dock icon or a window.
+        boolean training = java.util.Arrays.asList(args).contains(AotCache.TRAIN_FLAG);
+        if (training) {
+            System.setProperty("apple.awt.UIElement", "true");
+        }
         // Same pair the MainWindow toolbar toggle switches between at runtime.
         AppSettings.UiTheme theme = AppSettings.uiTheme();
         // Before any AWT/Swing call: the JDK reads the appearance property once, while
@@ -86,8 +101,41 @@ public final class MicroHarnessManagerApp {
         // headless host takes over the server (and the registry) until the app is back.
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("mhm-mcp-handoff").unstarted(
                 () -> HostLauncher.launchIfNeeded(registry, host)));
-        SwingUtilities.invokeLater(() -> new MainWindow(registry, host, stack.launcher(), mcpService, stack.events())
-                .setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            MainWindow window = new MainWindow(registry, host, stack.launcher(), mcpService, stack.events());
+            if (training) {
+                recordStart(window);
+                return;
+            }
+            window.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowOpened(java.awt.event.WindowEvent e) {
+                    StartupTimes.markWindowShown();
+                    AotCache.current().createLaterIfMissing(AOT_CREATE_DELAY, MicroHarnessManagerApp.class.getName());
+                }
+            });
+            window.setVisible(true);
+        });
+    }
+
+    /**
+     * A recording run's stand-in for showing the window: the native window is created and
+     * the whole window painted (into an image), which loads what a real start loads,
+     * without anything appearing on screen. Then the run quits.
+     */
+    private static void recordStart(MainWindow window) {
+        window.addNotify();
+        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(Math.max(1, window.getWidth()),
+                Math.max(1, window.getHeight()), java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = image.createGraphics();
+        try {
+            window.printAll(g);
+        } finally {
+            g.dispose();
+        }
+        javax.swing.Timer quit = new javax.swing.Timer(AOT_TRAIN_MILLIS, e -> System.exit(0));
+        quit.setRepeats(false);
+        quit.start();
     }
 
     /** Starts the MCP server when the setting is on. A taken port is logged by the

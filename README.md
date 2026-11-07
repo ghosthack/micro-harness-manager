@@ -48,6 +48,10 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   turns that off so Option composes accents natively (Option+e, e types é).
 - **Look.** Light and dark FlatLaf themes, and the terminal font and palette of your
   choice.
+- **Performance.** Settings → Performance… shows this run's startup time, whether the
+  startup cache was used, memory, garbage collection, CPU time and threads, with Copy for
+  bug reports. The installed app makes its startup cache after its first launch, and from
+  then on opens its window in about half the time.
 
 ## Install
 

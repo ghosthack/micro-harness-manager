@@ -25,9 +25,19 @@ starts the session daemon through `microhm-mux`. The bundled runtime keeps
 `bin/java`, because on macOS every session starts through a small JVM that takes the
 controlling terminal.
 
+The app's launcher also names a JDK AOT cache, which roughly halves the time to a
+visible window: `-XX:AOTCache=$HOME/.micro-harness-manager/aot/microhm-VERSION.aot`
+(`$USERPROFILE` on Windows; the launcher expands the variable, and `-Xlog:aot=off` keeps
+the JVM quiet while the file is missing). The app makes the file itself, in the background,
+about ten seconds after its first launch of each version: a second JVM records a start of
+the app without showing a window, then assembles the cache (about 40 MB) and moves it into
+place. Older versions' caches are deleted. Nothing is shipped in the download. Settings →
+Performance… shows whether this launch used it.
+
 `scripts/smoke-package.sh` checks a built image: the launchers, license files and
 runtime modules, the app's `--package-smoke` (look and feel, resources, JSON and the
-HTTP stack the MCP server uses), and a real session through the packaged daemon.
+HTTP stack the MCP server uses, and the AOT cache path the launcher expanded), and a
+real session through the packaged daemon.
 `scripts/smoke-windows-installer.ps1` installs, optionally upgrades, runs and
 uninstalls the Windows installer.
 
