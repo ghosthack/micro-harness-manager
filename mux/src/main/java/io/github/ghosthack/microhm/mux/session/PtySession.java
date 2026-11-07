@@ -11,7 +11,6 @@ import io.github.ghosthack.microhm.vt.VtTokenizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -614,25 +613,58 @@ public final class PtySession implements Session {
         if (clients.isEmpty()) {
             return;
         }
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        for (VtToken token : normalized) {
-            if (!QueryFilter.isServerAnswered(token)) {
-                out.writeBytes(token.bytesToForward());
-            }
-        }
-        out.writeBytes(batch.openStringFragment());
-        if (out.size() == 0) {
+        byte[] bytes = forwardBytes(normalized, batch.openStringFragment());
+        if (bytes.length == 0) {
             return;
         }
-        byte[] bytes = out.toByteArray();
         for (Client client : clients) {
             deliver(client, bytes);
         }
     }
 
+    /** The broadcast for one batch: every token {@link QueryFilter} keeps, as forwarded,
+     * then the open string fragment. Not simply the raw chunk: the tokenizer holds back
+     * partial tails across reads (and can reorder a dangling UTF-8 lead around an escape),
+     * so the bytes are assembled from the tokens — into one exactly sized array, or with no
+     * copy at all when a single piece is all there is. */
+    private static byte[] forwardBytes(List<VtToken> tokens, byte[] fragment) {
+        byte[][] pieces = new byte[tokens.size() + 1][];
+        int count = 0;
+        int total = 0;
+        for (VtToken token : tokens) {
+            if (!QueryFilter.isServerAnswered(token)) {
+                byte[] piece = token.bytesToForward();
+                if (piece.length > 0) {
+                    pieces[count++] = piece;
+                    total += piece.length;
+                }
+            }
+        }
+        if (fragment.length > 0) {
+            pieces[count++] = fragment;
+            total += fragment.length;
+        }
+        if (count == 0) {
+            return fragment; // empty
+        }
+        if (count == 1) {
+            return pieces[0];
+        }
+        byte[] out = new byte[total];
+        int offset = 0;
+        for (int i = 0; i < count; i++) {
+            System.arraycopy(pieces[i], 0, out, offset, pieces[i].length);
+            offset += pieces[i].length;
+        }
+        return out;
+    }
+
     /** Under the lock, on every read: each idle watcher turns active ({@code output}) and
      * gets a quiet check scheduled if it has none pending. */
     private void markActive() {
+        if (watchers.isEmpty()) {
+            return;
+        }
         // Over a copy: a watcher may (re-entrantly, on this thread) remove itself.
         for (Map.Entry<Watcher, WatchState> entry : List.copyOf(watchers.entrySet())) {
             Watcher watcher = entry.getKey();
