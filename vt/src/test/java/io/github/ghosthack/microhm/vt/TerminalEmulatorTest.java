@@ -896,4 +896,48 @@ class TerminalEmulatorTest {
         }
         return out;
     }
+
+    @Nested
+    class LineVersions {
+        /** Each sequence must change the version of the line at row 0 (cursor at 0,2). */
+        @Test
+        void everyRowMutationBumpsTheVersion() {
+            String[] mutations = {"x", "\u00e9", "\u4e2d", "e\u0301", C + "K", C + "1K", C + "2K", C + "@",
+                    C + "P", C + "X", C + "4hz", C + "J", C + "1J", C + "2J", E + "#8"};
+            for (String m : mutations) {
+                Term t = term(6, 3).feed("abcdef" + C + "1;3H");
+                Line line = t.e.line(0);
+                long before = line.version();
+                t.feed(m);
+                // Either the same line object changed, or a different (cleared/recycled) one is there.
+                Line after = t.e.line(0);
+                assertTrue(after != line || line.version() != before, FuzzTest.visible(m));
+            }
+        }
+
+        @Test
+        void softWrapAndUntouchedRows() {
+            Term t = term(4, 3).feed("ab");
+            Line row1 = t.e.line(1);
+            long v1 = row1.version();
+            Line row0 = t.e.line(0);
+            long v0 = row0.version();
+            t.feed("cd");
+            assertTrue(row0.version() != v0);
+            assertEquals(v1, row1.version(), "a row nothing wrote to keeps its version");
+            v0 = row0.version();
+            t.feed("e"); // the deferred wrap marks row 0 wrapped
+            assertTrue(row0.isWrapped());
+            assertTrue(row0.version() != v0);
+        }
+
+        @Test
+        void scrollRecyclesALineWithANewVersion() {
+            Term t = new Term(4, 2, 0).feed("ab\r\ncd");
+            Line top = t.e.line(0);
+            long v = top.version();
+            t.feed("\r\n"); // row 0 is recycled as the new, cleared bottom row
+            assertTrue(t.e.line(1) != top || top.version() != v);
+        }
+    }
 }

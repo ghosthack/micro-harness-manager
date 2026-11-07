@@ -50,7 +50,10 @@ class TerminalViewTest {
                 resizes.add(columns + "x" + rows);
             }
         }, PALETTE, BACKGROUND, false, "Monospaced", 12));
-        edtRun(() -> view.setSize(20 * view.cellWidth(), 5 * view.cellHeight()));
+        edtRun(() -> {
+            view.setSize(20 * view.cellWidth(), 5 * view.cellHeight());
+            view.setShowingForTest(true); // headless components never show
+        });
     }
 
     static <T> T edt(Callable<T> task) throws Exception {
@@ -573,5 +576,164 @@ class TerminalViewTest {
         BufferedImage image = paint();
         assertEquals(0x264F78, pixel(image, 0, 0, 0, 0));
         assertEquals(BACKGROUND, pixel(image, 2, 0, 0, 0));
+    }
+
+    // --- damage -------------------------------------------------------------------------
+
+    /** Records the view's repaint requests (dirty regions, in points). */
+    private static final class Recorder extends javax.swing.RepaintManager {
+        final javax.swing.JComponent target;
+        final List<java.awt.Rectangle> rects = java.util.Collections.synchronizedList(new ArrayList<>());
+
+        Recorder(javax.swing.JComponent target) {
+            this.target = target;
+        }
+
+        @Override
+        public void addDirtyRegion(javax.swing.JComponent c, int x, int y, int w, int h) {
+            if (c == target) {
+                rects.add(new java.awt.Rectangle(x, y, w, h));
+            }
+            super.addDirtyRegion(c, x, y, w, h);
+        }
+    }
+
+    /** Runs {@code action} with a recording repaint manager and returns what it asked for. */
+    private List<java.awt.Rectangle> recordRepaints(ThrowingRunnable action) throws Exception {
+        javax.swing.RepaintManager previous = edt(() -> javax.swing.RepaintManager.currentManager(view));
+        Recorder recorder = new Recorder(view);
+        edtRun(() -> javax.swing.RepaintManager.setCurrentManager(recorder));
+        try {
+            action.run();
+            edtRun(() -> { }); // anything queued on the EDT has run
+            return new ArrayList<>(recorder.rects);
+        } finally {
+            edtRun(() -> javax.swing.RepaintManager.setCurrentManager(previous));
+        }
+    }
+
+    private interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+
+    private void tallView() throws Exception {
+        edtRun(() -> {
+            view.setSize(20 * view.cellWidth(), 12 * view.cellHeight());
+            view.applyResize();
+        });
+        feed(C + "6;4H"); // the cursor parks on row 5 (0-based)
+    }
+
+    @Test
+    void writingOneCellRepaintsOnlyItsRow() throws Exception {
+        tallView();
+        long full = edt(view::fullFrames);
+        int ch = view.cellHeight();
+        List<java.awt.Rectangle> rects = recordRepaints(() -> feed("x"));
+        assertEquals(full, (long) edt(view::fullFrames), "no full repaint");
+        assertFalse(rects.isEmpty(), "the changed row is repainted");
+        java.awt.Rectangle union = rects.getFirst();
+        for (java.awt.Rectangle r : rects) {
+            union = union.union(r);
+        }
+        // row 5 plus a row of margin either side (and a pixel of rounding)
+        assertTrue(union.y >= 4 * ch - 1 && union.y + union.height <= 7 * ch + 2, union + " vs cell height " + ch);
+        assertTrue(union.y <= 5 * ch && union.y + union.height >= 6 * ch, "covers the row: " + union);
+        assertTrue(row(5).endsWith("x"));
+    }
+
+    @Test
+    void aSpinnerElsewhereRepaintsItsRowAndTheCursorRow() throws Exception {
+        tallView();
+        int ch = view.cellHeight();
+        // save cursor, write on row 1, restore: rows 0..2 change, the cursor row 5 is damaged too
+        List<java.awt.Rectangle> rects = recordRepaints(() -> feed(E + "7" + C + "2;1H|" + E + "8"));
+        java.awt.Rectangle union = rects.getFirst();
+        for (java.awt.Rectangle r : rects) {
+            union = union.union(r);
+        }
+        assertTrue(union.y + union.height <= 7 * ch + 2, "nothing below the cursor row: " + union);
+        assertTrue(union.height < 12 * ch, "not the whole view: " + union);
+    }
+
+    @Test
+    void scrollingRepaintsEverything() throws Exception {
+        tallView();
+        long full = edt(view::fullFrames);
+        List<java.awt.Rectangle> rects = recordRepaints(() -> lines(0, 20));
+        assertTrue(edt(view::fullFrames) > full, "output that scrolled the screen repaints it all");
+        assertTrue(rects.stream().anyMatch(r -> r.y <= 0 && r.height >= view.getHeight()), rects.toString());
+        full = edt(view::fullFrames);
+        edtRun(view::pageUp);
+        feed("y"); // the view is scrolled back: the next frame repaints everything
+        assertTrue(edt(view::fullFrames) > full);
+    }
+
+    @Test
+    void modeChangesRepaintEverything() throws Exception {
+        tallView();
+        long full = edt(view::fullFrames);
+        feed(C + "?5h");
+        assertEquals(full + 1, (long) edt(view::fullFrames), "reverse video");
+        feed(C + "?1049h");
+        assertEquals(full + 2, (long) edt(view::fullFrames), "alternate screen");
+        feed(C + "?25l");
+        assertEquals(full + 3, (long) edt(view::fullFrames), "cursor hidden");
+        edtRun(view::selectAll);
+        feed("z");
+        assertEquals(full + 4, (long) edt(view::fullFrames), "selection");
+    }
+
+    @Test
+    void hiddenViewDoesNoFrameWorkAndCatchesUpWhenShown() throws Exception {
+        lines(0, 30);
+        edtRun(view::pageUp);
+        int offset = edt(view::scrollOffset);
+        edtRun(() -> view.setShowingForTest(false));
+        long frames = edt(view::frames);
+        long full = edt(view::fullFrames);
+        List<java.awt.Rectangle> rects = recordRepaints(() -> {
+            for (int i = 0; i < 5; i++) {
+                String s = "hidden" + i + "\r\n";
+                view.feed(s.getBytes(StandardCharsets.UTF_8), 0, s.length());
+                Thread.sleep(30);
+            }
+        });
+        assertEquals(frames, (long) edt(view::frames), "no frames while hidden");
+        assertTrue(rects.isEmpty(), rects.toString());
+        assertEquals(offset, (int) edt(view::scrollOffset), "not re-anchored yet");
+        edtRun(() -> view.setShowingForTest(true));
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (edt(view::frames) == frames && System.nanoTime() < deadline) {
+            Thread.sleep(2);
+        }
+        assertEquals(frames + 1, (long) edt(view::frames), "one catch-up frame");
+        assertEquals(full + 1, (long) edt(view::fullFrames), "a full repaint");
+        assertEquals(offset + 5, (int) edt(view::scrollOffset), "anchored over everything that arrived");
+        feed("more"); // frames run normally again
+    }
+
+    @Test
+    void partialRepaintPaintsTheSameAsAFullOne() throws Exception {
+        feed(C + "41mab" + C + "0m\r\n" + C + "4mcd" + C + "0m\r\n─┼─");
+        BufferedImage full = paint();
+        BufferedImage partial = edt(() -> {
+            BufferedImage image = new BufferedImage(view.getWidth(), view.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = image.createGraphics();
+            int ch = view.cellHeight();
+            for (int r = 0; r < 5; r++) {
+                Graphics2D rg = (Graphics2D) g.create();
+                rg.setClip(0, r * ch, view.getWidth(), ch); // one row at a time
+                view.paint(rg);
+                rg.dispose();
+            }
+            g.dispose();
+            return image;
+        });
+        for (int y = 0; y < full.getHeight(); y++) {
+            for (int x = 0; x < full.getWidth(); x++) {
+                assertEquals(full.getRGB(x, y), partial.getRGB(x, y), "pixel " + x + "," + y);
+            }
+        }
     }
 }

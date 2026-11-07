@@ -32,10 +32,36 @@ public final class Line {
     /** Attached code points per cell, as UTF-16; null until a cell needs one. */
     String[] extras;
     boolean wrapped;
+    /** Bumped by every mutation; see {@link #version()}. */
+    private long version;
 
     Line(int columns) {
         codePoints = new int[columns];
         styles = new long[columns];
+    }
+
+    /**
+     * A modification counter: it changes whenever any cell, the width or the wrapped flag of
+     * this line changes (it never repeats for one line object). A renderer that remembers
+     * which line object it painted at a row, and that line's version, can tell whether the row
+     * needs repainting. Read it under the emulator lock, like everything else here.
+     */
+    public long version() {
+        return version;
+    }
+
+    /** Records a mutation made by code that writes the arrays directly (the emulator's fast
+     * paths); every mutating method here calls it itself. */
+    void touch() {
+        version++;
+    }
+
+    /** Sets the soft-wrap flag. */
+    void setWrapped(boolean wrapped) {
+        if (this.wrapped != wrapped) {
+            this.wrapped = wrapped;
+            version++;
+        }
     }
 
     /** The number of cells. */
@@ -140,6 +166,7 @@ public final class Line {
 
     /** Clears every cell to empty with {@code style} and drops the wrapped flag. */
     void clear(long style) {
+        version++;
         Arrays.fill(codePoints, 0);
         Arrays.fill(styles, style);
         extras = null;
@@ -153,6 +180,7 @@ public final class Line {
         if (columns == old) {
             return;
         }
+        version++;
         boolean cutsWide = columns > 0 && columns < old && codePoints[columns] == WIDE_TAIL;
         codePoints = Arrays.copyOf(codePoints, columns);
         styles = Arrays.copyOf(styles, columns);
@@ -167,6 +195,7 @@ public final class Line {
     /** Sets cell {@code x} (narrow) — callers have already {@link #breakWide broken} any
      * wide character overlapping it. */
     void set(int x, int cp, long style) {
+        version++;
         codePoints[x] = cp;
         styles[x] = style;
         if (extras != null) {
@@ -182,6 +211,7 @@ public final class Line {
 
     /** Appends attached code point {@code cp} to cell {@code x}. */
     void attach(int x, int cp) {
+        version++;
         if (extras == null) {
             extras = new String[codePoints.length];
         }
@@ -218,6 +248,7 @@ public final class Line {
     }
 
     private void clearCell(int x) {
+        version++;
         codePoints[x] = 0;
         if (extras != null) {
             extras[x] = null;
@@ -231,6 +262,7 @@ public final class Line {
         if (from >= to) {
             return;
         }
+        version++;
         breakWide(from, to);
         Arrays.fill(codePoints, from, to, 0);
         Arrays.fill(styles, from, to, style);
@@ -247,6 +279,7 @@ public final class Line {
             return;
         }
         count = Math.min(count, n - x);
+        version++;
         breakWide(x, x);
         int keep = n - x - count;
         // A wide char whose lead lands on the last column loses its tail off the edge.
@@ -274,6 +307,7 @@ public final class Line {
             return;
         }
         count = Math.min(count, n - x);
+        version++;
         breakWide(x, x + count);
         int move = n - x - count;
         System.arraycopy(codePoints, x + count, codePoints, x, move);
