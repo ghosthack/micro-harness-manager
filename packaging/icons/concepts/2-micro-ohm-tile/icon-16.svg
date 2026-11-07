@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- 16 px cut of micro-harness-manager.svg: the Ω alone, larger and a little bolder -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A2F45"/>
+      <stop offset="1" stop-color="#0F111A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.62" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#FF7A45" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#FF7A45" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ohm" gradientUnits="userSpaceOnUse" x1="0" y1="270" x2="0" y2="680">
+      <stop offset="0" stop-color="#FFC861"/>
+      <stop offset="0.55" stop-color="#FF7A45"/>
+      <stop offset="1" stop-color="#F0456A"/>
+    </linearGradient>
+    <linearGradient id="mu" gradientUnits="userSpaceOnUse" x1="0" y1="440" x2="0" y2="810">
+      <stop offset="0" stop-color="#F4F7FF"/>
+      <stop offset="1" stop-color="#AEBBDD"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="dots" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="16" cy="16" r="2.2" fill="#ffffff" fill-opacity="0.06"/>
+    </pattern>
+    <clipPath id="clip"><rect x="100" y="100" width="824" height="824" rx="184"/></clipPath>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#clip)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#tile)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#dots)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#glow)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>
+  </g>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="182.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="3"/>
+
+  <g transform="translate(512 525) scale(1.22) translate(-650 -447)" fill="none" stroke-width="84" filter="url(#lift)">
+    <path d="M454.0 637 H546.0 C588.0 637 617.4 595.3 586.6 580.9 A150 150 0 1 1 713.4 580.9 C682.6 595.3 712.0 637 754.0 637 H846.0" stroke="url(#ohm)" stroke-linejoin="round"/>
+    
+  </g>
+</svg>
