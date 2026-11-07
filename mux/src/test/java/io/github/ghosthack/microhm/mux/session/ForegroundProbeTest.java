@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -202,6 +203,85 @@ class ForegroundProbeTest {
     }
 
     @Test
+    void parsesProcStatWithAwkwardNames() {
+        assertEquals(Optional.of(new ForegroundProbe.ProcStat(4242, "bash", 4000, 4300)),
+                ForegroundProbe.parseStat("4242 (bash) S 4000 4242 4242 34816 4300 4194560 1 2 3\n"));
+        assertEquals(Optional.of(new ForegroundProbe.ProcStat(7, "a) b (c", 1, -1)),
+                ForegroundProbe.parseStat("7 (a) b (c) R 1 7 7 0 -1 0"));
+        assertEquals(Optional.empty(), ForegroundProbe.parseStat(""));
+        assertEquals(Optional.empty(), ForegroundProbe.parseStat("7 (x) R 1"));
+    }
+
+    @Test
+    void procRuleMatchesThePsRule() {
+        // The same trees as the ps cases: 501 shell, 777 leader, 778 its child.
+        Map<Long, ForegroundProbe.ProcStat> table = new HashMap<>();
+        ForegroundProbe.ProcStat shell = new ForegroundProbe.ProcStat(501, "zsh", 1, 777);
+        table.put(501L, shell);
+        table.put(777L, new ForegroundProbe.ProcStat(777, "node", 501, 777));
+        table.put(778L, new ForegroundProbe.ProcStat(778, "git", 777, 777));
+        java.util.function.LongFunction<Optional<ForegroundProbe.ProcStat>> stats =
+                pid -> Optional.ofNullable(table.get(pid));
+        assertEquals(new ForegroundProbe.Foreground(777, "node"), ForegroundProbe.choose(shell, stats));
+
+        // A grandchild leader (sh -c spawning a pipeline) still counts as a descendant.
+        ForegroundProbe.ProcStat toGrandchild = new ForegroundProbe.ProcStat(501, "zsh", 1, 778);
+        assertEquals(new ForegroundProbe.Foreground(778, "git"), ForegroundProbe.choose(toGrandchild, stats));
+
+        // Leader gone, no tty, idle shell, or a tpgid outside the shell's tree: the shell.
+        for (long tpgid : new long[] {900, 0, -1, 501}) {
+            assertEquals(new ForegroundProbe.Foreground(501, "zsh"),
+                    ForegroundProbe.choose(new ForegroundProbe.ProcStat(501, "-zsh", 1, tpgid), stats));
+        }
+        table.put(950L, new ForegroundProbe.ProcStat(950, "other", 1, 950));
+        assertEquals(new ForegroundProbe.Foreground(501, "zsh"),
+                ForegroundProbe.choose(new ForegroundProbe.ProcStat(501, "zsh", 1, 950), stats));
+    }
+
+    @Test
+    void memoReusesAQuietUnchangedForegroundOnly() {
+        long[] now = {0};
+        long[] group = {501};
+        int[] probes = {0};
+        ForegroundProbe.Memo memo = new ForegroundProbe.Memo(true, () -> group[0],
+                pid -> new ForegroundProbe.Foreground(pid, "zsh" + probes[0]++), () -> now[0]);
+        long s = 1_000_000_000L;
+        assertEquals("zsh0", memo.probe(501, 10).command());
+        now[0] = 5 * s;
+        assertEquals("zsh0", memo.probe(501, 10).command(), "quiet and same group: reused");
+        assertEquals("zsh1", memo.probe(501, 11).command(), "output since: re-probed");
+        now[0] += s / 2;
+        assertEquals("zsh1", memo.probe(501, 12).command(), "younger than FRESH: reused despite output");
+        group[0] = 777;
+        assertEquals("zsh2", memo.probe(501, 12).command(), "new foreground group: re-probed");
+        now[0] += 31 * s;
+        assertEquals("zsh3", memo.probe(501, 12).command(), "older than IDLE: re-probed");
+        group[0] = -1;
+        assertEquals("zsh4", memo.probe(501, 12).command(), "unknown group: never cached");
+        assertEquals("zsh5", memo.probe(501, 12).command());
+
+        ForegroundProbe.Memo off = new ForegroundProbe.Memo(false, () -> 501,
+                pid -> new ForegroundProbe.Foreground(pid, "p" + probes[0]++), () -> 0);
+        assertEquals("p6", off.probe(501, 0).command());
+        assertEquals("p7", off.probe(501, 0).command(), "disabled where the probe does not fork");
+    }
+
+    @Test
+    @EnabledOnOs({OS.MAC, OS.LINUX})
+    void ptyReportsItsForegroundGroup() throws IOException {
+        Map<String, String> env = new HashMap<>(System.getenv());
+        PtyProcess process = PtyProcess.start(List.of("/bin/sh", "-c", "exec sleep 5"), env,
+                Path.of(System.getProperty("java.io.tmpdir")), 80, 24);
+        try {
+            // setsid makes the child its own group leader and the tty's foreground group.
+            Await.until("tcgetpgrp to report pid " + process.pid(),
+                    () -> process.foregroundProcessGroup() == process.pid());
+        } finally {
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
     @EnabledOnOs({OS.MAC, OS.LINUX})
     void liveSleepUnderAPtyIsTheForeground() throws IOException {
         Map<String, String> env = new HashMap<>(System.getenv());
@@ -215,5 +295,13 @@ class ForegroundProbeTest {
         } finally {
             process.destroyForcibly();
         }
+    }
+
+    @Test
+    void aZombieOrDeadProcessReadsAsExited() {
+        assertTrue(ForegroundProbe.exited("4242 (cat) Z 100 4242 100 34816 4242 4194572 0"));
+        assertTrue(ForegroundProbe.exited("4242 (my (odd) cmd) X 100 4242"));
+        assertFalse(ForegroundProbe.exited("4242 (cat) S 100 4242 100 34816 4242 4194560 0"));
+        assertFalse(ForegroundProbe.exited("4242 (Z) R 100 4242 100 34816 4242 4194560 0"));
     }
 }

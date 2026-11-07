@@ -34,6 +34,11 @@ final class MasterFd implements AutoCloseable {
     private boolean closing;       // guarded by lock
     private boolean released;      // guarded by lock
 
+    /** Set by the reader once poll reports output and before it reads any of it; cleared
+     * by the consumer once what it read is applied. Together with {@link #unread}, some
+     * unapplied output is always visible: see {@link #outputPending}. */
+    private volatile boolean readPending;
+
     /** The reader's native buffers, allocated once and reused (there is one reader). */
     private final Object readLock = new Object();
     private MemorySegment readState;   // guarded by readLock
@@ -151,7 +156,13 @@ final class MasterFd implements AutoCloseable {
                     if ((revents & Posix.POLLNVAL) != 0) {
                         return -1;
                     }
+                    // Before the read takes the bytes out of the kernel, so that a caller
+                    // checking outputPending() never sees them in neither place.
+                    readPending = true;
                     long n = (long) Posix.READ.invokeExact(state, fd, native_, (long) length);
+                    if (n <= 0) {
+                        readPending = false;
+                    }
                     if (n > 0) {
                         MemorySegment.copy(native_, JAVA_BYTE_LAYOUT, 0, buffer, offset, (int) n);
                         return (int) n;
@@ -209,6 +220,37 @@ final class MasterFd implements AutoCloseable {
         } finally {
             exit();
         }
+    }
+
+    /**
+     * True while the program has output this process has not finished consuming: bytes
+     * still in the kernel buffer, or bytes the reader took since the consumer last called
+     * {@link #outputConsumed}. False once the descriptor is closed.
+     */
+    boolean outputPending() {
+        return readPending || unread() > 0;
+    }
+
+    /** The consumer has applied everything the reader returned so far. */
+    void outputConsumed() {
+        readPending = false;
+    }
+
+    /** {@code FIONREAD}: bytes waiting in the kernel; 0 when closed or unknown. */
+    private int unread() {
+        int[] count = new int[1];
+        with(descriptor -> {
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment n = arena.allocate(JAVA_INT);
+                if ((int) Posix.IOCTL.invokeExact(Posix.callState(arena), descriptor, Posix.FIONREAD, n) == 0) {
+                    count[0] = n.get(JAVA_INT, 0);
+                }
+            } catch (Throwable ignored) {
+                // Unknown: report nothing pending rather than stall a caller.
+            }
+            return true;
+        });
+        return count[0];
     }
 
     /** Runs {@code op} with the live descriptor; false (op not run) once closing. */

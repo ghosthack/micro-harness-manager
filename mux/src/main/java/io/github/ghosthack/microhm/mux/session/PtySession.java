@@ -65,6 +65,11 @@ public final class PtySession implements Session {
     static final Duration KILL_GRACE = Duration.ofSeconds(2);
     /** How often {@link #kill} re-checks the snapshot descendants while the grace runs. */
     private static final long KILL_POLL_MS = 20;
+    /** At most this long, input waits for the program's earlier output to be applied, so a
+     * program that never stops printing cannot hold typing up. */
+    private static final long INPUT_SYNC_MS = 100;
+    /** How long nothing must be pending before input goes out. */
+    private static final long INPUT_SYNC_SETTLE_MS = 2;
     /** The wire value of {@code Info.backend}: microhm-pty is Unix-only. */
     /** The PTY kind sessions report: a POSIX pty, or a Windows ConPTY pseudoconsole. */
     static final String BACKEND = System.getProperty("os.name", "").startsWith("Windows") ? "conpty" : "unix";
@@ -92,6 +97,8 @@ public final class PtySession implements Session {
     private final PtyProcess process;
     private final int historyLines;
     private final ExitListener exitListener;
+    /** The foreground probe, memoized where it forks (macOS {@code ps}). */
+    private final ForegroundProbe.Memo foregroundProbe;
 
     private final Object lock = new Object();
     private final VtTokenizer tokenizer = new VtTokenizer();   // guarded by lock
@@ -118,6 +125,7 @@ public final class PtySession implements Session {
         this.process = process;
         this.historyLines = historyLines;
         this.exitListener = exitListener;
+        this.foregroundProbe = new ForegroundProbe.Memo(process::foregroundProcessGroup);
         this.columns = columns;
         this.rows = rows;
         // Emulator replies (DA, DSR, CPR) are enqueued for the writer thread, never written
@@ -254,7 +262,7 @@ public final class PtySession implements Session {
             cursorVisible = terminal.modes().cursorVisible();
         }
         alive = alive && process.isAlive();
-        String foreground = alive ? ForegroundProbe.probe(process.pid()).command() : "";
+        String foreground = alive ? foregroundProbe.probe(process.pid(), bytes).command() : "";
         return new Capture(text, alive, foreground, process.pid(), title, cols, rws, bytes, cursorVisible);
     }
 
@@ -290,6 +298,7 @@ public final class PtySession implements Session {
 
     @Override
     public void input(List<String> keys) {
+        awaitOutputApplied();
         write(KeyNames.encode(keys, terminal.modes().applicationCursorKeys()));
     }
 
@@ -298,6 +307,7 @@ public final class PtySession implements Session {
         if (text.isEmpty()) {
             return;
         }
+        awaitOutputApplied();
         if (terminal.modes().bracketedPaste()) {
             writeBracketed(text);
         } else {
@@ -307,6 +317,7 @@ public final class PtySession implements Session {
 
     @Override
     public boolean pasteIfBracketed(String text) {
+        awaitOutputApplied();
         if (!terminal.modes().bracketedPaste()) {
             return false;
         }
@@ -314,6 +325,45 @@ public final class PtySession implements Session {
             writeBracketed(text);
         }
         return true;
+    }
+
+    /**
+     * Keys and pastes are encoded from the terminal's modes (cursor keys, bracketed paste),
+     * so they must see every mode switch the program printed before them. A caller can
+     * observe the program's state ahead of the pump (e.g. "cat is now the foreground"
+     * while printf's {@code CSI ?1l} is still in the PTY buffer): wait until all output is
+     * read and applied, bounded by {@link #INPUT_SYNC_MS}.
+     */
+    private void awaitOutputApplied() {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(INPUT_SYNC_MS);
+        synchronized (lock) {
+            // Nothing pending for INPUT_SYNC_SETTLE_MS, not just once: what a program writes
+            // reaches the master's readable queue through the kernel's tty flip buffer,
+            // asynchronously, and while in transit it shows neither to FIONREAD nor to poll.
+            long settle = TimeUnit.MILLISECONDS.toNanos(INPUT_SYNC_SETTLE_MS);
+            long cleanSince = -1;
+            while (!exited) {
+                long now = System.nanoTime();
+                if (process.outputPending()) {
+                    cleanSince = -1;
+                } else if (cleanSince < 0) {
+                    cleanSince = now;
+                } else if (now - cleanSince >= settle) {
+                    return;
+                }
+                if (deadline - now <= 0) {
+                    return;
+                }
+                try {
+                    // The pump notifies after applying; bytes still in the kernel don't, so
+                    // re-check on a short timer as well.
+                    lock.wait(1);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
     }
 
     private void writeBracketed(String text) {
@@ -408,7 +458,7 @@ public final class PtySession implements Session {
         }
         if (isAlive()) {
             long shellPid = process.pid();
-            long foregroundPid = ForegroundProbe.probe(shellPid).pid();
+            long foregroundPid = foregroundProbe.probe(shellPid, outputBytes()).pid();
             Optional<Path> cwd = CwdProbe.cwdOf(foregroundPid);
             if (cwd.isEmpty() && foregroundPid != shellPid) {
                 cwd = CwdProbe.cwdOf(shellPid);
@@ -539,6 +589,7 @@ public final class PtySession implements Session {
                     break;
                 }
                 if (n == 0) {
+                    process.outputConsumed();
                     continue;
                 }
                 synchronized (lock) {
@@ -546,7 +597,9 @@ public final class PtySession implements Session {
                     lastOutputNanos = System.nanoTime();
                     markActive();
                     applyAndBroadcast(tokenizer.feed(buffer, 0, n));
-                    lock.notifyAll(); // awaitQuiet waiters re-check the counter and the stamp
+                    process.outputConsumed();
+                    // awaitQuiet re-checks the counter and the stamp; input, the pending output
+                    lock.notifyAll();
                 }
             }
         } finally {

@@ -46,6 +46,8 @@ final class Posix {
     static final long TIOCSWINSZ = MAC ? 0x80087467L : 0x5414L;
     /** {@code _IO('t', 97)} on macOS; {@code 0x540E} on Linux. */
     static final long TIOCSCTTY = MAC ? 0x20007461L : 0x540EL;
+    /** Bytes waiting to be read: on a PTY master, output the slave side wrote. */
+    static final long FIONREAD = MAC ? 0x4004667FL : 0x541BL;
     static final short POSIX_SPAWN_SETSID = (short) (MAC ? 0x0400 : 0x80);
     /** macOS only: every descriptor not named by a file action is closed in the child. */
     static final short POSIX_SPAWN_CLOEXEC_DEFAULT = 0x4000;
@@ -102,6 +104,9 @@ final class Posix {
     static final MethodHandle PTHREAD_SIGMASK = call("pthread_sigmask",
             FunctionDescriptor.of(JAVA_INT, JAVA_INT, ADDRESS, ADDRESS));
     static final MethodHandle KILL = errnoCall("kill", FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT));
+    /** The foreground process group of the terminal open on the descriptor (the master
+     * works: it reports the slave side's group); -1 with errno on failure. */
+    static final MethodHandle TCGETPGRP = errnoCall("tcgetpgrp", FunctionDescriptor.of(JAVA_INT, JAVA_INT));
     static final MethodHandle WAITPID = errnoCall("waitpid", FunctionDescriptor.of(JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT));
 
     static final MethodHandle FILE_ACTIONS_INIT = call("posix_spawn_file_actions_init",

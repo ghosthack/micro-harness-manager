@@ -76,6 +76,21 @@ public final class PtyProcess {
 
         /** Closes the terminal: output ends, writes fail. Idempotent. */
         void close();
+
+        /** The terminal's foreground process group; -1 when unknown (closed, or no such
+         * notion, as on ConPTY). */
+        default long foregroundProcessGroup() {
+            return -1;
+        }
+
+        /** See {@link PtyProcess#outputPending()}; false where it cannot be known. */
+        default boolean outputPending() {
+            return false;
+        }
+
+        /** See {@link PtyProcess#outputConsumed()}. */
+        default void outputConsumed() {
+        }
     }
 
     private final long pid;
@@ -309,13 +324,45 @@ public final class PtyProcess {
         terminal.kill();
     }
 
+    /**
+     * True while the child has written output that the reader of {@link #getInputStream}
+     * has not yet reported consumed through {@link #outputConsumed}: bytes still in the
+     * kernel, or bytes a read already returned. Lets a caller act on the screen as of
+     * everything the program printed so far. Always false on Windows.
+     */
+    public boolean outputPending() {
+        return terminal.outputPending();
+    }
+
+    /** The reader of {@link #getInputStream} has applied all it read so far. */
+    public void outputConsumed() {
+        terminal.outputConsumed();
+    }
+
     /** Closes the master side. Output ends; further writes fail. Idempotent. */
     public void closeTerminal() {
         terminal.close();
     }
 
+    /** The terminal's foreground process group id ({@code tcgetpgrp} on the master, no
+     * fork); -1 when unknown: the terminal is closed, no process has it as its controlling
+     * terminal yet, or on Windows. */
+    public long foregroundProcessGroup() {
+        return terminal.foregroundProcessGroup();
+    }
+
     /** The POSIX terminal: the master descriptor and signals to the child. */
     private record UnixTerminal(int pid, MasterFd master, CompletableFuture<Integer> exit) implements Terminal {
+
+        @Override
+        public boolean outputPending() {
+            return master.outputPending();
+        }
+
+        @Override
+        public void outputConsumed() {
+            master.outputConsumed();
+        }
 
         @Override
         public void setWinSize(int columns, int rows) throws IOException {
@@ -355,6 +402,20 @@ public final class PtyProcess {
         @Override
         public void close() {
             master.close();
+        }
+
+        @Override
+        public long foregroundProcessGroup() {
+            long[] group = {-1};
+            master.with(fd -> {
+                try (Arena arena = Arena.ofConfined()) {
+                    group[0] = (int) Posix.TCGETPGRP.invokeExact(Posix.callState(arena), fd);
+                } catch (Throwable ignored) {
+                    // Unknown; the caller falls back to its slower strategy.
+                }
+                return true;
+            });
+            return group[0] > 0 ? group[0] : -1;
         }
 
         private void signal(int signal) {
