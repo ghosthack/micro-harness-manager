@@ -88,6 +88,7 @@ final class Posix {
     static final MethodHandle FCNTL = errnoCall("fcntl", FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT),
             Linker.Option.firstVariadicArg(2));
     static final MethodHandle CLOSE = errnoCall("close", FunctionDescriptor.of(JAVA_INT, JAVA_INT));
+    static final MethodHandle PIPE = errnoCall("pipe", FunctionDescriptor.of(JAVA_INT, ADDRESS));
     static final MethodHandle READ = errnoCall("read", FunctionDescriptor.of(JAVA_LONG, JAVA_INT, ADDRESS, JAVA_LONG));
     static final MethodHandle WRITE = errnoCall("write", FunctionDescriptor.of(JAVA_LONG, JAVA_INT, ADDRESS, JAVA_LONG));
     /** {@code poll(struct pollfd *, nfds_t, int)}; {@code nfds_t} is unsigned int on macOS,
