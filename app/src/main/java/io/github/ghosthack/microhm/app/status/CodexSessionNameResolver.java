@@ -7,10 +7,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.LongFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,17 +18,32 @@ import java.util.regex.Pattern;
  * Codex keeps the name in {@code session_index.jsonl}; the active rollout file held by
  * the pane's Codex process supplies the thread id used to select the matching row.
  * Public so the MCP session controller can also point agents at a live Codex session's
- * transcript ({@link #transcript}). Thread-safe; every call may block for a couple of
- * seconds ({@code lsof}), so never call it on the EDT. */
+ * transcript ({@link #transcript}). Thread-safe. A call may block for a couple of
+ * seconds ({@code lsof}) the first time it meets a Codex process, so never call it on
+ * the EDT; after that the process's rollout and the parsed index are cached
+ * ({@link CodexRolloutLocator}, {@link CodexSessionIndex}). */
 public final class CodexSessionNameResolver {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Pattern THREAD_ID = Pattern.compile(
             "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.jsonl$");
 
+    /** Bound on remembered first-prompt previews: one per recently seen rollout. */
+    static final int PREVIEW_CACHE_LIMIT = 128;
+
     private final Path codexHome;
     private final LongFunction<Optional<Path>> rolloutLocator;
-    private final ConcurrentHashMap<Path, String> previewCache = new ConcurrentHashMap<>();
+    private final CodexSessionIndex sessionIndex;
+    /** Rollout → first-prompt preview, least recently used dropped first. An empty
+     * preview remembers the rollout's size so it is retried once the file grows. */
+    private final Map<Path, Preview> previewCache = new LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Path, Preview> eldest) {
+            return size() > PREVIEW_CACHE_LIMIT;
+        }
+    };
+
+    private record Preview(String text, long rolloutSize) { }
 
     /** Over {@code $CODEX_HOME}, else {@code ~/.codex}. */
     public CodexSessionNameResolver() {
@@ -37,7 +51,7 @@ public final class CodexSessionNameResolver {
     }
 
     private CodexSessionNameResolver(Path codexHome) {
-        this(codexHome, paneProcessId -> locateOpenRollout(paneProcessId,
+        this(codexHome, new CodexRolloutLocator(
                 codexHome.toAbsolutePath().normalize().resolve("sessions")));
     }
 
@@ -46,6 +60,7 @@ public final class CodexSessionNameResolver {
     public CodexSessionNameResolver(Path codexHome, LongFunction<Optional<Path>> rolloutLocator) {
         this.codexHome = codexHome.toAbsolutePath().normalize();
         this.rolloutLocator = rolloutLocator;
+        this.sessionIndex = new CodexSessionIndex(this.codexHome.resolve("session_index.jsonl"));
     }
 
     /**
@@ -80,35 +95,42 @@ public final class CodexSessionNameResolver {
         // Codex's history UI uses the first real user prompt as the preview for an
         // unnamed thread. Mirror that instead of falling all the way back to the cwd.
         Path rolloutPath = rollout.get().toAbsolutePath().normalize();
-        String preview = previewCache.computeIfAbsent(rolloutPath,
-                path -> previewFromRollout(path).orElse(""));
+        String preview = preview(rolloutPath);
         return preview.isEmpty() ? Optional.empty() : Optional.of(preview);
     }
 
-    private Optional<String> nameFromIndex(String threadId) {
-        Path index = codexHome.resolve("session_index.jsonl");
-        if (!Files.isRegularFile(index)) {
-            return Optional.empty();
+    /** Remembered previews (for tests). */
+    int previewCacheSize() {
+        synchronized (previewCache) {
+            return previewCache.size();
         }
-        String latest = null;
-        try (BufferedReader lines = Files.newBufferedReader(index)) {
-            for (String line; (line = lines.readLine()) != null; ) {
-                try {
-                    JsonNode row = MAPPER.readTree(line);
-                    if (threadId.equals(row.path("id").asText())) {
-                        String name = row.path("thread_name").asText().strip();
-                        if (!name.isEmpty()) {
-                            latest = name;
-                        }
-                    }
-                } catch (IOException ignored) {
-                    // One partial/corrupt append must not hide an earlier valid rename.
-                }
+    }
+
+    private String preview(Path rollout) {
+        synchronized (previewCache) {
+            Preview cached = previewCache.get(rollout);
+            if (cached != null && (!cached.text().isEmpty() || cached.rolloutSize() == size(rollout))) {
+                return cached.text();
             }
-        } catch (IOException ignored) {
-            return Optional.empty();
         }
-        return Optional.ofNullable(latest);
+        long size = size(rollout);
+        String text = previewFromRollout(rollout).orElse("");
+        synchronized (previewCache) {
+            previewCache.put(rollout, new Preview(text, size));
+        }
+        return text;
+    }
+
+    private static long size(Path path) {
+        try {
+            return Files.size(path);
+        } catch (IOException e) {
+            return -1;
+        }
+    }
+
+    private Optional<String> nameFromIndex(String threadId) {
+        return sessionIndex.name(threadId);
     }
 
     private static Optional<String> previewFromRollout(Path rollout) {
@@ -148,71 +170,6 @@ public final class CodexSessionNameResolver {
             return Optional.empty();
         }
         return Optional.empty();
-    }
-
-    /** Finds the rollout file open by the Codex descendant of the session's shell. */
-    private static Optional<Path> locateOpenRollout(long paneProcessId, Path sessionsRoot) {
-        Optional<ProcessHandle> pane = ProcessHandle.of(paneProcessId);
-        if (pane.isEmpty()) {
-            return Optional.empty();
-        }
-        return java.util.stream.Stream.concat(java.util.stream.Stream.of(pane.get()), pane.get().descendants())
-                .filter(CodexSessionNameResolver::isCodexProcess)
-                .map(ProcessHandle::pid)
-                .map(processId -> openRolloutForProcess(processId, sessionsRoot))
-                .flatMap(Optional::stream)
-                .max(Comparator.comparingLong(CodexSessionNameResolver::lastModified));
-    }
-
-    private static boolean isCodexProcess(ProcessHandle process) {
-        return process.info().command()
-                .map(command -> Path.of(command).getFileName().toString().equals("codex"))
-                .orElse(false);
-    }
-
-    private static Optional<Path> openRolloutForProcess(long processId, Path sessionsRoot) {
-        Process process = null;
-        try {
-            process = new ProcessBuilder("lsof", "-a", "-p", Long.toString(processId), "-Fn")
-                    .redirectErrorStream(true).start();
-            if (!process.waitFor(2, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                return Optional.empty();
-            }
-            Path newest = null;
-            try (BufferedReader output = process.inputReader()) {
-                for (String line; (line = output.readLine()) != null; ) {
-                    if (line.startsWith("n") && line.contains("/rollout-")
-                            && line.endsWith(".jsonl")) {
-                        Path candidate = Path.of(line.substring(1)).toAbsolutePath().normalize();
-                        if (!candidate.startsWith(sessionsRoot)) {
-                            continue;
-                        }
-                        if (newest == null || lastModified(candidate) > lastModified(newest)) {
-                            newest = candidate;
-                        }
-                    }
-                }
-            }
-            return Optional.ofNullable(newest);
-        } catch (IOException e) {
-            return Optional.empty();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Optional.empty();
-        } finally {
-            if (process != null && process.isAlive()) {
-                process.destroyForcibly();
-            }
-        }
-    }
-
-    private static long lastModified(Path path) {
-        try {
-            return Files.getLastModifiedTime(path).toMillis();
-        } catch (IOException e) {
-            return Long.MIN_VALUE;
-        }
     }
 
     private static Path codexHome() {

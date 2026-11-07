@@ -1,7 +1,7 @@
 package io.github.ghosthack.microhm.vt;
 
-import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -67,12 +67,23 @@ public final class VtTokenizer {
 
     private State state = State.GROUND;
 
+    /** One shared token per C0 control and DEL: they carry no state, and token bytes are
+     * never written to, so a CR or LF costs no allocation. */
+    private static final VtToken[] CONTROLS = new VtToken[0x80];
+
+    static {
+        for (int c = 0; c < 0x20; c++) {
+            CONTROLS[c] = new VtToken(VtToken.Kind.CONTROL, new byte[]{(byte) c});
+        }
+        CONTROLS[0x7F] = new VtToken(VtToken.Kind.CONTROL, new byte[]{0x7F});
+    }
+
     /** Printable bytes accumulated in GROUND, flushed as a TEXT token at the next boundary. */
-    private final ByteArrayOutputStream text = new ByteArrayOutputStream();
+    private final Bytes text = new Bytes(256);
     /** The bytes of the escape/CSI sequence being parsed (starts with ESC). */
-    private final ByteArrayOutputStream seq = new ByteArrayOutputStream();
+    private final Bytes seq = new Bytes(MAX_CSI_LENGTH + 1);
     /** The bytes of the open string (introducer included). */
-    private final ByteArrayOutputStream stringBuf = new ByteArrayOutputStream();
+    private final Bytes stringBuf = new Bytes(256);
     /** OSC vs generic STRING, decided by the introducer byte. */
     private boolean stringIsOsc;
     /** Bytes of {@link #stringBuf} already returned to clients via openStringFragment. */
@@ -96,9 +107,15 @@ public final class VtTokenizer {
                     } else if (b < 0x20 || b == 0x7F) {
                         // C0 control (other than ESC, handled above) or DEL: its own token.
                         flushText(out);
-                        out.add(new VtToken(VtToken.Kind.CONTROL, new byte[]{(byte) b}));
+                        out.add(CONTROLS[b]);
                     } else {
-                        text.write(b);
+                        // A run of printable bytes (every byte >= 0x80 is text): copy it whole.
+                        int runEnd = i + 1;
+                        while (runEnd < end && isPrintable(chunk[runEnd])) {
+                            runEnd++;
+                        }
+                        text.write(chunk, i, runEnd - i);
+                        i = runEnd - 1;
                     }
                 }
                 case AFTER_ESC -> {
@@ -190,7 +207,7 @@ public final class VtTokenizer {
         if (state == State.IN_STRING) {
             int size = stringBuf.size();
             if (size > stringForwarded) {
-                fragment = slice(stringBuf.toByteArray(), stringForwarded, size);
+                fragment = stringBuf.copy(stringForwarded, size);
             }
             stringForwarded = size;
             if (size > MAX_STRING_LENGTH) {
@@ -252,25 +269,17 @@ public final class VtTokenizer {
         if (size == 0) {
             return;
         }
-        byte[] buf = text.toByteArray();
-        int tail = incompleteUtf8TailLength(buf, size);
+        int tail = incompleteUtf8TailLength(text.array(), size);
         if (size - tail > 0) {
-            out.add(new VtToken(VtToken.Kind.TEXT, slice(buf, 0, size - tail)));
+            out.add(new VtToken(VtToken.Kind.TEXT, text.copy(0, size - tail)));
         }
-        text.reset();
-        if (tail > 0) {
-            // Re-hold the incomplete code point so the next feed can complete it.
-            text.write(buf, size - tail, tail);
-        }
+        // Re-hold an incomplete code point at the front so the next feed can complete it.
+        text.keepTail(tail);
     }
 
     private void appendSeqAsText() {
-        byte[] s = seq.toByteArray();
         // Prepend the aborted sequence to any pending text so byte order is preserved.
-        byte[] existing = text.toByteArray();
-        text.reset();
-        text.write(s, 0, s.length);
-        text.write(existing, 0, existing.length);
+        text.prepend(seq.array(), seq.size());
     }
 
     private void emitString(List<VtToken> out) {
@@ -285,9 +294,14 @@ public final class VtTokenizer {
     /** The trailing bytes of {@link #text} that form an incomplete (completable) UTF-8
      * code point, as a fresh array; empty when the buffer ends on a boundary. */
     private byte[] incompleteUtf8Tail() {
-        byte[] buf = text.toByteArray();
-        int tail = incompleteUtf8TailLength(buf, buf.length);
-        return tail == 0 ? EMPTY : slice(buf, buf.length - tail, buf.length);
+        int size = text.size();
+        int tail = incompleteUtf8TailLength(text.array(), size);
+        return tail == 0 ? EMPTY : text.copy(size - tail, size);
+    }
+
+    /** Text in GROUND: anything but a C0 control, ESC or DEL (bytes >= 0x80 included). */
+    private static boolean isPrintable(byte b) {
+        return b < 0 || (b >= 0x20 && b != 0x7F);
     }
 
     /**
@@ -324,9 +338,70 @@ public final class VtTokenizer {
         return cont + 1; // lead byte plus the continuations seen so far
     }
 
-    private static byte[] slice(byte[] a, int from, int to) {
-        byte[] r = new byte[to - from];
-        System.arraycopy(a, from, r, 0, r.length);
-        return r;
+    /** A growable byte buffer without {@link java.io.ByteArrayOutputStream}'s locking:
+     * the tokenizer is single-threaded and writes to these on every byte. */
+    private static final class Bytes {
+        private byte[] buf;
+        private int size;
+
+        Bytes(int capacity) {
+            buf = new byte[capacity];
+        }
+
+        int size() {
+            return size;
+        }
+
+        /** The backing array; only {@code [0, size())} is meaningful. */
+        byte[] array() {
+            return buf;
+        }
+
+        void reset() {
+            size = 0;
+        }
+
+        void write(int b) {
+            if (size == buf.length) {
+                grow(size + 1);
+            }
+            buf[size++] = (byte) b;
+        }
+
+        void write(byte[] src, int off, int len) {
+            if (size + len > buf.length) {
+                grow(size + len);
+            }
+            System.arraycopy(src, off, buf, size, len);
+            size += len;
+        }
+
+        /** Inserts {@code src[0, len)} before the current contents. */
+        void prepend(byte[] src, int len) {
+            if (size + len > buf.length) {
+                grow(size + len);
+            }
+            System.arraycopy(buf, 0, buf, len, size);
+            System.arraycopy(src, 0, buf, 0, len);
+            size += len;
+        }
+
+        /** Keeps only the last {@code tail} bytes, moved to the front. */
+        void keepTail(int tail) {
+            System.arraycopy(buf, size - tail, buf, 0, tail);
+            size = tail;
+        }
+
+        byte[] copy(int from, int to) {
+            return Arrays.copyOfRange(buf, from, to);
+        }
+
+        byte[] toByteArray() {
+            return Arrays.copyOf(buf, size);
+        }
+
+        private void grow(int min) {
+            buf = Arrays.copyOf(buf, Math.max(min, buf.length * 2));
+        }
     }
 }

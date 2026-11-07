@@ -39,9 +39,11 @@ public final class QueryFilter {
         if (token.kind() != VtToken.Kind.CSI) {
             return false;
         }
-        String body = token.csiBody();
+        // The final byte first: only c / n / t can be stripped, so no other CSI pays for
+        // decoding its body.
         switch (token.csiFinal()) {
             case 'c' -> {
+                String body = token.csiBody();
                 if (body.startsWith(">")) {
                     // DA2: strip only when the first parameter is absent or 0.
                     return leadingInt(body, 1) == 0;
@@ -50,6 +52,7 @@ public final class QueryFilter {
                 return true;
             }
             case 'n' -> {
+                String body = token.csiBody();
                 if (body.startsWith("?")) {
                     // DECXCPR (CSI ? 6 n) and CSI ? 996 n pass through — not answered here.
                     return false;
@@ -60,7 +63,7 @@ public final class QueryFilter {
             }
             case 't' -> {
                 // XTWINOPS: strip the "resize text area" form (8) only.
-                return leadingInt(body, 0) == 8;
+                return leadingInt(token.csiBody(), 0) == 8;
             }
             default -> {
                 return false;

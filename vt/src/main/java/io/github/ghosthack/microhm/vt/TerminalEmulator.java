@@ -761,6 +761,7 @@ public final class TerminalEmulator {
             Line line = screen.row(cy);
             int n = Math.min(columns - cx, to - i);
             line.breakWide(cx, cx + n);
+            line.touch();
             int[] cps = line.codePoints;
             long[] styles = line.styles;
             String[] extras = line.extras;
@@ -885,7 +886,7 @@ public final class TerminalEmulator {
 
     /** The deferred wrap: mark the row soft-wrapped and move to the next line. */
     private void wrapLine() {
-        screen.row(cy).wrapped = true;
+        screen.row(cy).setWrapped(true);
         cx = 0;
         index();
     }
@@ -1075,7 +1076,7 @@ public final class TerminalEmulator {
             case 0 -> {
                 Line line = screen.row(cy);
                 line.erase(cx, columns, fill);
-                line.wrapped = false;
+                line.setWrapped(false);
                 for (int y = cy + 1; y < rows; y++) {
                     screen.row(y).clear(fill);
                 }
@@ -1110,12 +1111,12 @@ public final class TerminalEmulator {
         switch (mode) {
             case 0 -> {
                 line.erase(cx, columns, fill);
-                line.wrapped = false;
+                line.setWrapped(false);
             }
             case 1 -> line.erase(0, cx + 1, fill);
             case 2 -> {
                 line.erase(0, columns, fill);
-                line.wrapped = false;
+                line.setWrapped(false);
             }
             default -> {
             }
@@ -1272,6 +1273,7 @@ public final class TerminalEmulator {
             Line line = screen.row(y);
             line.clear(Style.DEFAULT);
             java.util.Arrays.fill(line.codePoints, 'E');
+            line.touch();
         }
         home();
     }

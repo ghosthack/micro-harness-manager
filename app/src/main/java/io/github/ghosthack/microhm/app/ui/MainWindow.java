@@ -83,6 +83,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -1424,10 +1425,18 @@ public final class MainWindow extends JFrame {
             if (entry.status() == SidebarEntry.Status.LIVE && entry.sessionName().equals(sessionName)) {
                 SidebarView.FilterStatus oldStatus = SidebarView.filterStatus(entry);
                 String oldDisplayName = entry.displayName();
+                SessionState oldState = entry.state();
+                String oldReason = entry.stateReason();
+                String oldPaneTitle = entry.paneTitle();
                 if (result.stateConfirmed()) {
                     entry.setState(result.classification().state(), result.classification().reason());
                 }
                 entry.setPaneTitle(result.paneTitle());
+                // everything a poll can touch on the entry, so everything its row and
+                // tooltip can show differently afterwards
+                boolean changed = oldState != entry.state()
+                        || !Objects.equals(oldReason, entry.stateReason())
+                        || !Objects.equals(oldPaneTitle, entry.paneTitle());
                 SidebarView.FilterStatus newStatus = SidebarView.filterStatus(entry);
                 boolean filterMembershipMayChange = oldStatus != newStatus
                         && visibleStatuses.size() != SidebarView.FilterStatus.values().length;
@@ -1436,13 +1445,17 @@ public final class MainWindow extends JFrame {
                         && !oldDisplayName.equals(entry.displayName());
                 if (filterMembershipMayChange || orderMayChange) {
                     rebuildVisibleSidebar(lastSelectedSessionName, false);
-                } else {
+                } else if (changed) {
                     int index = indexOfSessionName(sessionName);
                     if (index >= 0) {
                         sidebarList.repaint(sidebarList.getCellBounds(index, index));
                     }
                 }
-                ensurePulsing();
+                if (changed || isPulsing(entry)) {
+                    // unchanged but pulsing: the timer may have stopped while a filter hid
+                    // the row (filter changes don't restart it), so keep reviving it here
+                    ensurePulsing();
+                }
                 if (entry.equals(sidebarList.getSelectedValue())) {
                     updateWindowTitle(entry); // a /rename must reach the window title too
                 }

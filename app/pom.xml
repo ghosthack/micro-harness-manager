@@ -59,6 +59,16 @@
         </configuration>
       </plugin>
       <plugin>
+        <!-- Always rebuild the thin jar. Otherwise, a build without "clean" finds the jar
+             up to date and leaves in place the shaded jar of the last build, and shade then
+             bundles that jar's stale copies of vt/pty/mux classes over the fresh ones. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <forceCreation>true</forceCreation>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.6.0</version>

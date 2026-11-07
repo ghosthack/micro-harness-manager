@@ -26,6 +26,7 @@ class SessionTerminalTest {
     private SessionTerminal open() throws Exception {
         terminal = edt(() -> SessionTerminal.create(connection, new SessionTerminal.Config(null, false,
                 AnsiPalettes.forSetting(AppSettings.TerminalPalette.MACOS_TERMINAL), false, false, "Monospaced", 12)));
+        edtRun(() -> terminal.view().setShowingForTest(true)); // headless: as if its card were shown
         return terminal;
     }
 

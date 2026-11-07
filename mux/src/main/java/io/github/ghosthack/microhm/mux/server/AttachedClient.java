@@ -46,6 +46,10 @@ final class AttachedClient implements Session.Client {
      * closes the socket underneath it. */
     private static final Duration ERROR_DELIVERY_GRACE = Duration.ofSeconds(1);
 
+    /** Upper bound on the payload of one DATA_OUT frame assembled from several queued
+     * chunks; a single larger chunk (e.g. a snapshot) still goes out whole. */
+    static final int MAX_BATCH_BYTES = 64 * 1024;
+
     private final Session session;
     private final SocketChannel channel;
     private final FrameCodec codec;
@@ -178,9 +182,7 @@ final class AttachedClient implements Session.Client {
                             return;
                         }
                         if (!queue.isEmpty()) {
-                            byte[] chunk = queue.poll();
-                            queued -= chunk.length;
-                            next = Frame.of(FrameType.DATA_OUT, chunk);
+                            next = Frame.of(FrameType.DATA_OUT, pollBatch());
                             break;
                         }
                         if (behind && !resyncRequested) {
@@ -229,6 +231,38 @@ final class AttachedClient implements Session.Client {
         } finally {
             closeChannel();
         }
+    }
+
+    /** Must hold {@link #lock}; the queue must not be empty. Takes the head chunk and, while
+     * the total stays within {@link #MAX_BATCH_BYTES}, the chunks queued behind it, so a
+     * backlog goes out as a few large frames rather than one frame per pump read. The bytes
+     * leave in queue order either way. */
+    private byte[] pollBatch() {
+        byte[] first = queue.poll();
+        int total = first.length;
+        byte[] following = queue.peek();
+        if (following == null || total + following.length > MAX_BATCH_BYTES) {
+            queued -= total;
+            return first;
+        }
+        int count = 1;
+        for (byte[] chunk : queue) {
+            if (total + chunk.length > MAX_BATCH_BYTES) {
+                break;
+            }
+            total += chunk.length;
+            count++;
+        }
+        byte[] batch = new byte[total];
+        System.arraycopy(first, 0, batch, 0, first.length);
+        int offset = first.length;
+        for (int i = 1; i < count; i++) {
+            byte[] chunk = queue.poll();
+            System.arraycopy(chunk, 0, batch, offset, chunk.length);
+            offset += chunk.length;
+        }
+        queued -= total;
+        return batch;
     }
 
     private void markProgress() {

@@ -57,8 +57,21 @@ import java.util.function.Consumer;
  * there, which only queues one frame on the EDT (an atomic flag, so a burst of output is one
  * pending frame). The frame is rate-limited to ~60 fps, held while the program is mid
  * synchronized update (DECSET 2026, capped at 150 ms so a stuck program still paints), and
- * then adjusts the scrollback anchor and the scrollbar and calls {@code repaint()}. Painting
- * holds the emulator lock for the duration of one frame. Everything else here is EDT-only.
+ * then adjusts the scrollback anchor and the scrollbar and repaints what changed (see
+ * Damage below). Painting holds the emulator lock for the duration of one frame. Everything
+ * else here is EDT-only. While the view is not showing (a hidden card) frames are skipped
+ * entirely — the pending one is left queued, so output costs the EDT nothing — and one
+ * catch-up frame with a full repaint runs when it shows again.
+ *
+ * <h2>Damage</h2>
+ * Each frame remembers, per visible row, the {@link Line} object it showed and that line's
+ * {@link Line#version() version}; the next frame repaints only the rows whose line or version
+ * differ (one union rectangle, a row of margin either side for glyphs that overflow their
+ * cell) plus the old and new cursor rows. Anything global — the grid size, the scroll
+ * position or history growth, reverse video, the alternate screen, the cursor's mode, the
+ * selection, focus, the component's size, fonts or colours — makes the frame repaint
+ * everything. Other changes (selection, theme, scrolling by the user) repaint everything
+ * themselves, as before.
  *
  * <h2>Painting</h2>
  * Per row in the clip: background runs (merged per resolved colour), then text runs —
@@ -100,6 +113,20 @@ public final class TerminalView extends JComponent implements TerminalListener {
     private long lastFrameNanos;
     private long syncSinceNanos;
     private long frames;
+
+    // Damage tracking: what the last frame asked to be painted (see the class comment).
+    private FrameKey paintedKey;
+    private Line[] paintedLines = new Line[0];
+    private long[] paintedVersions = new long[0];
+    private int paintedCursorRow = -1;
+    /** Bumped by changes that repaint everything on their own (fonts, colours, scale), so
+     * the next frame also treats its snapshot as stale. */
+    private int viewStamp;
+    /** Output arrived while the view was not showing; a catch-up frame is owed. */
+    private boolean catchUpPending;
+    /** Tests: stands in for {@link #isShowing()} (headless components never show). */
+    private Boolean showingOverride;
+    private long fullFrames;
 
     // Scrollback: lines back from the live screen (0 = live).
     private int scrollOffset;
@@ -208,6 +235,11 @@ public final class TerminalView extends JComponent implements TerminalListener {
                 event.consume();
             }
         });
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0) {
+                showingChanged();
+            }
+        });
         addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
@@ -265,12 +297,14 @@ public final class TerminalView extends JComponent implements TerminalListener {
         colors.setTheme(background, light);
         emulator.setColorScheme(light ? TerminalEmulator.ColorScheme.LIGHT : TerminalEmulator.ColorScheme.DARK);
         updateBackground();
+        viewStamp++;
         repaint();
     }
 
     public void setPalette(int[] palette) {
         colors.setPalette(palette);
         updateBackground();
+        viewStamp++;
         repaint();
     }
 
@@ -283,6 +317,7 @@ public final class TerminalView extends JComponent implements TerminalListener {
         fontFamily = family;
         fontSize = size;
         fonts = new TerminalFonts(family, size, scale);
+        viewStamp++;
         revalidate();
         scheduleResize();
         repaint();
@@ -313,6 +348,8 @@ public final class TerminalView extends JComponent implements TerminalListener {
     public void addNotify() {
         super.addNotify();
         applyScale(screenScale());
+        paintedKey = null; // (re)attached: whatever was painted before is gone
+        showingChanged();
     }
 
     /** The scale of the screen the view is on; 1 when not on one (headless, not shown). */
@@ -332,6 +369,7 @@ public final class TerminalView extends JComponent implements TerminalListener {
         }
         scale = newScale;
         fonts = new TerminalFonts(fontFamily, fontSize, scale);
+        viewStamp++;
         revalidate();
         scheduleResize();
         repaint();
@@ -415,6 +453,33 @@ public final class TerminalView extends JComponent implements TerminalListener {
         return frames;
     }
 
+    /** Frames that repainted everything (tests). */
+    long fullFrames() {
+        return fullFrames;
+    }
+
+    /** Tests: pretend the view is (or is not) showing, as a card switch would. */
+    void setShowingForTest(boolean showing) {
+        showingOverride = showing;
+        showingChanged();
+    }
+
+    private boolean viewShowing() {
+        Boolean override = showingOverride;
+        return override != null ? override : isShowing();
+    }
+
+    /** Shown or hidden (a card switch, a window opened or closed): runs the catch-up frame
+     * owed for output that arrived while hidden, and starts or stops the cursor blink. */
+    private void showingChanged() {
+        if (viewShowing() && catchUpPending) {
+            catchUpPending = false;
+            paintedKey = null; // the catch-up frame repaints everything
+            frameDue();
+        }
+        updateBlinkTimer();
+    }
+
     private void setScrollOffset(int offset) {
         int history;
         emulator.lock().lock();
@@ -479,6 +544,13 @@ public final class TerminalView extends JComponent implements TerminalListener {
     // =====================================================================================
 
     private void frameDue() {
+        if (!viewShowing()) {
+            // Hidden: leave the frame queued (so further output doesn't post more) and catch
+            // up in one frame when the view shows again.
+            catchUpPending = true;
+            frameTimer.stop();
+            return;
+        }
         long now = System.nanoTime();
         long wait = lastFrameNanos + FRAME_NANOS - now;
         if (emulator.synchronizedOutput()) {
@@ -501,19 +573,20 @@ public final class TerminalView extends JComponent implements TerminalListener {
         syncSinceNanos = 0;
         frames++;
         int history;
-        long added;
+        int[] damage;
         emulator.lock().lock();
         try {
             history = emulator.historySize();
-            added = emulator.historyLinesAdded();
+            long added = emulator.historyLinesAdded();
+            long grown = added - lastHistoryAdded;
+            lastHistoryAdded = added;
+            if (scrollOffset > 0) {
+                // keep a scrolled-back view on the same lines while output arrives
+                scrollOffset = (int) Math.min(history, scrollOffset + grown);
+            }
+            damage = collectDamage(history, added);
         } finally {
             emulator.lock().unlock();
-        }
-        long grown = added - lastHistoryAdded;
-        lastHistoryAdded = added;
-        if (scrollOffset > 0) {
-            // keep a scrolled-back view on the same lines while output arrives
-            scrollOffset = (int) Math.min(history, scrollOffset + grown);
         }
         updateScrollModel(history);
         blinkOn = true;
@@ -521,7 +594,68 @@ public final class TerminalView extends JComponent implements TerminalListener {
             blinkTimer.restart();
         }
         updateBlinkTimer();
-        repaint();
+        if (damage == null) {
+            fullFrames++;
+            repaint();
+        } else if (damage[0] <= damage[1]) {
+            Insets in = getInsets();
+            int ch = fonts.cellHeight();
+            repaintDevice(0, device(in.top) + damage[0] * ch, device(getWidth()), (damage[1] - damage[0] + 1) * ch);
+        }
+    }
+
+    /** Everything outside the rows' own content that changes what a frame paints. */
+    private record FrameKey(int rows, int columns, int offset, int history, long added, boolean reverse,
+                            boolean alternate, boolean cursorVisible, int cursorShape, boolean cursorBlink,
+                            int width, int height, Insets insets, TerminalFonts fonts, double scale,
+                            int viewStamp, boolean focused, boolean ended, boolean selectionActive,
+                            long selStartRow, int selStartColumn, long selEndRow, int selEndColumn,
+                            String composed) {
+    }
+
+    /**
+     * Compares the visible rows with what the last frame painted and records them as
+     * painted. Returns null when everything must be repainted, else the first and last view
+     * rows to repaint (first > last: none). Lock held.
+     */
+    private int[] collectDamage(int history, long added) {
+        int rows = emulator.rows();
+        int offset = Math.min(scrollOffset, history);
+        FrameKey key = new FrameKey(rows, emulator.columns(), offset, history, added, emulator.reverseVideo(),
+                emulator.alternateScreen(), emulator.cursorVisible(), emulator.cursorShape(), emulator.cursorBlink(),
+                getWidth(), getHeight(), getInsets(), fonts, scale, viewStamp, hasFocus(), ended, selectionActive,
+                selStartRow, selStartColumn, selEndRow, selEndColumn, composedText);
+        boolean full = !key.equals(paintedKey) || paintedLines.length != rows;
+        paintedKey = key;
+        if (full) {
+            paintedLines = new Line[rows];
+            paintedVersions = new long[rows];
+        }
+        int first = Integer.MAX_VALUE;
+        int last = -1;
+        for (int r = 0; r < rows; r++) {
+            Line line = emulator.line(r - offset);
+            long version = line.version();
+            if (paintedLines[r] != line || paintedVersions[r] != version) {
+                paintedLines[r] = line;
+                paintedVersions[r] = version;
+                first = Math.min(first, r);
+                last = r;
+            }
+        }
+        int cursorRow = emulator.cursorRow() + offset;
+        for (int r : new int[]{paintedCursorRow, cursorRow}) {
+            if (r >= 0 && r < rows) {
+                first = Math.min(first, r);
+                last = Math.max(last, r);
+            }
+        }
+        paintedCursorRow = cursorRow;
+        if (full) {
+            return null;
+        }
+        // a row of margin either side: a glyph may overflow its cell into a neighbour
+        return new int[]{Math.max(0, first - 1), Math.min(rows - 1, last + 1)};
     }
 
     private void flashBell() {
@@ -543,7 +677,7 @@ public final class TerminalView extends JComponent implements TerminalListener {
         } finally {
             emulator.lock().unlock();
         }
-        boolean run = blinking && hasFocus() && !ended && isShowing();
+        boolean run = blinking && hasFocus() && !ended && viewShowing();
         if (run && !blinkTimer.isRunning()) {
             blinkOn = true;
             blinkTimer.start();
@@ -634,6 +768,9 @@ public final class TerminalView extends JComponent implements TerminalListener {
 
     @Override
     protected void paintComponent(Graphics graphics) {
+        if (catchUpPending && viewShowing()) {
+            SwingUtilities.invokeLater(this::showingChanged); // a missed showing change
+        }
         if (!scaleForced) {
             applyScale(screenScale());
         }
@@ -670,8 +807,10 @@ public final class TerminalView extends JComponent implements TerminalListener {
             int history = emulator.historySize();
             int offset = Math.min(scrollOffset, history);
             long added = emulator.historyLinesAdded();
-            int firstRow = Math.max(0, (clip.y - in.top) / ch);
-            int lastRow = Math.min(rows - 1, (clip.y + clip.height - in.top - 1) / ch);
+            // one row beyond the clip either way, so a neighbour's glyph overflowing into the
+            // clip is redrawn (the graphics clip keeps everything else untouched)
+            int firstRow = Math.max(0, Math.floorDiv(clip.y - in.top, ch) - 1);
+            int lastRow = Math.min(rows - 1, Math.floorDiv(clip.y + clip.height - in.top - 1, ch) + 1);
             int columns = Math.min(emulator.columns(), (width - in.left + cw - 1) / cw);
             for (int r = firstRow; r <= lastRow; r++) {
                 int index = r - offset;

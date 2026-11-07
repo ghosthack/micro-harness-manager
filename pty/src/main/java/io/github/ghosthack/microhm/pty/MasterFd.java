@@ -15,21 +15,55 @@ import static java.lang.foreign.ValueLayout.JAVA_SHORT;
  * {@code open} anywhere in the JVM, so a late write to a closed number could land in an
  * unrelated file. Every operation registers itself as in flight; {@link #close} marks the
  * descriptor closed and releases it only once nothing is in flight. Reads wait in
- * {@code poll} with a short timeout rather than blocking in {@code read}, so a close never
- * waits on output that will not come.
+ * {@code poll} on the master and on a wake pipe rather than blocking in {@code read}:
+ * {@link #close} writes to the pipe, so a close never waits on output that will not come,
+ * and an idle session costs no wakeups at all. Should the pipe be unavailable, the wait
+ * falls back to a short poll timeout.
  */
 final class MasterFd implements AutoCloseable {
 
-    private static final int POLL_MILLIS = 100;
+    /** Poll timeout used only when the wake pipe could not be created. */
+    private static final int FALLBACK_POLL_MILLIS = 100;
 
     private final int fd;
+    /** The wake pipe's read and write ends, or -1 when it could not be created. */
+    private final int wakeRead;
+    private final int wakeWrite;
     private final Object lock = new Object();
     private int inFlight;          // guarded by lock
     private boolean closing;       // guarded by lock
     private boolean released;      // guarded by lock
 
+    /** The reader's native buffers, allocated once and reused (there is one reader). */
+    private final Object readLock = new Object();
+    private MemorySegment readState;   // guarded by readLock
+    private MemorySegment readPollfds; // guarded by readLock
+    private MemorySegment readBuffer;  // guarded by readLock
+
     MasterFd(int fd) {
         this.fd = fd;
+        int[] pipe = openWakePipe();
+        this.wakeRead = pipe[0];
+        this.wakeWrite = pipe[1];
+    }
+
+    /** A close-on-exec pipe, so the shells this process spawns never inherit it; {-1, -1}
+     * when it cannot be created. */
+    private static int[] openWakePipe() {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment state = Posix.callState(arena);
+            MemorySegment fds = arena.allocate(JAVA_INT, 2);
+            if ((int) Posix.PIPE.invokeExact(state, fds) != 0) {
+                return new int[] {-1, -1};
+            }
+            int r = fds.getAtIndex(JAVA_INT, 0);
+            int w = fds.getAtIndex(JAVA_INT, 1);
+            int ignored = (int) Posix.FCNTL.invokeExact(state, r, Posix.F_SETFD, Posix.FD_CLOEXEC);
+            ignored = (int) Posix.FCNTL.invokeExact(state, w, Posix.F_SETFD, Posix.FD_CLOEXEC);
+            return new int[] {r, w};
+        } catch (Throwable t) {
+            return new int[] {-1, -1};
+        }
     }
 
     int fd() {
@@ -64,10 +98,28 @@ final class MasterFd implements AutoCloseable {
         if (length == 0) {
             return 0;
         }
-        try (Arena arena = Arena.ofConfined()) {
-            MemorySegment state = Posix.callState(arena);
-            MemorySegment pollfd = arena.allocate(8);
-            MemorySegment native_ = arena.allocate(length);
+        synchronized (readLock) {
+            return readLocked(buffer, offset, length);
+        }
+    }
+
+    private int readLocked(byte[] buffer, int offset, int length) throws IOException {
+        if (readState == null) {
+            // GC-managed: the reader thread may differ from the one that releases the fd.
+            Arena arena = Arena.ofAuto();
+            readState = Posix.callState(arena);
+            readPollfds = arena.allocate(16);
+        }
+        if (readBuffer == null || readBuffer.byteSize() < length) {
+            readBuffer = Arena.ofAuto().allocate(length);
+        }
+        MemorySegment state = readState;
+        MemorySegment pollfd = readPollfds;
+        MemorySegment native_ = readBuffer;
+        boolean wakeable = wakeRead >= 0;
+        int nfds = wakeable ? 2 : 1;
+        int timeout = wakeable ? -1 : FALLBACK_POLL_MILLIS;
+        try {
             while (true) {
                 if (!enter()) {
                     return -1;
@@ -76,9 +128,12 @@ final class MasterFd implements AutoCloseable {
                     pollfd.set(JAVA_INT, 0, fd);
                     pollfd.set(JAVA_SHORT, 4, Posix.POLLIN);
                     pollfd.set(JAVA_SHORT, 6, (short) 0);
+                    pollfd.set(JAVA_INT, 8, wakeRead);
+                    pollfd.set(JAVA_SHORT, 12, Posix.POLLIN);
+                    pollfd.set(JAVA_SHORT, 14, (short) 0);
                     int ready = Posix.MAC
-                            ? (int) Posix.POLL.invokeExact(state, pollfd, 1, POLL_MILLIS)
-                            : (int) Posix.POLL.invokeExact(state, pollfd, 1L, POLL_MILLIS);
+                            ? (int) Posix.POLL.invokeExact(state, pollfd, nfds, timeout)
+                            : (int) Posix.POLL.invokeExact(state, pollfd, (long) nfds, timeout);
                     if (ready < 0) {
                         int errno = Posix.errno(state);
                         if (errno == Posix.EINTR || errno == Posix.EAGAIN) {
@@ -87,7 +142,10 @@ final class MasterFd implements AutoCloseable {
                         throw new IOException("poll on the PTY failed: " + Posix.describe(errno));
                     }
                     if (ready == 0) {
-                        continue; // timeout: re-check whether we are closing
+                        continue; // fallback timeout: re-check whether we are closing
+                    }
+                    if (wakeable && pollfd.get(JAVA_SHORT, 14) != 0) {
+                        return -1; // close() woke us
                     }
                     short revents = pollfd.get(JAVA_SHORT, 6);
                     if ((revents & Posix.POLLNVAL) != 0) {
@@ -166,7 +224,7 @@ final class MasterFd implements AutoCloseable {
     }
 
     /** Marks the descriptor closed; it is released now, or when the last in-flight
-     * operation (at most one poll timeout away for a read) finishes. Idempotent. */
+     * operation finishes (a read waiting in poll is woken through the pipe). Idempotent. */
     @Override
     public void close() {
         synchronized (lock) {
@@ -176,7 +234,22 @@ final class MasterFd implements AutoCloseable {
             closing = true;
             if (inFlight == 0) {
                 release();
+                return;
             }
+            // A read is in flight: wake it. The pipe stays open until release().
+            wake();
+        }
+    }
+
+    private void wake() {
+        if (wakeWrite < 0) {
+            return;
+        }
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment one = arena.allocate(1);
+            long ignored = (long) Posix.WRITE.invokeExact(Posix.callState(arena), wakeWrite, one, 1L);
+        } catch (Throwable ignored) {
+            // The reader then waits for the master's own hang-up instead.
         }
     }
 
@@ -186,9 +259,14 @@ final class MasterFd implements AutoCloseable {
         }
         released = true;
         try (Arena arena = Arena.ofConfined()) {
-            int ignored = (int) Posix.CLOSE.invokeExact(Posix.callState(arena), fd);
+            MemorySegment state = Posix.callState(arena);
+            int ignored = (int) Posix.CLOSE.invokeExact(state, fd);
+            if (wakeRead >= 0) {
+                ignored = (int) Posix.CLOSE.invokeExact(state, wakeRead);
+                ignored = (int) Posix.CLOSE.invokeExact(state, wakeWrite);
+            }
         } catch (Throwable ignored) {
-            // Nothing useful to do: the descriptor is abandoned either way.
+            // Nothing useful to do: the descriptors are abandoned either way.
         }
     }
 
