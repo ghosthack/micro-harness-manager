@@ -134,13 +134,32 @@ public final class ForegroundProbe {
         return new Foreground(shell.pid(), normalize(shell.comm()));
     }
 
+    /** A live process's stat; empty when it is unreadable, or a zombie or dead: a command
+     * that just exited stays the terminal's foreground leader until the shell reaps it, and
+     * must not read as still running (a caller waiting for the next command would see it). */
     private static Optional<ProcStat> procStat(long pid) {
         try {
             byte[] bytes = Files.readAllBytes(Path.of("/proc", Long.toString(pid), "stat"));
-            return parseStat(new String(bytes, StandardCharsets.UTF_8));
+            String stat = new String(bytes, StandardCharsets.UTF_8);
+            if (exited(stat)) {
+                return Optional.empty();
+            }
+            return parseStat(stat);
         } catch (IOException | RuntimeException e) {
             return Optional.empty();
         }
+    }
+
+    /** True when a stat line's state (the field after the last {@code ')'}) is zombie or dead. */
+    static boolean exited(String stat) {
+        int close = stat.lastIndexOf(')');
+        for (int i = close + 1; i >= 1 && i < stat.length(); i++) {
+            char c = stat.charAt(i);
+            if (c != ' ') {
+                return c == 'Z' || c == 'X' || c == 'x';
+            }
+        }
+        return false;
     }
 
     /** {@code pid (comm) state ppid pgrp session tty_nr tpgid ...}; comm may hold spaces and

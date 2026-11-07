@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -294,5 +295,13 @@ class ForegroundProbeTest {
         } finally {
             process.destroyForcibly();
         }
+    }
+
+    @Test
+    void aZombieOrDeadProcessReadsAsExited() {
+        assertTrue(ForegroundProbe.exited("4242 (cat) Z 100 4242 100 34816 4242 4194572 0"));
+        assertTrue(ForegroundProbe.exited("4242 (my (odd) cmd) X 100 4242"));
+        assertFalse(ForegroundProbe.exited("4242 (cat) S 100 4242 100 34816 4242 4194560 0"));
+        assertFalse(ForegroundProbe.exited("4242 (Z) R 100 4242 100 34816 4242 4194560 0"));
     }
 }
