@@ -1,6 +1,8 @@
 package io.github.ghosthack.microhm.app.ui;
 
 import io.github.ghosthack.microhm.app.harness.HarnessType;
+import io.github.ghosthack.microhm.app.session.SessionShell;
+import io.github.ghosthack.microhm.app.settings.AppSettings;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -64,9 +66,13 @@ final class OpenSessionDialog {
         form.addRow("Project path:", pathField, browse);
         form.addRow("Harness:", harnessCombo);
         form.addRow("Resume session id (optional):", sessionIdField);
+        // Which shell the session starts in; chosen in Settings, shown here so it is no surprise.
+        JLabel shellLabel = new JLabel(SessionShell.system().describe(AppSettings.sessionShell()));
+        shellLabel.setToolTipText("Change it in Settings → Sessions → Shell");
+        form.addRow("Shell:", shellLabel);
 
         JLabel hint = new JLabel(
-                "Blank session id starts a fresh harness conversation; 'shell' is just your default shell.");
+                "Blank session id starts a fresh harness conversation; 'shell' is just the shell above.");
         hint.setHorizontalAlignment(SwingConstants.LEFT);
         form.constraints.gridx = 0;
         form.constraints.gridy = form.reserveRow();

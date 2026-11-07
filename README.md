@@ -37,6 +37,10 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   system-tray icon (Windows; Linux desktops with a tray) shows how many are running and
   whether MCP is serving, and opens the app (end sessions from the app). On by default;
   Settings → Sessions → Background icon, or "Hide This Icon" in its menu, turns it off.
+- **Shell.** Sessions start in your login shell, or in the one you pick in Settings →
+  Sessions → Shell (zsh, bash, fish, sh, or any program); the New dialog shows which.
+  Agents are typed into the shell once it is up; "Start agents in one step" has zsh,
+  bash, sh and fish start them directly instead, so nothing is typed during startup.
 - **Terminal.** Right-click (Ctrl+click on macOS) for Copy, Paste, Select All, Page Up and
   Page Down; when the program tracks the mouse the click goes to it, and
   Shift+right-click still opens the menu. On macOS, Option+letter is Meta by default

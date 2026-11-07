@@ -3,6 +3,9 @@ package io.github.ghosthack.microhm.app.daemon;
 import io.github.ghosthack.microhm.app.host.SessionConnection;
 import io.github.ghosthack.microhm.app.host.SessionHost;
 import io.github.ghosthack.microhm.app.host.SessionHostException;
+import io.github.ghosthack.microhm.app.session.DirectSessionStarter;
+import io.github.ghosthack.microhm.app.session.SessionShell;
+import io.github.ghosthack.microhm.app.settings.AppSettings;
 import io.github.ghosthack.microhm.app.state.Screen;
 import io.github.ghosthack.microhm.mux.client.AttachedSession;
 import io.github.ghosthack.microhm.mux.client.SessionServerClient;
@@ -37,7 +40,7 @@ import java.util.function.Supplier;
  * and tells the user how to retire it (the client never spawns, kills or replaces a
  * mismatched server: it still hosts live sessions).
  */
-public final class SessionServerHost implements SessionHost {
+public final class SessionServerHost implements SessionHost, DirectSessionStarter {
 
     private final SessionServerClient client;
 
@@ -82,7 +85,7 @@ public final class SessionServerHost implements SessionHost {
      * when no server answers. A null command is the daemon's platform login shell. */
     @Override
     public void newSession(String session, Path workdir, int columns, int rows) {
-        run(() -> client.newSession(session, workdir, columns, rows, null));
+        run(() -> client.newSession(session, workdir, columns, rows, shellCommand()));
     }
 
     /** {@link #newSession(String, Path, int, int)} with extra environment variables for
@@ -93,7 +96,19 @@ public final class SessionServerHost implements SessionHost {
      * @return whether {@code env} was applied: false only when a non-empty {@code env}
      *         went to a daemon that did not acknowledge it */
     public boolean newSession(String session, Path workdir, int columns, int rows, Map<String, String> env) {
-        return call(() -> client.newSession(session, workdir, columns, rows, null, null, env)).envApplied();
+        return call(() -> client.newSession(session, workdir, columns, rows, shellCommand(), null, env)).envApplied();
+    }
+
+    @Override
+    public boolean newSession(String session, Path workdir, int columns, int rows, List<String> command,
+                              Map<String, String> env) {
+        Map<String, String> extra = env == null || env.isEmpty() ? null : env;
+        return call(() -> client.newSession(session, workdir, columns, rows, command, null, extra)).envApplied();
+    }
+
+    /** The shell the Settings pick for new sessions; null keeps the daemon's default. */
+    private static List<String> shellCommand() {
+        return SessionShell.system().command(AppSettings.sessionShell()).orElse(null);
     }
 
     @Override
