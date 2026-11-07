@@ -528,7 +528,8 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
             if (text == null || text.isEmpty()) {
                 return;
             }
-            int slash = text.lastIndexOf('/', text.length() - 2);
+            int slash = Math.max(text.lastIndexOf('/', text.length() - 2),
+                    text.lastIndexOf('\\', text.length() - 2));
             String folder = slash < 0 ? text : text.substring(slash + 1);
             String parent = slash <= 0 ? "" : text.substring(0, slash);
             Graphics2D g2 = smooth(g);
