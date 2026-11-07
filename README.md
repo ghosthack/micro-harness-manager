@@ -2,7 +2,7 @@
   <img src="packaging/icons/micro-harness-manager.png" width="128" height="128" alt="micro-harness-manager resistor logo">
 </p>
 
-# micro-harness-manager
+# µ Harness Manager
 
 A desktop app for running coding agents (Claude Code, Codex, Cursor Agent, Grok,
 OpenCode, Pi, Muse) and shells side by side. A sidebar lists your sessions with what
