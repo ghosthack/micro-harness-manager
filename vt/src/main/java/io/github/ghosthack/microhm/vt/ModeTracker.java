@@ -46,7 +46,7 @@ public final class ModeTracker {
 
     public void observe(VtToken token) {
         switch (token.kind()) {
-            case CSI -> observeCsi(token.csiBody(), token.csiFinal());
+            case CSI -> observeCsi(token);
             case ESCAPE -> observeEscape(token.bytes());
             case OSC -> observeOsc(token.bytes());
             default -> {
@@ -54,21 +54,15 @@ public final class ModeTracker {
         }
     }
 
-    private void observeCsi(String body, char finalChar) {
+    /** Looks at the final byte first, so the body is only decoded for the few finals
+     * tracked here (every other CSI — cursor motion, SGR, erase — costs nothing). */
+    private void observeCsi(VtToken token) {
+        char finalChar = token.csiFinal();
         switch (finalChar) {
-            case 'h', 'l' -> {
-                if (body.startsWith("?")) {
-                    boolean set = finalChar == 'h';
-                    for (String p : body.substring(1).split(";", -1)) {
-                        Integer mode = parseIntOrNull(p);
-                        if (mode != null) {
-                            applyDecPrivateMode(mode, set);
-                        }
-                    }
-                }
-            }
+            case 'h', 'l' -> observeDecPrivateModes(token.bytes(), finalChar == 'h');
             case 'q' -> {
                 // DECSCUSR: CSI Ps SP q. Ignore XTVERSION (CSI > q).
+                String body = token.csiBody();
                 if (!body.startsWith(">")) {
                     int ps = leadingInt(body);
                     cursorShape = ps == 0 ? 1 : ps; // 0 and 1 both mean a blinking block
@@ -76,12 +70,52 @@ public final class ModeTracker {
             }
             case 'r' -> {
                 // DECSTBM: CSI t;b r. CSI ? ... r is "restore DEC private modes" — not us.
+                String body = token.csiBody();
                 if (!body.startsWith("?")) {
                     setScrollingRegion(body);
                 }
             }
             default -> {
             }
+        }
+    }
+
+    /** {@code CSI ? Pm h/l} straight from the token bytes ({@code ESC [ ? Pm final}): each
+     * ';'-separated parameter that is a non-empty run of digits fitting an int is applied;
+     * anything else (empty, other characters, overflow) is skipped. A body not starting
+     * with '?' is not a DEC private mode set/reset. */
+    private void observeDecPrivateModes(byte[] bytes, boolean set) {
+        int end = bytes.length - 1; // the final byte
+        if (end < 3 || bytes[2] != '?') {
+            return;
+        }
+        int i = 3;
+        while (true) {
+            long value = 0;
+            boolean digits = false;
+            boolean valid = true;
+            while (i < end && bytes[i] != ';') {
+                int b = bytes[i];
+                if (b >= '0' && b <= '9') {
+                    digits = true;
+                    if (valid) {
+                        value = value * 10 + (b - '0');
+                        if (value > Integer.MAX_VALUE) {
+                            valid = false;
+                        }
+                    }
+                } else {
+                    valid = false;
+                }
+                i++;
+            }
+            if (digits && valid) {
+                applyDecPrivateMode((int) value, set);
+            }
+            if (i >= end) {
+                return;
+            }
+            i++; // past ';'
         }
     }
 
