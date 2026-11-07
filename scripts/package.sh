@@ -137,9 +137,12 @@ if [[ "$MODE" != "installer" ]]; then
 
     # The daemon CLI and session daemon: ServerLauncher looks for this launcher
     # next to the app's own, so the GUI starts the daemon through it.
+    # Long-lived processes with small heaps: serial GC, a heap that starts small and gives
+    # memory back (see mux JvmOptions, which the source launches use).
+    JAVA_OPTIONS="-XX:+UseSerialGC -Xms16m -Xmx2g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 --enable-native-access=ALL-UNNAMED"
     MUX_PROPERTIES="$PACKAGE_ROOT/$MUX_LAUNCHER-launcher.properties"
-    printf 'main-jar=%s\nmain-class=%s\nwin-console=true\njava-options=--enable-native-access=ALL-UNNAMED\n' \
-        "$MAIN_JAR" "$MUX_CLASS" > "$MUX_PROPERTIES"
+    printf 'main-jar=%s\nmain-class=%s\nwin-console=true\njava-options=%s\n' \
+        "$MAIN_JAR" "$MUX_CLASS" "$JAVA_OPTIONS" > "$MUX_PROPERTIES"
 
     echo "==> Creating the self-contained application image"
     IMAGE_ARGS=(
@@ -158,7 +161,7 @@ if [[ "$MODE" != "installer" ]]; then
         # (ControllingTerminal) that takes the controlling terminal, run from
         # <java.home>/bin/java. jpackage strips native commands by default.
         --jlink-options "--strip-debug --no-man-pages --no-header-files"
-        --java-options "--enable-native-access=ALL-UNNAMED"
+        --java-options "$JAVA_OPTIONS"
         --add-launcher "$MUX_LAUNCHER=$MUX_PROPERTIES"
         --icon "$ICON"
     )

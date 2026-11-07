@@ -77,8 +77,11 @@ public final class ServerLauncher {
                 && classpath != null && !classpath.isBlank()) {
             // -jar would honour the manifest's Enable-Native-Access; a -cp launch does not,
             // and the FFM PTY layer would print restricted-method warnings into server.log.
-            return Optional.of(withServeArgs(javaBinary(javaHome).toString(),
-                    "--enable-native-access=ALL-UNNAMED", "-cp", absolutize(classpath), MAIN_CLASS));
+            List<String> command = new ArrayList<>();
+            command.add(javaBinary(javaHome).toString());
+            command.addAll(JvmOptions.RESIDENT);
+            command.addAll(List.of("--enable-native-access=ALL-UNNAMED", "-cp", absolutize(classpath), MAIN_CLASS));
+            return Optional.of(withServeArgs(command.toArray(String[]::new)));
         }
         return Optional.empty();
     }

@@ -13,4 +13,4 @@ if [[ ! -f "$JAR" ]] || [[ -n "$(cd "$ROOT" && find app vt pty mux pom.xml \( -p
   (cd "$ROOT" && mvn -q -pl app -am package -DskipTests)
 fi
 
-exec java --enable-native-access=ALL-UNNAMED -cp "$JAR" io.github.ghosthack.microhm.mux.Main "$@"
+exec java -XX:+UseSerialGC -Xms16m -Xmx2g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 --enable-native-access=ALL-UNNAMED -cp "$JAR" io.github.ghosthack.microhm.mux.Main "$@"

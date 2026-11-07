@@ -14,6 +14,7 @@ if [[ ! -f "$JAR" ]] || [[ -n "$(find app vt pty mux pom.xml \( -path '*/src/*' 
   mvn -q -pl app -am package -DskipTests
 fi
 
-exec java --enable-native-access=ALL-UNNAMED \
+# Same JVM options as the packaged app (see mux JvmOptions): a small, shrinking heap.
+exec java -XX:+UseSerialGC -Xms16m -Xmx2g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 --enable-native-access=ALL-UNNAMED \
   -Dapple.awt.application.name=micro-harness-manager \
   -jar "$JAR" "$@"
