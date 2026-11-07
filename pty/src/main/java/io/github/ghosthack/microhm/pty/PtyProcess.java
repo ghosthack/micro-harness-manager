@@ -76,6 +76,12 @@ public final class PtyProcess {
 
         /** Closes the terminal: output ends, writes fail. Idempotent. */
         void close();
+
+        /** The terminal's foreground process group; -1 when unknown (closed, or no such
+         * notion, as on ConPTY). */
+        default long foregroundProcessGroup() {
+            return -1;
+        }
     }
 
     private final long pid;
@@ -314,6 +320,13 @@ public final class PtyProcess {
         terminal.close();
     }
 
+    /** The terminal's foreground process group id ({@code tcgetpgrp} on the master, no
+     * fork); -1 when unknown: the terminal is closed, no process has it as its controlling
+     * terminal yet, or on Windows. */
+    public long foregroundProcessGroup() {
+        return terminal.foregroundProcessGroup();
+    }
+
     /** The POSIX terminal: the master descriptor and signals to the child. */
     private record UnixTerminal(int pid, MasterFd master, CompletableFuture<Integer> exit) implements Terminal {
 
@@ -355,6 +368,20 @@ public final class PtyProcess {
         @Override
         public void close() {
             master.close();
+        }
+
+        @Override
+        public long foregroundProcessGroup() {
+            long[] group = {-1};
+            master.with(fd -> {
+                try (Arena arena = Arena.ofConfined()) {
+                    group[0] = (int) Posix.TCGETPGRP.invokeExact(Posix.callState(arena), fd);
+                } catch (Throwable ignored) {
+                    // Unknown; the caller falls back to its slower strategy.
+                }
+                return true;
+            });
+            return group[0] > 0 ? group[0] : -1;
         }
 
         private void signal(int signal) {

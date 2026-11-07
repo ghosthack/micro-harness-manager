@@ -1,5 +1,10 @@
 package io.github.ghosthack.microhm.mux.session;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -7,6 +12,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.LongFunction;
+import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -15,10 +22,15 @@ import java.util.stream.Stream;
 /**
  * The session's foreground command, as tmux's {@code pane_current_command} reports it.
  *
- * <p>Unix: {@code ps -o pid=,pgid=,tpgid=,comm= -p <shell + descendants>}; the foreground
- * process is the one whose {@code pid} equals the shell row's {@code tpgid} (the leader of
- * the terminal's foreground process group), falling back to the shell itself when no row
- * matches (the leader already exited, or the shell has no controlling terminal).
+ * <p>Unix: the foreground process is the one among the shell and its descendants whose
+ * {@code pid} equals the shell's {@code tpgid} (the leader of the terminal's foreground
+ * process group), falling back to the shell itself when none matches (the leader already
+ * exited, or the shell has no controlling terminal). Linux reads it all from procfs
+ * ({@code /proc/<pid>/stat}: {@code ppid}, {@code tpgid} and {@code comm}, the same fields
+ * {@code ps} prints there) and never forks. Elsewhere it is
+ * {@code ps -o pid=,pgid=,tpgid=,comm= -p <shell + descendants>}, which forks, so a session
+ * probes through a {@link Memo} that reuses the last answer while the terminal's foreground
+ * group ({@code tcgetpgrp}, no fork) is unchanged and the session has been quiet.
  *
  * <p>Windows, or when {@code ps} is unavailable: walk from the shell down the chain formed
  * by taking the newest live child at each level, skipping transparent wrappers
@@ -54,8 +66,11 @@ public final class ForegroundProbe {
     /** Processes the fallback walk looks through rather than at (an npm shim's cmd.exe). */
     static final Set<String> TRANSPARENT = Set.of("cmd", "conhost");
 
-    private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT)
-            .startsWith("windows");
+    private static final String OS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+    private static final boolean WINDOWS = OS.startsWith("windows");
+    private static final boolean LINUX = OS.startsWith("linux");
+    /** Bound on a parent-chain walk through procfs. */
+    private static final int MAX_DEPTH = 4096;
 
     /** {@code pid pgid tpgid comm}; comm may contain spaces (a path under /Applications). */
     private static final Pattern PS_ROW = Pattern.compile("^\\s*(\\d+)\\s+(\\d+)\\s+(-?\\d+)\\s+(.*?)\\s*$");
@@ -67,13 +82,86 @@ public final class ForegroundProbe {
         if (shell.isEmpty()) {
             return new Foreground(shellPid, "");
         }
-        if (!WINDOWS) {
+        if (LINUX) {
+            Optional<Foreground> viaProc = viaProc(shellPid);
+            if (viaProc.isPresent()) {
+                return viaProc.get();
+            }
+        } else if (!WINDOWS) {
             Optional<Foreground> viaPs = viaPs(shell.get());
             if (viaPs.isPresent()) {
                 return viaPs.get();
             }
         }
         return walk(HandleNode.of(shell.get()));
+    }
+
+    /** Whether {@link #probe} forks on this platform (so a {@link Memo} is worth keeping). */
+    static boolean forks() {
+        return !LINUX && !WINDOWS;
+    }
+
+    /** The fields of one procfs {@code stat} line the probe uses. */
+    record ProcStat(long pid, String comm, long ppid, long tpgid) {
+    }
+
+    /** Linux: the {@code pid == tpgid} rule over {@code /proc/<pid>/stat}; empty when the
+     * shell's own stat is unreadable (then the caller falls back to the tree walk). */
+    private static Optional<Foreground> viaProc(long shellPid) {
+        return procStat(shellPid).map(shell -> choose(shell, ForegroundProbe::procStat));
+    }
+
+    /** The rule over any stat source: the {@code tpgid} process when it is the shell or one
+     * of its descendants (its parent chain reaches the shell), else the shell. */
+    static Foreground choose(ProcStat shell, LongFunction<Optional<ProcStat>> stats) {
+        long tpgid = shell.tpgid();
+        if (tpgid > 0 && tpgid != shell.pid()) {
+            Optional<ProcStat> leader = stats.apply(tpgid);
+            if (leader.isPresent()) {
+                long parent = leader.get().ppid();
+                for (int i = 0; i < MAX_DEPTH && parent > 0; i++) {
+                    if (parent == shell.pid()) {
+                        return new Foreground(leader.get().pid(), normalize(leader.get().comm()));
+                    }
+                    Optional<ProcStat> up = stats.apply(parent);
+                    if (up.isEmpty()) {
+                        break;
+                    }
+                    parent = up.get().ppid();
+                }
+            }
+        }
+        return new Foreground(shell.pid(), normalize(shell.comm()));
+    }
+
+    private static Optional<ProcStat> procStat(long pid) {
+        try {
+            byte[] bytes = Files.readAllBytes(Path.of("/proc", Long.toString(pid), "stat"));
+            return parseStat(new String(bytes, StandardCharsets.UTF_8));
+        } catch (IOException | RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** {@code pid (comm) state ppid pgrp session tty_nr tpgid ...}; comm may hold spaces and
+     * parentheses, so it ends at the <em>last</em> {@code ')'}. */
+    static Optional<ProcStat> parseStat(String stat) {
+        int open = stat.indexOf('(');
+        int close = stat.lastIndexOf(')');
+        if (open < 0 || close < open) {
+            return Optional.empty();
+        }
+        String[] rest = stat.substring(close + 1).strip().split("\\s+");
+        if (rest.length < 6) {
+            return Optional.empty();
+        }
+        try {
+            long pid = Long.parseLong(stat.substring(0, open).strip());
+            return Optional.of(new ProcStat(pid, stat.substring(open + 1, close),
+                    Long.parseLong(rest[1]), Long.parseLong(rest[5])));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
     }
 
     private static Optional<Foreground> viaPs(ProcessHandle shell) {
@@ -145,6 +233,63 @@ public final class ForegroundProbe {
             name = name.substring(0, name.length() - 4);
         }
         return name;
+    }
+
+    /**
+     * A session's probe, for the platforms where {@link #probe} forks ({@code ps} on macOS):
+     * the last answer is reused while the terminal's foreground process group is unchanged
+     * (read with {@code tcgetpgrp} on the master, no fork) and it is either younger than
+     * {@link #FRESH} or the session produced no output since, for up to {@link #IDLE}. A new
+     * foreground group (a command started or ended) or output re-probes. Where the probe
+     * does not fork, or the group is unknown, every call probes.
+     */
+    static final class Memo {
+
+        static final Duration FRESH = Duration.ofSeconds(1);
+        static final Duration IDLE = Duration.ofSeconds(30);
+
+        private record Entry(long shellPid, long group, long outputBytes, long atNanos, Foreground foreground) {
+        }
+
+        private final boolean enabled;
+        private final LongSupplier foregroundGroup;
+        private final LongFunction<Foreground> probe;
+        private final LongSupplier clock;
+        private Entry last; // guarded by this
+
+        /** {@code foregroundGroup}: the terminal's foreground process group, -1 when unknown. */
+        Memo(LongSupplier foregroundGroup) {
+            this(forks(), foregroundGroup, ForegroundProbe::probe, System::nanoTime);
+        }
+
+        Memo(boolean enabled, LongSupplier foregroundGroup, LongFunction<Foreground> probe, LongSupplier clock) {
+            this.enabled = enabled;
+            this.foregroundGroup = foregroundGroup;
+            this.probe = probe;
+            this.clock = clock;
+        }
+
+        /** The foreground of {@code shellPid}; {@code outputBytes} is the session's output
+         * counter, whose change means the screen (and maybe the foreground) moved on. */
+        synchronized Foreground probe(long shellPid, long outputBytes) {
+            if (!enabled) {
+                return probe.apply(shellPid);
+            }
+            long group = foregroundGroup.getAsLong();
+            long now = clock.getAsLong();
+            Entry e = last;
+            if (group > 0 && e != null && e.shellPid() == shellPid && e.group() == group) {
+                long age = now - e.atNanos();
+                boolean fresh = age < FRESH.toNanos();
+                boolean quiet = outputBytes == e.outputBytes() && age < IDLE.toNanos();
+                if (age >= 0 && (fresh || quiet)) {
+                    return e.foreground();
+                }
+            }
+            Foreground fg = probe.apply(shellPid);
+            last = group > 0 ? new Entry(shellPid, group, outputBytes, now, fg) : null;
+            return fg;
+        }
     }
 
     /** {@link ProcessNode} over a live {@code ProcessHandle}. */

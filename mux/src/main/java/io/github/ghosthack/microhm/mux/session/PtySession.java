@@ -92,6 +92,8 @@ public final class PtySession implements Session {
     private final PtyProcess process;
     private final int historyLines;
     private final ExitListener exitListener;
+    /** The foreground probe, memoized where it forks (macOS {@code ps}). */
+    private final ForegroundProbe.Memo foregroundProbe;
 
     private final Object lock = new Object();
     private final VtTokenizer tokenizer = new VtTokenizer();   // guarded by lock
@@ -118,6 +120,7 @@ public final class PtySession implements Session {
         this.process = process;
         this.historyLines = historyLines;
         this.exitListener = exitListener;
+        this.foregroundProbe = new ForegroundProbe.Memo(process::foregroundProcessGroup);
         this.columns = columns;
         this.rows = rows;
         // Emulator replies (DA, DSR, CPR) are enqueued for the writer thread, never written
@@ -254,7 +257,7 @@ public final class PtySession implements Session {
             cursorVisible = terminal.modes().cursorVisible();
         }
         alive = alive && process.isAlive();
-        String foreground = alive ? ForegroundProbe.probe(process.pid()).command() : "";
+        String foreground = alive ? foregroundProbe.probe(process.pid(), bytes).command() : "";
         return new Capture(text, alive, foreground, process.pid(), title, cols, rws, bytes, cursorVisible);
     }
 
@@ -408,7 +411,7 @@ public final class PtySession implements Session {
         }
         if (isAlive()) {
             long shellPid = process.pid();
-            long foregroundPid = ForegroundProbe.probe(shellPid).pid();
+            long foregroundPid = foregroundProbe.probe(shellPid, outputBytes()).pid();
             Optional<Path> cwd = CwdProbe.cwdOf(foregroundPid);
             if (cwd.isEmpty() && foregroundPid != shellPid) {
                 cwd = CwdProbe.cwdOf(shellPid);

@@ -102,6 +102,9 @@ final class Posix {
     static final MethodHandle PTHREAD_SIGMASK = call("pthread_sigmask",
             FunctionDescriptor.of(JAVA_INT, JAVA_INT, ADDRESS, ADDRESS));
     static final MethodHandle KILL = errnoCall("kill", FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT));
+    /** The foreground process group of the terminal open on the descriptor (the master
+     * works: it reports the slave side's group); -1 with errno on failure. */
+    static final MethodHandle TCGETPGRP = errnoCall("tcgetpgrp", FunctionDescriptor.of(JAVA_INT, JAVA_INT));
     static final MethodHandle WAITPID = errnoCall("waitpid", FunctionDescriptor.of(JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT));
 
     static final MethodHandle FILE_ACTIONS_INIT = call("posix_spawn_file_actions_init",
