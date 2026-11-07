@@ -14,21 +14,25 @@ class HostLauncherTest {
 
     @Test
     void aPackagedAppStartsTheHostThroughItsOwnLauncher() {
+        // Paths as the platform spells them (backslashes on Windows), as the app passes them.
+        Path registry = Path.of("/home/u/.micro-harness-manager/sessions.json");
+        Path muxHome = Path.of("/home/u/.micro-harness-manager/mux");
         List<String> command = HostLauncher.command("/Applications/mhm.app/Contents/MacOS/mhm", "/jdk", "x.jar",
-                Path.of("/home/u/.micro-harness-manager/sessions.json"), Path.of("/home/u/.micro-harness-manager/mux"));
+                registry, muxHome);
         assertEquals(List.of("/Applications/mhm.app/Contents/MacOS/mhm", McpHost.FLAG,
-                "--registry=/home/u/.micro-harness-manager/sessions.json",
-                "--mux-home=/home/u/.micro-harness-manager/mux"), command);
+                "--registry=" + registry, "--mux-home=" + muxHome), command);
     }
 
     @Test
     void aJvmLaunchKeepsTheClasspathAbsoluteAndPassesTheStateLocations() {
+        Path registry = Path.of("/tmp/r/sessions.json");
+        Path muxHome = Path.of("/tmp/m");
         List<String> command = HostLauncher.command(null, "/jdk", "app.jar" + File.pathSeparator + "/abs/lib.jar",
-                Path.of("/tmp/r/sessions.json"), Path.of("/tmp/m"));
+                registry, muxHome);
         assertTrue(command.getFirst().startsWith(Path.of("/jdk", "bin").toString()), command.toString());
         assertTrue(command.contains("--enable-native-access=ALL-UNNAMED"));
-        assertTrue(command.contains("--registry=/tmp/r/sessions.json"));
-        assertTrue(command.contains("--mux-home=/tmp/m"));
+        assertTrue(command.contains("--registry=" + registry), command.toString());
+        assertTrue(command.contains("--mux-home=" + muxHome), command.toString());
         String classPath = command.get(command.indexOf("-cp") + 1);
         for (String entry : classPath.split(File.pathSeparator)) {
             assertTrue(Path.of(entry).isAbsolute(), entry);
