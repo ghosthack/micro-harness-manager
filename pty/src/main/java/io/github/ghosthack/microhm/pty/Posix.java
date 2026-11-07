@@ -46,6 +46,8 @@ final class Posix {
     static final long TIOCSWINSZ = MAC ? 0x80087467L : 0x5414L;
     /** {@code _IO('t', 97)} on macOS; {@code 0x540E} on Linux. */
     static final long TIOCSCTTY = MAC ? 0x20007461L : 0x540EL;
+    /** Bytes waiting to be read: on a PTY master, output the slave side wrote. */
+    static final long FIONREAD = MAC ? 0x4004667FL : 0x541BL;
     static final short POSIX_SPAWN_SETSID = (short) (MAC ? 0x0400 : 0x80);
     /** macOS only: every descriptor not named by a file action is closed in the child. */
     static final short POSIX_SPAWN_CLOEXEC_DEFAULT = 0x4000;
