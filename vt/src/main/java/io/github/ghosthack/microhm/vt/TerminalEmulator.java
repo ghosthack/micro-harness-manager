@@ -131,6 +131,10 @@ public final class TerminalEmulator {
 
     private final ReentrantLock lock = new ReentrantLock();
     private final VtTokenizer tokenizer = new VtTokenizer();
+    /** {@link #feed}'s path: tokens straight from the tokenizer, no copies. Under the lock. */
+    private final VtTokenizer.Sink tokenSink = this::applyFed;
+    /** Tokens {@link #applyFed} applied in the current {@link #feed}. */
+    private int tokensApplied;
 
     private int columns;
     private int rows;
@@ -277,14 +281,19 @@ public final class TerminalEmulator {
      * tokenizes itself and calls {@link #apply}.
      */
     public void feed(byte[] data, int off, int len) {
-        List<VtToken> tokens;
+        Outcome outcome;
         lock.lock();
         try {
-            tokens = tokenizer.feed(data, off, len).tokens();
+            tokensApplied = 0;
+            tokenizer.feed(data, off, len, tokenSink);
+            if (tokensApplied == 0) {
+                return;
+            }
+            outcome = endBatch();
         } finally {
             lock.unlock();
         }
-        apply(tokens);
+        deliver(outcome);
     }
 
     /** {@link #feed(byte[], int, int)} for a whole array. */
@@ -297,38 +306,50 @@ public final class TerminalEmulator {
         if (tokens.isEmpty()) {
             return;
         }
-        List<byte[]> replies;
-        ReplySink sink;
-        int bells;
-        String newTitle;
+        Outcome outcome;
         lock.lock();
         try {
             for (VtToken token : tokens) {
-                applyToken(token);
+                byte[] b = token.bytes();
+                applyToken(token.kind(), b, 0, b.length);
             }
-            changeCount++;
-            replies = pendingReplies.isEmpty() ? List.of() : new ArrayList<>(pendingReplies);
-            pendingReplies.clear();
-            sink = replySink;
-            bells = pendingBells;
-            pendingBells = 0;
-            newTitle = titleDirty ? title : null;
-            titleDirty = false;
+            outcome = endBatch();
         } finally {
             lock.unlock();
         }
-        if (sink != null) {
-            for (byte[] reply : replies) {
-                sink.send(reply);
+        deliver(outcome);
+    }
+
+    /** What a batch of tokens left to do outside the lock. */
+    private record Outcome(List<byte[]> replies, ReplySink sink, int bells, String newTitle) {
+    }
+
+    /** Under the lock, after a batch: counts the change and takes its pending effects. */
+    private Outcome endBatch() {
+        changeCount++;
+        List<byte[]> replies = pendingReplies.isEmpty() ? List.of() : new ArrayList<>(pendingReplies);
+        pendingReplies.clear();
+        int bells = pendingBells;
+        pendingBells = 0;
+        String newTitle = titleDirty ? title : null;
+        titleDirty = false;
+        return new Outcome(replies, replySink, bells, newTitle);
+    }
+
+    /** Outside the lock: sends the replies and tells the listener. */
+    private void deliver(Outcome outcome) {
+        if (outcome.sink() != null) {
+            for (byte[] reply : outcome.replies()) {
+                outcome.sink().send(reply);
             }
         }
         TerminalListener l = listener;
         if (l != null) {
-            if (newTitle != null) {
-                l.titleChanged(newTitle);
+            if (outcome.newTitle() != null) {
+                l.titleChanged(outcome.newTitle());
             }
-            if (bells > 0) {
-                l.bell(bells);
+            if (outcome.bells() > 0) {
+                l.bell(outcome.bells());
             }
             l.contentChanged();
         }
@@ -618,29 +639,34 @@ public final class TerminalEmulator {
     // Token dispatch
     // =====================================================================================
 
-    private void applyToken(VtToken token) {
-        byte[] b = token.bytes();
-        switch (token.kind()) {
-            case TEXT -> printUtf8(b);
-            case CONTROL -> {
-                flushUtf8();
-                control(b[0] & 0xFF);
-            }
-            case CSI -> {
-                flushUtf8();
-                csi(b);
-            }
-            case ESCAPE -> {
-                flushUtf8();
-                escape(b);
-            }
-            case OSC -> {
-                flushUtf8();
-                osc(b);
-            }
-            case STRING -> {
-                flushUtf8();
-                deviceControlString(b);
+    private void applyFed(VtToken.Kind kind, byte[] b, int off, int len) {
+        tokensApplied++;
+        applyToken(kind, b, off, len);
+    }
+
+    /** Applies one token, {@code b[off, off + len)}. Sequences are parsed in place, so
+     * {@code b} may be a buffer the tokenizer reuses. */
+    private void applyToken(VtToken.Kind kind, byte[] b, int off, int len) {
+        if (kind == VtToken.Kind.TEXT) {
+            printUtf8(b, off, off + len);
+            return;
+        }
+        flushUtf8();
+        if (kind == VtToken.Kind.CONTROL) {
+            control(b[off] & 0xFF);
+            return;
+        }
+        if (off != 0) {
+            // Sequence handlers index from 0; the tokenizer hands them over from its own
+            // buffers, which start there. Never taken in practice.
+            b = java.util.Arrays.copyOfRange(b, off, off + len);
+        }
+        switch (kind) {
+            case CSI -> csi(b, len);
+            case ESCAPE -> escape(b, len);
+            case OSC -> osc(b, len);
+            case STRING -> deviceControlString(b, len);
+            default -> {
             }
         }
     }
@@ -670,9 +696,8 @@ public final class TerminalEmulator {
 
     // --- printing ---------------------------------------------------------------------
 
-    private void printUtf8(byte[] b) {
-        int i = 0;
-        int n = b.length;
+    private void printUtf8(byte[] b, int from, int n) {
+        int i = from;
         while (i < n) {
             int c = b[i] & 0xFF;
             if (utf8Need == 0 && c < 0x80) {
@@ -1217,8 +1242,8 @@ public final class TerminalEmulator {
     // ESC
     // =====================================================================================
 
-    private void escape(byte[] b) {
-        if (b.length == 2) {
+    private void escape(byte[] b, int len) {
+        if (len == 2) {
             switch (b[1]) {
                 case '7' -> saveCursor();
                 case '8' -> restoreCursor();
@@ -1242,7 +1267,7 @@ public final class TerminalEmulator {
             }
             return;
         }
-        if (b.length == 3) {
+        if (len == 3) {
             int set = switch (b[2]) {
                 case '0' -> CHARSET_DEC_GRAPHICS;
                 case 'A' -> CHARSET_UK;
@@ -1284,8 +1309,8 @@ public final class TerminalEmulator {
 
     /** Parses {@code ESC [ prefix? params intermediates final} into {@link #params}; returns
      * {@code prefix << 16 | intermediate << 8 | final}, or -1 for a malformed sequence. */
-    private int parseCsi(byte[] b) {
-        int end = b.length - 1;
+    private int parseCsi(byte[] b, int len) {
+        int end = len - 1;
         int i = 2;
         int prefix = 0;
         if (i < end && b[i] >= '<' && b[i] <= '?') {
@@ -1352,8 +1377,8 @@ public final class TerminalEmulator {
         return false;
     }
 
-    private void csi(byte[] b) {
-        int key = parseCsi(b);
+    private void csi(byte[] b, int len) {
+        int key = parseCsi(b, len);
         if (key < 0) {
             return;
         }
@@ -1820,8 +1845,8 @@ public final class TerminalEmulator {
      * is answered "invalid request" ({@code DCS 0 + r ST}) so a prober moves on at once
      * instead of waiting for its timeout (as the daemon's jediterm did).
      */
-    private void deviceControlString(byte[] b) {
-        if (b.length >= 4 && b[1] == 'P' && b[2] == '+' && b[3] == 'q') {
+    private void deviceControlString(byte[] b, int len) {
+        if (len >= 4 && b[1] == 'P' && b[2] == '+' && b[3] == 'q') {
             reply(XTGETTCAP_INVALID);
         }
     }
@@ -1830,8 +1855,8 @@ public final class TerminalEmulator {
     // OSC
     // =====================================================================================
 
-    private void osc(byte[] b) {
-        int end = b.length;
+    private void osc(byte[] b, int len) {
+        int end = len;
         if (end > 2 && b[end - 1] == 0x07) {
             end--;
         } else if (end > 3 && b[end - 1] == '\\' && b[end - 2] == 0x1B) {

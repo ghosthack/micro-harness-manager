@@ -6,6 +6,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
 
@@ -78,6 +81,32 @@ class RecordingsTest {
         }
         assertArrayEquals(ScreenSerializer.serialize(whole, 1000), ScreenSerializer.serialize(pieces, 1000));
         assertEquals(whole.title(), pieces.title());
+    }
+
+    /** {@link TerminalEmulator#feed} (tokens straight from the tokenizer, the app's path)
+     * and {@link TerminalEmulator#apply} of the tokenizer's batches (the daemon's path)
+     * leave the same state, chunk for chunk; and the tokens are the same. */
+    @ParameterizedTest
+    @MethodSource("recordings")
+    void feedingMatchesApplyingTokens(Recording r) {
+        byte[] bytes = r.bytes();
+        TerminalEmulator fed = new TerminalEmulator(r.columns(), r.rows(), 1000);
+        TerminalEmulator applied = new TerminalEmulator(r.columns(), r.rows(), 1000);
+        VtTokenizer batches = new VtTokenizer();
+        VtTokenizer sinks = new VtTokenizer();
+        Random rnd = new Random(bytes.length * 31L);
+        for (int off = 0; off < bytes.length; ) {
+            int n = Math.min(1 + rnd.nextInt(300), bytes.length - off);
+            fed.feed(bytes, off, n);
+            List<VtToken> tokens = batches.feed(bytes, off, n).tokens();
+            applied.apply(tokens);
+            List<String> sunk = new ArrayList<>();
+            sinks.feed(bytes, off, n, (kind, b, o, len) -> sunk.add(kind + ":" + Arrays.toString(Arrays.copyOfRange(b, o, o + len))));
+            assertEquals(tokens.stream().map(t -> t.kind() + ":" + Arrays.toString(t.bytes())).toList(), sunk, "at byte " + off);
+            off += n;
+        }
+        ModelAssert.assertSameState(fed, applied, 1000);
+        assertEquals(applied.title(), fed.title());
     }
 
     /** The state at every checkpoint, chained into a digest recorded at each one, then the
