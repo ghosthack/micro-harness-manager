@@ -7,7 +7,7 @@ call :stale
 if errorlevel 1 (
   call mvn -q -pl app -am package -DskipTests || exit /b 1
 )
-java --enable-native-access=ALL-UNNAMED -jar "%JAR%" %*
+java -XX:+UseSerialGC -Xms16m -Xmx2g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 --enable-native-access=ALL-UNNAMED -jar "%JAR%" %*
 exit /b %errorlevel%
 
 :stale

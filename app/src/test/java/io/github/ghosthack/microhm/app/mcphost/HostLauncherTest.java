@@ -33,6 +33,7 @@ class HostLauncherTest {
                 registry, muxHome, McpHost.FLAG);
         assertTrue(command.getFirst().startsWith(Path.of("/jdk", "bin").toString()), command.toString());
         assertTrue(command.contains("--enable-native-access=ALL-UNNAMED"));
+        assertTrue(command.containsAll(io.github.ghosthack.microhm.mux.client.JvmOptions.RESIDENT), command.toString());
         assertTrue(command.contains("--registry=" + registry), command.toString());
         assertTrue(command.contains("--mux-home=" + muxHome), command.toString());
         String classPath = command.get(command.indexOf("-cp") + 1);

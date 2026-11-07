@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,14 +55,17 @@ class ServerLauncherTest {
         String classpath = "target/classes" + File.pathSeparator + "/abs/lib.jar";
         Optional<List<String>> command = ServerLauncher.resolveCommand(null, null,
                 Optional.of(Path.of("/apps/micro-harness-manager")), "/jdk", classpath, true);
-        assertEquals(List.of(
-                Path.of("/jdk", "bin", JAVA).toString(),
+        List<String> expected = new ArrayList<>();
+        expected.add(Path.of("/jdk", "bin", JAVA).toString());
+        expected.addAll(JvmOptions.RESIDENT);
+        expected.addAll(List.of(
                 "--enable-native-access=ALL-UNNAMED",
                 "-cp",
                 Path.of("target/classes").toAbsolutePath().normalize() + File.pathSeparator
                         + Path.of("/abs/lib.jar").toAbsolutePath().normalize(),
                 ServerLauncher.MAIN_CLASS,
-                "serve", "--daemon"), command.orElseThrow());
+                "serve", "--daemon"));
+        assertEquals(expected, command.orElseThrow());
     }
 
     @Test

@@ -5,6 +5,7 @@ import io.github.ghosthack.microhm.app.daemon.SessionServerHost;
 import io.github.ghosthack.microhm.app.registry.RegistryPaths;
 import io.github.ghosthack.microhm.app.registry.SessionRegistry;
 import io.github.ghosthack.microhm.app.settings.AppSettings;
+import io.github.ghosthack.microhm.mux.client.JvmOptions;
 import io.github.ghosthack.microhm.mux.server.ServerHome;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,6 +92,7 @@ public final class HostLauncher {
         } else {
             boolean windows = System.getProperty("os.name", "").toLowerCase().startsWith("windows");
             command.add(Path.of(javaHome, "bin", windows ? "java.exe" : "java").toString());
+            command.addAll(JvmOptions.RESIDENT);
             command.add("--enable-native-access=ALL-UNNAMED");
             command.add("-cp");
             command.add(absolutize(classPath));
