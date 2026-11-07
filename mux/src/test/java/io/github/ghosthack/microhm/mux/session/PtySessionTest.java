@@ -341,8 +341,15 @@ class PtySessionTest {
         Session.WaitResult busy = session.awaitQuiet(-1, 400, 800);
         assertFalse(busy.quiet());
         assertTrue(busy.alive());
-        session.input(List.of("C-c"));
-        assertTrue(session.awaitQuiet(-1, 300, 10_000).quiet(), "quiet again after C-c");
+        // A C-c landing just as a sleep exits can reach no one: the dead sleep's process
+        // group still owns the terminal, and the loop carries on. Press it again, as anyone
+        // would. A C-c that never works still fails here.
+        boolean stopped = false;
+        for (int attempt = 0; attempt < 20 && !stopped; attempt++) {
+            session.input(List.of("C-c"));
+            stopped = session.awaitQuiet(-1, 300, 1_000).quiet();
+        }
+        assertTrue(stopped, "quiet again after C-c");
     }
 
     @Test
