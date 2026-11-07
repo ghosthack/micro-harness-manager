@@ -60,7 +60,8 @@ final class SettingsDialog {
                   boolean mcpServerEnabled,
                   int mcpPort,
                   boolean mcpTokenRegenerated,
-                  boolean mcpChanged) {
+                  boolean mcpChanged,
+                  boolean trayIcon) {
     }
 
     /**
@@ -183,6 +184,12 @@ final class SettingsDialog {
                         new Choice<>("Once, on select", AppSettings.ActiveTabPollMode.ONCE),
                         new Choice<>("Scheduled while selected", AppSettings.ActiveTabPollMode.SCHEDULED));
 
+        boolean macOs = MacWindowAppearance.isMac(System.getProperty("os.name", ""));
+        JCheckBox trayIconBox = new JCheckBox(macOs
+                ? "Show a menu-bar icon while sessions run with the app closed"
+                : "Show a system-tray icon while sessions run with the app closed",
+                AppSettings.trayIconEnabled());
+
         boolean mcpWasEnabled = AppSettings.mcpServerEnabled();
         int mcpWasPort = AppSettings.mcpPort();
         JCheckBox mcpServerBox = new JCheckBox(
@@ -254,6 +261,8 @@ final class SettingsDialog {
         sessions.addRow("", note("Off freezes status badges and pane titles."));
         sessions.addRow("Active tab, if polling off:", activeTabPollModeCombo);
         sessions.addRow("", note("Keeps the selected tab's badge fresh even with polling off."));
+        sessions.addRow("Background icon:", trayIconBox);
+        sessions.addRow("", note("On by default. Opens the app; takes effect next time you quit."));
 
         agents.addRow("MCP server:", mcpServerBox);
         agents.addRow("MCP port:", mcpPortSpinner);
@@ -294,7 +303,8 @@ final class SettingsDialog {
                     (Integer) mcpPortSpinner.getValue(),
                     regenerateMcpToken.get(),
                     mcpChanged(mcpWasEnabled, mcpWasPort, mcpServerBox.isSelected(),
-                            (Integer) mcpPortSpinner.getValue(), regenerateMcpToken.get()))));
+                            (Integer) mcpPortSpinner.getValue(), regenerateMcpToken.get()),
+                    trayIconBox.isSelected())));
             dialog.dispose();
         });
         cancel.addActionListener(e -> dialog.dispose());

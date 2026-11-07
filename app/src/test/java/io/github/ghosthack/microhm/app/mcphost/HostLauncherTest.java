@@ -17,8 +17,9 @@ class HostLauncherTest {
         // Paths as the platform spells them (backslashes on Windows), as the app passes them.
         Path registry = Path.of("/home/u/.micro-harness-manager/sessions.json");
         Path muxHome = Path.of("/home/u/.micro-harness-manager/mux");
-        List<String> command = HostLauncher.command("/Applications/mhm.app/Contents/MacOS/mhm", "/jdk", "x.jar",
-                registry, muxHome);
+        List<String> command = HostLauncher.command(
+                HostLauncher.launcher("/Applications/mhm.app/Contents/MacOS/mhm", "/jdk", "x.jar"),
+                registry, muxHome, McpHost.FLAG);
         assertEquals(List.of("/Applications/mhm.app/Contents/MacOS/mhm", McpHost.FLAG,
                 "--registry=" + registry, "--mux-home=" + muxHome), command);
     }
@@ -27,8 +28,9 @@ class HostLauncherTest {
     void aJvmLaunchKeepsTheClasspathAbsoluteAndPassesTheStateLocations() {
         Path registry = Path.of("/tmp/r/sessions.json");
         Path muxHome = Path.of("/tmp/m");
-        List<String> command = HostLauncher.command(null, "/jdk", "app.jar" + File.pathSeparator + "/abs/lib.jar",
-                registry, muxHome);
+        List<String> command = HostLauncher.command(
+                HostLauncher.launcher(null, "/jdk", "app.jar" + File.pathSeparator + "/abs/lib.jar"),
+                registry, muxHome, McpHost.FLAG);
         assertTrue(command.getFirst().startsWith(Path.of("/jdk", "bin").toString()), command.toString());
         assertTrue(command.contains("--enable-native-access=ALL-UNNAMED"));
         assertTrue(command.contains("--registry=" + registry), command.toString());
@@ -39,5 +41,13 @@ class HostLauncherTest {
         }
         assertEquals(List.of(MicroHarnessManagerApp.class.getName(), McpHost.FLAG),
                 command.subList(command.size() - 4, command.size() - 2));
+    }
+
+    @Test
+    void openingTheAppPassesTheStateButNoMode() {
+        Path registry = Path.of("/tmp/r/sessions.json");
+        Path muxHome = Path.of("/tmp/m");
+        List<String> command = HostLauncher.command(List.of("/opt/mhm/bin/mhm"), registry, muxHome);
+        assertEquals(List.of("/opt/mhm/bin/mhm", "--registry=" + registry, "--mux-home=" + muxHome), command);
     }
 }

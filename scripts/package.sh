@@ -15,8 +15,11 @@ MODE="${1:-all}"
 VERSION="${2:-${APP_VERSION:-1.0.0}}"
 APP_NAME="micro-harness-manager"
 APP_ID="io.github.ghosthack.microhm"
-# The macOS bundle name (menu bar, Finder) is capped at 16 characters.
-MAC_PACKAGE_NAME="micro-harness"
+# The name people see in the OS: the macOS bundle name (menu bar, Finder; at most 16
+# characters) and the Windows Start-menu folder. Launchers, paths, package ids and
+# artifacts keep APP_NAME.
+DISPLAY_NAME="Microhm"
+MAC_PACKAGE_NAME="$DISPLAY_NAME"
 MAIN_CLASS="io.github.ghosthack.microhm.app.MicroHarnessManagerApp"
 MUX_CLASS="io.github.ghosthack.microhm.mux.Main"
 MUX_LAUNCHER="microhm-mux"
@@ -236,7 +239,7 @@ case "$PLATFORM" in
             --win-upgrade-uuid "$WINDOWS_UPGRADE_UUID"
             --win-dir-chooser
             --win-menu
-            --win-menu-group "$APP_NAME"
+            --win-menu-group "$DISPLAY_NAME"
             --win-shortcut
         )
         ;;

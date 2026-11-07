@@ -47,6 +47,8 @@ public final class MicroHarnessManagerApp {
             McpHost.run(args);
             return;
         }
+        // The background host opens the app with its own state locations spelled out.
+        McpHost.applyStateOptions(args);
         // Same pair the MainWindow toolbar toggle switches between at runtime.
         AppSettings.UiTheme theme = AppSettings.uiTheme();
         // Before any AWT/Swing call: the JDK reads the appearance property once, while

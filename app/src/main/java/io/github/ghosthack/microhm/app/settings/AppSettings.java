@@ -610,6 +610,19 @@ public final class AppSettings {
     }
 
     /**
+     * Whether a menu-bar (macOS) or system-tray (Windows, Linux) icon shows while sessions
+     * run with the app closed: {@code tray.icon=on|off}. On unless set to {@code off}.
+     */
+    public static boolean trayIconEnabled() {
+        String value = load().getProperty("tray.icon");
+        return value == null || !value.trim().equalsIgnoreCase("off");
+    }
+
+    public static void saveTrayIconEnabled(boolean on) {
+        save(p -> p.setProperty("tray.icon", on ? "on" : "off"));
+    }
+
+    /**
      * The loopback port the MCP server binds: {@code mcp.port}, default
      * {@link #DEFAULT_MCP_PORT}; clamped to the unprivileged range so hand-edited
      * settings remain usable, and unparseable values fall back to the default.
