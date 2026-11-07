@@ -75,6 +75,41 @@ done
 
 shopt -s nullglob
 
+# Apple's notary service scans native binaries inside JARs (FlatLaf ships dylibs), and
+# jpackage's signing can't reach into a JAR, so sign them before the image is built.
+sign_macos_jar_natives() {
+    local jar_file="$1" identity="$2"
+    local work entry
+    local -a natives=()
+    while IFS= read -r entry; do
+        case "$entry" in
+            /*|../*|*/../*|*/..) echo "error: unsafe JAR entry: $entry" >&2; return 1 ;;
+            *.dylib|*.jnilib) natives+=("$entry") ;;
+        esac
+    done < <(jar tf "$jar_file")
+    if (( ${#natives[@]} == 0 )); then
+        echo "error: no macOS native libraries found in $jar_file" >&2
+        return 1
+    fi
+    work="$(mktemp -d "${TMPDIR:-/tmp}/microhm-native-sign.XXXXXX")"
+    (
+        cd "$work"
+        jar xf "$jar_file" "${natives[@]}"
+        for entry in "${natives[@]}"; do
+            if [[ -n "${MACOS_KEYCHAIN:-}" ]]; then
+                codesign --force --sign "$identity" --timestamp --options runtime \
+                    --keychain "$MACOS_KEYCHAIN" "$entry"
+            else
+                codesign --force --sign "$identity" --timestamp --options runtime "$entry"
+            fi
+            codesign --verify --strict "$entry"
+        done
+        zip -q "$jar_file" "${natives[@]}"
+    ) || { rm -rf "$work"; return 1; }
+    rm -rf "$work"
+    echo "==> Signed ${#natives[@]} native libraries inside $(basename "$jar_file")"
+}
+
 if [[ "$MODE" != "installer" ]]; then
     echo "==> Building micro-harness-manager $VERSION"
     # clean wipes target/, so the staging directories are made after the build
@@ -86,6 +121,10 @@ if [[ "$MODE" != "installer" ]]; then
     cp "$ROOT/LICENSE" "$INPUT_DIR/LICENSE"
     cp "$ROOT/THIRD-PARTY.md" "$INPUT_DIR/THIRD-PARTY.md"
     cp -R "$ROOT/licenses" "$INPUT_DIR/THIRD-PARTY-LICENSES"
+
+    if [[ "$PLATFORM" == "macos" && -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
+        sign_macos_jar_natives "$INPUT_DIR/$MAIN_JAR" "$MACOS_SIGNING_IDENTITY"
+    fi
 
     case "$PLATFORM" in
         macos)   ICON="$ROOT/packaging/icons/micro-harness-manager.icns" ;;
