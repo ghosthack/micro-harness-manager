@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.mux.client;
 
+import io.github.ghosthack.microhm.mux.protocol.SocketThreads;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.ghosthack.microhm.mux.protocol.Frame;
 import io.github.ghosthack.microhm.mux.protocol.FrameCodec;
@@ -39,7 +40,7 @@ final class SocketAttachedSession implements AttachedSession {
         this.name = name;
         this.connection = connection;
         this.codec = connection.codec();
-        Thread.ofVirtual().name("microhm-mux-attach-reader-" + name).start(this::pump);
+        SocketThreads.named("microhm-mux-attach-reader-" + name).start(this::pump);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.mux.server;
 
+import io.github.ghosthack.microhm.mux.protocol.SocketThreads;
 import io.github.ghosthack.microhm.mux.protocol.Frame;
 import io.github.ghosthack.microhm.mux.protocol.FrameCodec;
 import io.github.ghosthack.microhm.mux.protocol.FrameType;
@@ -73,7 +74,7 @@ final class AttachedClient implements Session.Client {
         this.codec = codec;
         this.capacity = options.clientBufferBytes();
         this.behindTimeout = options.behindTimeout();
-        this.writer = Thread.ofVirtual().name("microhm-mux-writer-" + session.name()).unstarted(this::drain);
+        this.writer = SocketThreads.named("microhm-mux-writer-" + session.name()).unstarted(this::drain);
     }
 
     void start() {

@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.mux.server;
 
+import io.github.ghosthack.microhm.mux.protocol.SocketThreads;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.ghosthack.microhm.mux.protocol.Protocol;
 import io.github.ghosthack.microhm.mux.session.SessionManager;
@@ -96,7 +97,7 @@ public final class SessionServer implements AutoCloseable {
             throw e;
         }
         manager.setListener(this::onLastSessionEnded);
-        Thread.ofVirtual().name("microhm-mux-accept").start(this::acceptLoop);
+        SocketThreads.named("microhm-mux-accept").start(this::acceptLoop);
         log.info("microhm-mux {} (protocol {}, pid {}) listening on {}",
                 version, Protocol.VERSION, pid, ServerHome.socket(home));
         return true;
@@ -228,7 +229,7 @@ public final class SessionServer implements AutoCloseable {
             }
             ClientConnection connection = new ClientConnection(accepted, this, dispatcher, options);
             connections.add(connection);
-            Thread.ofVirtual().name("microhm-mux-conn").start(connection);
+            SocketThreads.named("microhm-mux-conn").start(connection);
         }
     }
 

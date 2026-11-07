@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.mux.client;
 
+import io.github.ghosthack.microhm.mux.protocol.SocketThreads;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.ghosthack.microhm.mux.protocol.Frame;
 import io.github.ghosthack.microhm.mux.protocol.FrameCodec;
@@ -32,7 +33,7 @@ final class SocketWatch implements SessionServerClient.Watch {
         this.connection = connection;
         this.codec = connection.codec();
         this.onEvent = onEvent;
-        Thread.ofVirtual().name("microhm-mux-watch-reader").start(this::pump);
+        SocketThreads.named("microhm-mux-watch-reader").start(this::pump);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.mux.server;
 
+import io.github.ghosthack.microhm.mux.protocol.SocketThreads;
 import io.github.ghosthack.microhm.mux.protocol.Frame;
 import io.github.ghosthack.microhm.mux.protocol.FrameCodec;
 import io.github.ghosthack.microhm.mux.protocol.FrameType;
@@ -55,7 +56,7 @@ final class WatchStream implements Session.Watcher {
         this.channel = channel;
         this.codec = codec;
         this.quietMs = quietMs;
-        this.writer = Thread.ofVirtual().name("microhm-mux-watch-writer").unstarted(this::drain);
+        this.writer = SocketThreads.named("microhm-mux-watch-writer").unstarted(this::drain);
     }
 
     void start() {
