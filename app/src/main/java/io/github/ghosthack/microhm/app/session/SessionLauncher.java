@@ -9,6 +9,7 @@ import io.github.ghosthack.microhm.app.mcp.McpService.McpLink;
 import io.github.ghosthack.microhm.app.registry.SessionEntry;
 import io.github.ghosthack.microhm.app.registry.SessionNaming;
 import io.github.ghosthack.microhm.app.registry.SessionRegistry;
+import io.github.ghosthack.microhm.app.settings.AppSettings;
 import io.github.ghosthack.microhm.app.terminal.SessionTerminal;
 import io.github.ghosthack.microhm.mux.client.SessionServerException;
 import org.slf4j.Logger;
@@ -23,6 +24,7 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -134,13 +136,11 @@ public final class SessionLauncher {
         String name = reserveName(projectPath);
         try {
             HarnessPlugin plugin = HarnessPlugins.of(harness);
-            McpLink mcp = newSession(name, projectPath, plugin, mcpLinkFor.apply(name));
             Optional<String> display = displayName.filter(d -> !d.isBlank());
             Map<String, String> all = new LinkedHashMap<>(labels);
             all.put(LABEL_HARNESS, harness.id());
             all.put(LABEL_PROJECT, projectPath.toString());
             display.ifPresent(d -> all.put(LABEL_DISPLAY, d));
-            label(name, all);
             Optional<String> id = harnessSessionId;
             String command;
             String freshId = UUID.randomUUID().toString();
@@ -153,7 +153,7 @@ public final class SessionLauncher {
             } else {
                 command = launchCommand(plugin, id, onNoResumeSyntax);
             }
-            sendLaunch(name, plugin, command, mcp);
+            start(name, projectPath, plugin, mcpLinkFor.apply(name), command, all);
             SessionEntry entry = SessionEntry.newlyCreated(name, projectPath.toString(), harness, id.orElse(null));
             registry.put(display.map(entry::withDisplayName).orElse(entry));
             return name;
@@ -174,21 +174,52 @@ public final class SessionLauncher {
     public void resume(SessionEntry entry, Runnable onNoResumeSyntax) {
         String name = entry.sessionName();
         HarnessPlugin plugin = HarnessPlugins.of(entry.harnessType());
-        McpLink mcp = newSession(name, Path.of(entry.projectPath()), plugin, mcpLinkFor.apply(name));
         Map<String, String> all = new LinkedHashMap<>();
         all.put(LABEL_HARNESS, entry.harnessType().id());
         all.put(LABEL_PROJECT, entry.projectPath());
         if (entry.displayName() != null && !entry.displayName().isBlank()) {
             all.put(LABEL_DISPLAY, entry.displayName());
         }
-        label(name, all);
         Optional<String> id = entry.harnessSessionIdOpt();
         Optional<String> fresh = id.isPresent() && !plugin.canResume(id.get(), Path.of(entry.projectPath()))
                 ? Optional.of(plugin.launchCommandWithId(id.get()).orElse(plugin.launchCommand()))
                 : Optional.empty();
         // an id given at launch whose conversation never got a message has nothing to
         // resume: start it fresh, under the same id when the harness allows
-        sendLaunch(name, plugin, fresh.orElseGet(() -> launchCommand(plugin, id, onNoResumeSyntax)), mcp);
+        start(name, Path.of(entry.projectPath()), plugin, mcpLinkFor.apply(name),
+                fresh.orElseGet(() -> launchCommand(plugin, id, onNoResumeSyntax)), all);
+    }
+
+    /**
+     * Starts the session, labels it, and launches {@code command} in it: typed into the
+     * shell once it is up (the default), or, when the settings ask for one-step starts and
+     * the session's shell supports it, as the shell's own command, so nothing is typed
+     * while the shell's startup files run.
+     */
+    private void start(String name, Path workdir, HarnessPlugin plugin, McpLink mcp, String command,
+                       Map<String, String> labels) {
+        if (!command.isBlank() && AppSettings.directLaunch() && host instanceof DirectSessionStarter direct) {
+            String line = mcp != null ? withMcpServer(name, plugin, command, mcp) : command;
+            Optional<List<String>> argv = SessionShell.system().oneStep(AppSettings.sessionShell(), line);
+            if (argv.isPresent()) {
+                if (mcp == null) {
+                    discardMcpConfig(name); // a stale token's file from an earlier lifecycle
+                }
+                Map<String, String> env = mcp != null && plugin.usesMcpTokenEnv()
+                        ? Map.of(HarnessPlugin.MCP_TOKEN_ENV, mcp.token()) : Map.of();
+                boolean envApplied = direct.newSession(name, workdir, SessionTerminal.COLUMNS,
+                        SessionTerminal.ROWS, argv.get(), env);
+                if (!env.isEmpty() && !envApplied) {
+                    LOG.warn("the running daemon predates per-session environment variables, so {} started "
+                            + "without its MCP token; restart the daemon for MCP in such sessions", name);
+                }
+                label(name, labels);
+                return;
+            }
+        }
+        McpLink link = newSession(name, workdir, plugin, mcp);
+        label(name, labels);
+        sendLaunch(name, plugin, command, link);
     }
 
     /**

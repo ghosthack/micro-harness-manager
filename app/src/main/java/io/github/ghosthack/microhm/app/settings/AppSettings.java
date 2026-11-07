@@ -622,6 +622,28 @@ public final class AppSettings {
         save(p -> p.setProperty("tray.icon", on ? "on" : "off"));
     }
 
+    /** The shell new sessions start in: {@code session.shell}, empty for the user's default
+     * (see {@link io.github.ghosthack.microhm.app.session.SessionShell}). */
+    public static String sessionShell() {
+        String value = load().getProperty("session.shell");
+        return value == null ? "" : value.trim();
+    }
+
+    public static void saveSessionShell(String shell) {
+        save(p -> p.setProperty("session.shell", shell == null ? "" : shell.trim()));
+    }
+
+    /** Whether agents start in one step inside the shell (the default) rather than being
+     * typed into it once the shell is up ({@code session.launch=typed}). */
+    public static boolean directLaunch() {
+        String value = load().getProperty("session.launch");
+        return value == null || !value.trim().equalsIgnoreCase("typed");
+    }
+
+    public static void saveDirectLaunch(boolean direct) {
+        save(p -> p.setProperty("session.launch", direct ? "direct" : "typed"));
+    }
+
     /**
      * The loopback port the MCP server binds: {@code mcp.port}, default
      * {@link #DEFAULT_MCP_PORT}; clamped to the unprivileged range so hand-edited

@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.app.ui;
 
+import io.github.ghosthack.microhm.app.session.SessionShell;
 import io.github.ghosthack.microhm.app.settings.AppSettings;
 
 import javax.swing.BorderFactory;
@@ -9,6 +10,7 @@ import javax.swing.JComponent;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
@@ -61,7 +63,9 @@ final class SettingsDialog {
                   int mcpPort,
                   boolean mcpTokenRegenerated,
                   boolean mcpChanged,
-                  boolean trayIcon) {
+                  boolean trayIcon,
+                  String sessionShell,
+                  boolean directLaunch) {
     }
 
     /**
@@ -190,6 +194,10 @@ final class SettingsDialog {
                 : "Show a system-tray icon while sessions run with the app closed",
                 AppSettings.trayIconEnabled());
 
+        JComboBox<Choice<String>> shellCombo = shellCombo(AppSettings.sessionShell(), parent);
+        JCheckBox directLaunchBox = new JCheckBox("Start agents in one step (zsh, bash, sh, fish)",
+                AppSettings.directLaunch());
+
         boolean mcpWasEnabled = AppSettings.mcpServerEnabled();
         int mcpWasPort = AppSettings.mcpPort();
         JCheckBox mcpServerBox = new JCheckBox(
@@ -261,6 +269,11 @@ final class SettingsDialog {
         sessions.addRow("", note("Off freezes status badges and pane titles."));
         sessions.addRow("Active tab, if polling off:", activeTabPollModeCombo);
         sessions.addRow("", note("Keeps the selected tab's badge fresh even with polling off."));
+        sessions.addRow("Shell:", shellCombo);
+        sessions.addRow("", note("For new sessions. Your default is your login shell; others read their own setup files."));
+        sessions.addRow("Agent start:", directLaunchBox);
+        sessions.addRow("", note("On by default: the shell starts the agent itself, so nothing is typed during startup."));
+        sessions.addRow("", note("Off types the agent's command once the shell is up. Other shells always type it."));
         sessions.addRow("Background icon:", trayIconBox);
         sessions.addRow("", note("On by default. Opens the app; takes effect next time you quit."));
 
@@ -304,7 +317,9 @@ final class SettingsDialog {
                     regenerateMcpToken.get(),
                     mcpChanged(mcpWasEnabled, mcpWasPort, mcpServerBox.isSelected(),
                             (Integer) mcpPortSpinner.getValue(), regenerateMcpToken.get()),
-                    trayIconBox.isSelected())));
+                    trayIconBox.isSelected(),
+                    selected(shellCombo),
+                    directLaunchBox.isSelected())));
             dialog.dispose();
         });
         cancel.addActionListener(e -> dialog.dispose());
@@ -380,6 +395,49 @@ final class SettingsDialog {
                 combo.setSelectedItem(choice);
             }
         }
+        return combo;
+    }
+
+    /** Your default, then the shells installed here, then any custom path in use, then
+     * "Other…", which picks a program and adds it. */
+    private static JComboBox<Choice<String>> shellCombo(String current, Window parent) {
+        SessionShell shells = SessionShell.system();
+        JComboBox<Choice<String>> combo = new JComboBox<>();
+        combo.addItem(new Choice<>(shells.describe(SessionShell.DEFAULT), SessionShell.DEFAULT));
+        for (String name : shells.installedNames()) {
+            combo.addItem(new Choice<>(shells.displayName(name), name));
+        }
+        boolean listed = false;
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            if (combo.getItemAt(i).value().equals(current)) {
+                combo.setSelectedIndex(i);
+                listed = true;
+            }
+        }
+        if (!listed) {
+            Choice<String> custom = new Choice<>(shells.describe(current), current);
+            combo.addItem(custom);
+            combo.setSelectedItem(custom);
+        }
+        Choice<String> other = new Choice<>("Other…", null);
+        combo.addItem(other);
+        int[] previous = {combo.getSelectedIndex()};
+        combo.addActionListener(e -> {
+            if (combo.getSelectedItem() != other) {
+                previous[0] = combo.getSelectedIndex();
+                return;
+            }
+            JFileChooser chooser = new JFileChooser("/bin");
+            chooser.setDialogTitle("Choose a shell");
+            if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
+                String path = chooser.getSelectedFile().getAbsolutePath();
+                Choice<String> picked = new Choice<>(shells.describe(path), path);
+                combo.insertItemAt(picked, combo.getItemCount() - 1);
+                combo.setSelectedItem(picked);
+            } else {
+                combo.setSelectedIndex(previous[0]);
+            }
+        });
         return combo;
     }
 

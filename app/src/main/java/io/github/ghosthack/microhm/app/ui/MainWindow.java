@@ -2472,6 +2472,8 @@ public final class MainWindow extends JFrame {
                 AppSettings.saveMcpServerEnabled(result.mcpServerEnabled());
                 AppSettings.saveMcpPort(result.mcpPort());
                 AppSettings.saveTrayIconEnabled(result.trayIcon());
+                AppSettings.saveSessionShell(result.sessionShell());
+                AppSettings.saveDirectLaunch(result.directLaunch());
             });
             if (SettingsDialog.mcpNeedsApply(result.mcpChanged(), result.mcpServerEnabled(),
                     mcpService.isRunning())) {
