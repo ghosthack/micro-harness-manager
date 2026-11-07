@@ -12,6 +12,7 @@ import javax.swing.JPanel;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListModel;
 import javax.swing.SwingConstants;
+import javax.swing.border.Border;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
@@ -26,6 +27,7 @@ import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
+import java.util.Objects;
 
 /**
  * Sidebar row rendering, laid out like a macOS source list:
@@ -78,6 +80,13 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
     private static final int GROUPED_ROW_PAD_Y = 4;
     private static final int GROUP_GAP = 12;
 
+    private static final Border ROW_BORDER = rowBorder(ROW_PAD_Y, ROW_PAD_Y);
+    private static final Border GROUPED_ROW_BORDER = rowBorder(GROUPED_ROW_PAD_Y, GROUPED_ROW_PAD_Y);
+    private static final Border GROUPED_START_ROW_BORDER = rowBorder(0, GROUPED_ROW_PAD_Y);
+    private static final Border GROUPED_TOP_PAD = BorderFactory.createEmptyBorder(GROUPED_ROW_PAD_Y, 0, 0, 0);
+    private static final Border FIRST_HEADER_BORDER = BorderFactory.createEmptyBorder(6, 0, 3, 0);
+    private static final Border HEADER_BORDER = BorderFactory.createEmptyBorder(GROUP_GAP, 0, 3, 0);
+
     private final Avatar avatar = new Avatar();
     private final JLabel avatarLabel = new JLabel(avatar);
     private final ClippedLabel name = new ClippedLabel(false);
@@ -87,6 +96,10 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
 
     private boolean reticuleEnabled;
     private boolean folderGrouping;
+
+    /** Derived per base font / theme, not per render call; see {@link #fonts} / {@link #palette}. */
+    private Fonts fonts;
+    private Palette palette;
 
     /** Per-cell paint state, set in {@link #getListCellRendererComponent}. */
     private boolean veiled;
@@ -134,11 +147,13 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
                                                   int index, boolean isSelected, boolean cellHasFocus) {
         Color background = list.getBackground();
         boolean hovered = !isSelected && Integer.valueOf(index).equals(list.getClientProperty(HOVER_INDEX));
+        Palette palette = palette(list);
+        RowColors colors = isSelected ? palette.selected : hovered ? palette.hovered : palette.plain;
         pillFill = isSelected ? list.getSelectionBackground()
-                : hovered ? blend(list.getForeground(), background, 0.07) : null;
+                : hovered ? palette.hoverFill : null;
         Color rowBackground = pillFill != null ? pillFill : background;
         Color foreground = isSelected ? list.getSelectionForeground() : list.getForeground();
-        Color muted = blend(foreground, rowBackground, isSelected ? 0.72 : 0.55);
+        Color muted = colors.muted;
         boolean dead = entry.status() == SidebarEntry.Status.DEAD;
 
         setOpaque(true);
@@ -146,10 +161,11 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
         setForeground(foreground);
 
         Font font = list.getFont();
+        Fonts fonts = fonts(font);
         name.setFont(font);
         name.setForeground(dead ? muted : foreground);
         name.setText(entry.nameText());
-        detail.setFont(font.deriveFont(font.getSize2D() - 2f));
+        detail.setFont(fonts.detail);
         detail.setForeground(muted);
         detail.setText(entry.detailText());
 
@@ -157,19 +173,19 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
         avatar.badge = statusIcon(entry, reticuleEnabled);
         avatar.faded = dead;
         avatar.ring = rowBackground;
-        avatar.tile = blend(foreground, rowBackground, isDark(rowBackground) ? 0.13 : 0.08);
+        avatar.tile = colors.tile;
         avatarLabel.setForeground(foreground);
 
         boolean waiting = !dead && entry.state() == SessionState.WAITING_FOR_INPUT;
         pill.setVisible(waiting);
-        pill.setFont(font.deriveFont(Font.BOLD, font.getSize2D() - 2.5f));
+        pill.setFont(fonts.pill);
         // a white chip on the saturated accent selection; amber everywhere else,
         // including the gray selection an unfocused list shows
-        pill.onAccent = isSelected && saturation(rowBackground) > 0.35f;
+        pill.onAccent = isSelected && palette.selectionIsAccent;
         pill.rowBackground = rowBackground;
 
         veiled = reticuleEnabled && entry.status() == SidebarEntry.Status.LIVE && !entry.isAttached();
-        applyFolderGroup(list, entry, index, background);
+        applyFolderGroup(list, entry, index, fonts, palette);
         return this;
     }
 
@@ -179,7 +195,7 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
      * exactly a maximal run of rows sharing a {@link SidebarView#folderGroupKey}.
      */
     private void applyFolderGroup(JList<? extends SidebarEntry> list, SidebarEntry entry, int index,
-                                  Color background) {
+                                  Fonts fonts, Palette palette) {
         ListModel<? extends SidebarEntry> model = list.getModel();
         String key = SidebarView.folderGroupKey(entry);
         boolean grouped = folderGrouping && !key.isEmpty();
@@ -193,23 +209,112 @@ final class SidebarCellRenderer extends JPanel implements ListCellRenderer<Sideb
                 count++;
             }
             groupHeader.count = count;
-            Font font = list.getFont();
-            groupHeader.setFont(font.deriveFont(Font.BOLD, font.getSize2D() - 2f));
-            groupHeader.secondaryFont = font.deriveFont(Font.PLAIN, font.getSize2D() - 2f);
+            groupHeader.setFont(fonts.header);
+            groupHeader.secondaryFont = fonts.headerSecondary;
             // the heading sits on the list, never inside a selection pill
-            groupHeader.setForeground(blend(list.getForeground(), background, 0.78));
-            groupHeader.secondary = blend(list.getForeground(), background, 0.5);
-            groupHeader.setBorder(BorderFactory.createEmptyBorder(index == 0 ? 6 : GROUP_GAP, 0, 3, 0));
+            groupHeader.setForeground(palette.header);
+            groupHeader.secondary = palette.headerSecondary;
+            groupHeader.setBorder(index == 0 ? FIRST_HEADER_BORDER : HEADER_BORDER);
         }
         detail.setVisible(!grouped);
-        int pad = grouped ? GROUPED_ROW_PAD_Y : ROW_PAD_Y;
-        setBorder(BorderFactory.createEmptyBorder(groupStart ? 0 : pad, CONTENT_INSET_X,
-                pad, CONTENT_INSET_X));
+        // empty borders are immutable, so one shared instance per shape; handing a row the
+        // instance it already has also spares Swing a revalidate
+        // (a group start is always grouped)
+        setBorder(groupStart ? GROUPED_START_ROW_BORDER : grouped ? GROUPED_ROW_BORDER : ROW_BORDER);
         // with the header on top, the row's own top padding moves below the header
-        avatarLabel.setBorder(groupStart ? BorderFactory.createEmptyBorder(pad, 0, 0, 0) : null);
-        pill.setBorder(groupStart ? BorderFactory.createEmptyBorder(pad, 0, 0, 0) : null);
-        ((JComponent) name.getParent()).setBorder(
-                groupStart ? BorderFactory.createEmptyBorder(pad, 0, 0, 0) : null);
+        Border below = groupStart ? GROUPED_TOP_PAD : null;
+        avatarLabel.setBorder(below);
+        pill.setBorder(below);
+        ((JComponent) name.getParent()).setBorder(below);
+    }
+
+    private static Border rowBorder(int top, int pad) {
+        return BorderFactory.createEmptyBorder(top, CONTENT_INSET_X, pad, CONTENT_INSET_X);
+    }
+
+    /** The fonts derived from the list's font, rebuilt only when that font changes. */
+    private Fonts fonts(Font base) {
+        Fonts cached = fonts;
+        if (cached == null || !cached.base.equals(base)) {
+            cached = new Fonts(base);
+            fonts = cached;
+        }
+        return cached;
+    }
+
+    /** The colours blended from the list's theme colours, rebuilt only when one changes. */
+    private Palette palette(JList<?> list) {
+        Palette cached = palette;
+        Color fg = list.getForeground();
+        Color bg = list.getBackground();
+        Color selFg = list.getSelectionForeground();
+        Color selBg = list.getSelectionBackground();
+        if (cached == null || !cached.matches(fg, bg, selFg, selBg)) {
+            cached = new Palette(fg, bg, selFg, selBg);
+            palette = cached;
+        }
+        return cached;
+    }
+
+    private static final class Fonts {
+        final Font base;
+        final Font detail;
+        final Font pill;
+        final Font header;
+        final Font headerSecondary;
+
+        Fonts(Font base) {
+            this.base = base;
+            this.detail = base.deriveFont(base.getSize2D() - 2f);
+            this.pill = base.deriveFont(Font.BOLD, base.getSize2D() - 2.5f);
+            this.header = base.deriveFont(Font.BOLD, base.getSize2D() - 2f);
+            this.headerSecondary = base.deriveFont(Font.PLAIN, base.getSize2D() - 2f);
+        }
+    }
+
+    /** Muted text and avatar tile for one kind of row (selected, hovered, plain). */
+    private record RowColors(Color muted, Color tile) {
+        static RowColors over(Color foreground, Color rowBackground, double mutedAmount) {
+            return new RowColors(blend(foreground, rowBackground, mutedAmount),
+                    blend(foreground, rowBackground, isDark(rowBackground) ? 0.13 : 0.08));
+        }
+    }
+
+    /** Everything blended from the list's four theme colours. Keyed by {@link Color#equals}
+     * (the RGBA value), which is all {@link #blend}, {@link #isDark} and
+     * {@link #saturation} read. */
+    private static final class Palette {
+        final Color fg;
+        final Color bg;
+        final Color selFg;
+        final Color selBg;
+        final Color hoverFill;
+        final RowColors selected;
+        final RowColors hovered;
+        final RowColors plain;
+        final boolean selectionIsAccent;
+        final Color header;
+        final Color headerSecondary;
+
+        Palette(Color fg, Color bg, Color selFg, Color selBg) {
+            this.fg = fg;
+            this.bg = bg;
+            this.selFg = selFg;
+            this.selBg = selBg;
+            this.hoverFill = blend(fg, bg, 0.07);
+            // a look and feel may leave the selection colours unset; only a selected row reads them
+            this.selected = selFg != null && selBg != null ? RowColors.over(selFg, selBg, 0.72) : null;
+            this.hovered = RowColors.over(fg, hoverFill, 0.55);
+            this.plain = RowColors.over(fg, bg, 0.55);
+            this.selectionIsAccent = selBg != null && saturation(selBg) > 0.35f;
+            this.header = blend(fg, bg, 0.78);
+            this.headerSecondary = blend(fg, bg, 0.5);
+        }
+
+        boolean matches(Color fg, Color bg, Color selFg, Color selBg) {
+            return this.fg.equals(fg) && this.bg.equals(bg)
+                    && Objects.equals(this.selFg, selFg) && Objects.equals(this.selBg, selBg);
+        }
     }
 
     /** Empty past either end of the model, so the first and last rows read as
