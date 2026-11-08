@@ -55,7 +55,7 @@ public final class AotCache {
         CREATED("made; the next launch will use it"),
         /** Another copy of the app is making it. */
         BUSY("being made by another window"),
-        FAILED("could not be made (see the log)");
+        FAILED("not available with this Java version");
 
         private final String description;
 
@@ -98,6 +98,9 @@ public final class AotCache {
             usable = Files.size(path) > 0 && Files.getLastModifiedTime(path).toInstant().isBefore(jvmStart);
         } catch (IOException e) {
             // missing
+        }
+        if (!usable && Files.exists(failedMarker(path))) {
+            return new AotCache(path, State.FAILED);
         }
         return new AotCache(path, usable ? State.USED : State.MISSING);
     }
@@ -166,10 +169,15 @@ public final class AotCache {
                     state = State.CREATED;
                     return;
                 }
+                if (Files.exists(failedMarker(path))) {
+                    state = State.FAILED;
+                    return;
+                }
                 state = State.CREATING;
-                long started = System.nanoTime();
-                record(dir, mainClass);
+                // Older versions' caches (and leftovers) go first, whatever happens next.
                 deleteOthers(dir);
+                long started = System.nanoTime();
+                makeVerified(dir, mainClass);
                 state = State.CREATED;
                 LOG.info("AOT cache made in {} ms: {}", (System.nanoTime() - started) / 1_000_000, path);
             }
@@ -179,20 +187,58 @@ public final class AotCache {
         }
     }
 
-    /** Records a start (a JVM that builds the window without showing it), then assembles
-     * the cache from the recording; written beside the cache and moved into place. */
-    private void record(Path dir, String mainClass) throws IOException, InterruptedException {
+    /**
+     * A cache that the JVM fails to start with leaves the app unable to open at all (the
+     * JVM stops before any app code runs: JDK 26.0.2 does this with AOT-linked classes,
+     * "Unexpected exception when loading aot-linked classes"). So each cache is tried by a
+     * real start of the app with it before it is moved into place: first the full cache,
+     * then one without AOT-linked classes (most of the gain, and it works there). When
+     * neither starts, a marker keeps this version from trying again.
+     */
+    private void makeVerified(Path dir, String mainClass) throws IOException, InterruptedException {
+        IOException last = null;
+        for (boolean linking : new boolean[]{true, false}) {
+            try {
+                record(dir, mainClass, linking);
+                return;
+            } catch (IOException e) {
+                last = e;
+                LOG.info("AOT cache {} class linking was not usable: {}", linking ? "with" : "without", e.getMessage());
+            }
+        }
+        try {
+            Files.writeString(failedMarker(path), String.valueOf(last));
+        } catch (IOException e) {
+            LOG.debug("could not write {}: {}", failedMarker(path), e.toString());
+        }
+        throw last;
+    }
+
+    /** Beside the cache: this version's caches would not start, so none is made. */
+    static Path failedMarker(Path cache) {
+        return cache.resolveSibling(cache.getFileName() + ".failed");
+    }
+
+    /** Records a start (a JVM that builds the window without showing it), assembles the
+     * cache from the recording, and starts the app once more with it (the same window-less
+     * run) before moving it into place: a cache only replaces nothing once a JVM has
+     * started with it and exited cleanly. */
+    private void record(Path dir, String mainClass, boolean linking) throws IOException, InterruptedException {
         Path config = dir.resolve(path.getFileName() + ".config.tmp");
         Path partial = dir.resolve(path.getFileName() + ".tmp");
         Path scratch = Files.createTempDirectory("microhm-aot");
         try {
             List<String> base = baseCommand();
+            if (!linking) {
+                base.add("-XX:-AOTClassLinking");
+            }
             String classPath = System.getProperty("java.class.path");
+            List<String> appRun = List.of("-cp", classPath, mainClass, TRAIN_FLAG,
+                    "--registry=" + scratch.resolve("sessions.json"), "--mux-home=" + scratch.resolve("mux"));
 
             List<String> recordRun = new ArrayList<>(base);
-            recordRun.addAll(List.of("-XX:AOTMode=record", "-XX:AOTConfiguration=" + config,
-                    "-cp", classPath, mainClass, TRAIN_FLAG,
-                    "--registry=" + scratch.resolve("sessions.json"), "--mux-home=" + scratch.resolve("mux")));
+            recordRun.addAll(List.of("-XX:AOTMode=record", "-XX:AOTConfiguration=" + config));
+            recordRun.addAll(appRun);
             run(recordRun, "recording");
 
             List<String> createRun = new ArrayList<>(base);
@@ -203,6 +249,14 @@ public final class AotCache {
             if (!Files.isRegularFile(partial) || Files.size(partial) == 0) {
                 throw new IOException("the JVM wrote no cache");
             }
+
+            // The check: started exactly as the launcher starts (its options, which include
+            // no -XX:-AOTClassLinking), with the new cache.
+            List<String> checkRun = new ArrayList<>(baseCommand());
+            checkRun.add("-XX:AOTCache=" + partial);
+            checkRun.addAll(appRun);
+            run(checkRun, "check");
+
             Files.move(partial, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } finally {
             Files.deleteIfExists(config);
