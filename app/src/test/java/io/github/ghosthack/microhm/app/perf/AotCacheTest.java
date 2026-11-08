@@ -54,6 +54,13 @@ class AotCacheTest {
     }
 
     @Test
+    void aVersionWhoseCachesWouldNotStartIsNotTriedAgain() throws Exception {
+        Path path = dir.resolve("f.aot");
+        Files.writeString(AotCache.failedMarker(path), "no");
+        assertEquals(AotCache.State.FAILED, AotCache.detect(List.of("-XX:AOTCache=" + path), Instant.now()).state());
+    }
+
+    @Test
     void aCacheWrittenAfterTheLaunchWasNot() throws Exception {
         Path path = dir.resolve("c.aot");
         Files.write(path, new byte[]{1});
