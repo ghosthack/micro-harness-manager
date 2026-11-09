@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -465,6 +466,34 @@ class PtySessionTest {
         HeadlessTerminal replica = new HeadlessTerminal(80, 24, 0, bytes -> { });
         replica.apply(tokensOf(ansi.text().getBytes(StandardCharsets.UTF_8)));
         assertEquals(text.text(), replica.screenText());
+    }
+
+    @Test
+    void captureWithHistoryReturnsTheLinesScrolledOffAboveTheScreen() throws Exception {
+        session.sendKeys("i=1; while [ $i -le 60 ]; do echo row-$i; i=$((i+1)); done", true);
+        Await.until("the last row", () -> session.capture().text().contains("row-60"));
+        session.awaitQuiet(-1, 300, 5000);
+        Session.Capture plain = session.capture(CaptureFormat.TEXT);
+        assertNull(plain.history(), "none asked for");
+        Session.Capture all = session.capture(CaptureFormat.TEXT, 10_000);
+        assertEquals(plain.text(), all.text(), "the screen is the same either way");
+        String held = all.history().text();
+        assertTrue(held.contains("row-1\n"), held);
+        assertFalse(all.text().contains("row-1\n"), "row-1 has scrolled off the 24-row screen");
+        assertEquals(all.history().held(), held.split("\n", -1).length - 1, "every line held");
+        assertFalse(all.history().alternateScreen());
+        // history then screen reads as one continuous log
+        String joined = held + all.text();
+        for (int i = 1; i < 60; i++) {
+            assertTrue(joined.indexOf("row-" + i + "\n") < joined.indexOf("row-" + (i + 1) + "\n"), "row " + i);
+        }
+        Session.Capture three = session.capture(CaptureFormat.ANNOTATED, 3);
+        assertEquals(3, three.history().text().split("\n").length);
+        assertTrue(held.endsWith(three.history().text()), "the newest lines, just above the screen");
+        // since: each line once
+        Session.Capture since = session.captureSince(CaptureFormat.TEXT, 0);
+        assertEquals(held, since.history().text(), "nothing has fallen out of a 2000-line history");
+        assertEquals("", session.captureSince(CaptureFormat.TEXT, since.history().added()).history().text());
     }
 
     @Test

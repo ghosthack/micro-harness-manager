@@ -67,6 +67,26 @@ public final class Protocol {
     public static final String F_OUTPUT_BYTES = "outputBytes";
     /** {@code capture}: whether the program shows its cursor. */
     public static final String F_CURSOR_VISIBLE = "cursorVisible";
+    /** {@code capture} request: how many scrollback lines above the screen to include
+     * (0 or absent = none). A daemon that predates it ignores it, and its reply then has no
+     * {@link #F_HISTORY_SIZE}: that absence is how a client tells. */
+    public static final String F_HISTORY = "history";
+    /** {@code capture} request, instead of {@link #F_HISTORY}: the scrollback lines added
+     * after the first this many ever added (a previous reply's {@link #F_HISTORY_ADDED}),
+     * those still held. */
+    public static final String F_HISTORY_SINCE = "historySince";
+    /** {@code capture} reply, when history was asked for: the scrollback lines, oldest
+     * first, in the {@code text} format's shape (each ends with a newline). */
+    public static final String F_HISTORY_TEXT = "historyText";
+    /** {@code capture} reply, when history was asked for: the lines of scrollback the
+     * session holds in all. */
+    public static final String F_HISTORY_SIZE = "historySize";
+    /** {@code capture} reply, when history was asked for: the lines ever added to the
+     * scrollback (monotonic). */
+    public static final String F_HISTORY_ADDED = "historyAdded";
+    /** {@code capture} reply, when history was asked for: whether a full-screen program
+     * shows the alternate screen (which keeps no scrollback). */
+    public static final String F_ALTERNATE_SCREEN = "alternateScreen";
     /** {@code wait}: true when the output went quiet, false on timeout. */
     public static final String F_QUIET = "quiet";
     /** A {@code watch} stream entry: one of the {@code EVENT_*} names. */

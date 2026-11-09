@@ -70,7 +70,7 @@ public final class McpServer implements AutoCloseable {
     static final String INSTRUCTIONS = """
             micro-harness-manager lets you see and drive the other terminal sessions it hosts \
             (coding agents and shells running side by side with you).
-            - Start with `list` to see the sessions, their harness, state and transcript path.
+            - Start with `list` to see the sessions, their harness, state, transcript path and log path.
             - `read` is incremental and cheap: it returns only what changed since your last read \
             of that session (or "unchanged"); pass full=true for the whole screen.
             - Answer prompts and menus with `keys`, one step at a time, and read the screen it \
@@ -78,8 +78,10 @@ public final class McpServer implements AutoCloseable {
             - To wait for another session, use `notify` instead of polling with `read`: you get a \
             line typed into your session when the event happens.
             - The screen is only the visible terminal; a session's history lives in its transcript \
-            file (claude-code, codex, muse and grok have one: `list` and whole-screen reads give its \
-            path) — tail or grep it with your file tools rather than loading it whole.""";
+            file (claude-code, codex, muse and grok have one) and in a plain-text screen log kept \
+            in your own project's .microhm-sessions/ folder (any harness): `list` and whole-screen \
+            reads give both paths — tail or grep them with your file tools rather than loading \
+            them whole.""";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;

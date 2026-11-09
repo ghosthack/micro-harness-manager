@@ -154,6 +154,10 @@ public final class SessionController implements McpToolset {
      * their creation returning; guarded by itself. */
     private final Set<String> spawningDisplays = new HashSet<>();
 
+    private final SessionLogs logs = new SessionLogs();
+    /** The logs being kept, by file: whose, of which session, in which folder. */
+    private final ConcurrentHashMap<Path, Mirror> mirrors = new ConcurrentHashMap<>();
+
     private final Semaphore wake = new Semaphore(0);
     /** Guarded by {@code this}. */
     private Thread monitor;
@@ -256,6 +260,7 @@ public final class SessionController implements McpToolset {
             return "no sessions are running";
         }
         List<Target> targets = infos.stream().map(this::target).toList();
+        Optional<Path> callerDir = callerDir(caller, targets);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < infos.size(); i++) {
             Session.Info info = infos.get(i);
@@ -268,7 +273,8 @@ public final class SessionController implements McpToolset {
                     .append(" · ").append(target.harness().id())
                     .append(" · ").append(state)
                     .append(" · ").append(target.project())
-                    .append(" · transcript: ").append(transcript);
+                    .append(" · transcript: ").append(transcript)
+                    .append(" · log: ").append(logOf(caller, callerDir, target).map(Path::toString).orElse("-"));
             if (target.name().equals(caller)) {
                 sb.append(" (you)");
             }
@@ -286,9 +292,132 @@ public final class SessionController implements McpToolset {
             return target.name() + " · exited";
         }
         long pid = obs.get().capture().processId();
-        return render(caller, target, obs.get(), full, () -> transcriptOf(target, pid,
-                infos.stream().map(this::target).toList())
-                .map(where -> "… (earlier output is in the transcript, " + where + ": grep or tail it)"));
+        List<Target> all = infos.stream().map(this::target).toList();
+        Optional<Path> log = logOf(caller, callerDir(caller, all), target);
+        return render(caller, target, obs.get(), full, () -> earlierOutputNote(transcriptOf(target, pid, all), log));
+    }
+
+    /** Where a whole-screen read says the earlier output is; empty when nowhere. */
+    static Optional<String> earlierOutputNote(Optional<String> transcript, Optional<Path> log) {
+        if (transcript.isEmpty() && log.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of("… (earlier output is in " + transcript.map(t -> "the transcript, " + t
+                + (log.isPresent() ? ", and in " : "")).orElse("")
+                + log.map(l -> "the screen log, " + l).orElse("")
+                + ": grep or tail " + (transcript.isPresent() && log.isPresent() ? "them" : "it") + ")");
+    }
+
+    // ------------------------------------------------------------------ screen logs
+
+    /** Whose log, of which session, in which folder. */
+    private record Mirror(String caller, String session, Path dir) {
+    }
+
+    /** The project folder of the calling session, where its logs go; empty when the caller
+     * is not a running session with a project folder. */
+    private static Optional<Path> callerDir(String caller, List<Target> all) {
+        if (caller == null || caller.isBlank()) {
+            return Optional.empty();
+        }
+        return all.stream().filter(t -> t.name().equals(caller)).findFirst()
+                .map(Target::project)
+                .filter(p -> !p.equals("-"))
+                .map(Path::of)
+                .filter(Files::isDirectory);
+    }
+
+    /** {@code target}'s log for {@code caller}, brought up to date and kept so from now on;
+     * empty for the caller's own session, without a caller folder, or when it can't be
+     * written. */
+    private Optional<Path> logOf(String caller, Optional<Path> callerDir, Target target) {
+        if (callerDir.isEmpty() || target.name().equals(caller)) {
+            return Optional.empty();
+        }
+        Path file = SessionLogs.file(callerDir.get(), target.name());
+        Mirror mirror = new Mirror(caller, target.name(), callerDir.get());
+        mirrors.put(file, mirror);
+        try {
+            syncLog(file, mirror);
+            return Optional.of(file);
+        } catch (RuntimeException e) {
+            LOG.debug("could not write {}: {}", file, e.toString());
+            if (e instanceof Unreachable) {
+                return Optional.of(file);
+            }
+            mirrors.remove(file);
+            return Optional.empty();
+        }
+    }
+
+    /** Appends what is new in the mirrored session to its log; stops keeping a log whose
+     * session has ended (after its last lines). */
+    private void syncLog(Path file, Mirror mirror) {
+        SessionLogs.Log log = logs.open(mirror.dir(), mirror.session());
+        synchronized (log) {
+            Optional<Session.Capture> capture = captureForLog(mirror.session(), log.since());
+            if (capture.isPresent() && log.pid() != 0 && capture.get().processId() != log.pid()) {
+                log.restarted(capture.get().processId(), clock.instant());
+                capture = captureForLog(mirror.session(), 0);
+            }
+            if (capture.isEmpty()) {
+                if (!reachable()) {
+                    throw new Unreachable();
+                }
+                stopLog(file);
+                return;
+            }
+            log.record(capture.get(), clock.instant());
+            if (!capture.get().alive()) {
+                stopLog(file);
+            }
+        }
+    }
+
+    private void stopLog(Path file) {
+        mirrors.remove(file);
+        logs.close(file);
+    }
+
+    /** The screen as text with the scrollback added since {@code since}; just the screen
+     * from a daemon that predates scrollback reads (the log then copies screens). */
+    private Optional<Session.Capture> captureForLog(String name, long since) {
+        if (compat.has(DaemonCompat.Feature.HISTORY)) {
+            try {
+                return daemon.captureSince(name, CaptureFormat.TEXT, since);
+            } catch (RuntimeException e) {
+                if (!DaemonCompat.isUnsupported(e)) {
+                    throw e;
+                }
+                compat.markMissing(DaemonCompat.Feature.HISTORY);
+            }
+        }
+        return daemon.capture(name, CaptureFormat.TEXT);
+    }
+
+    /** One pass over the logs being kept: drops those whose caller has gone, and brings
+     * the rest up to date. */
+    private void syncLogs() {
+        if (mirrors.isEmpty()) {
+            return;
+        }
+        List<Session.Info> infos = daemon.list();
+        if (infos.isEmpty() && !reachable()) {
+            return;
+        }
+        Set<String> live = infos.stream().map(Session.Info::name).collect(Collectors.toSet());
+        for (Map.Entry<Path, Mirror> e : mirrors.entrySet()) {
+            Mirror mirror = e.getValue();
+            if (!live.contains(mirror.caller())) {
+                stopLog(e.getKey());
+                continue;
+            }
+            try {
+                syncLog(e.getKey(), mirror);
+            } catch (RuntimeException ex) {
+                LOG.debug("could not update {}: {}", e.getKey(), ex.toString());
+            }
+        }
     }
 
     /** The session's transcript as list shows it: the file, or — for a claude-code session
@@ -824,6 +953,7 @@ public final class SessionController implements McpToolset {
      * so tests drive it with a mutable clock instead of the background thread.
      */
     void tick() {
+        syncLogs();
         if (!hasPending()) {
             return;
         }
@@ -1434,7 +1564,7 @@ public final class SessionController implements McpToolset {
     static final String LIST_DESCRIPTION = """
             List the sessions you can see and drive: every terminal session \
             micro-harness-manager hosts (coding agents and shells), one per line:
-            `name · display name · harness · STATE · project · transcript: path`
+            `name · display name · harness · STATE · project · transcript: path · log: path`
             Your own session is marked (you). STATE is WORKING (busy, output changing), \
             WAITING_FOR_INPUT (a question, approval or menu waits for an answer) or IDLE (at its \
             prompt, or its harness is not running). Address a session by its name or display name.
@@ -1445,7 +1575,15 @@ public final class SessionController implements McpToolset {
             they get large. Where the replies are: claude-code rows with "type":"assistant"; codex \
             "type":"response_item" rows whose payload is an assistant message; muse \
             "assistant_message_committed" events (session.jsonl); grok rows with "type":"assistant" \
-            (chat_history.jsonl).""";
+            (chat_history.jsonl).
+            log is a plain-text copy of the session's output kept inside your own project, in \
+            .microhm-sessions/ (git-ignored), for any harness — use it when the transcript is \
+            outside what you may read, or for a shell. It holds the lines that scrolled off the \
+            screen (the screen itself is what read shows); for a full-screen program, a copy of \
+            the screen each time it settles, under `--- microhm · <time> · screen ---`. It is \
+            kept up to date from your first list or read on, starting with the scrollback the \
+            session still holds; older parts are beside it as <name>.0001.log.gz, .0002… \
+            (zgrep them). "-" when your session has no project folder.""";
 
     static final String READ_DESCRIPTION = """
             Show a session's terminal screen. The first line is \
@@ -1466,9 +1604,11 @@ public final class SessionController implements McpToolset {
             menu; `▮` is where the cursor is. If the header ends with `(old daemon: no \
             selection/cursor markers)` there are none. Output is capped at 8000 characters (oldest lines \
             dropped). Only the visible screen is shown. A reply showing the whole screen ends with \
-            `… (earlier output is in the transcript, <path>: grep or tail it)` when the session has \
-            one (claude-code, codex, muse, grok): for anything that scrolled off, such as the start \
-            of a long answer, grep or tail that file with your file tools — never load it whole. \
+            `… (earlier output is in the transcript, <path>, and in the screen log, <path>: grep \
+            or tail them)` — the harness's own transcript when it has one (claude-code, codex, \
+            muse, grok), and the plain-text log in your project's .microhm-sessions/ (see list): \
+            for anything that scrolled off, such as the start of a long answer, grep or tail \
+            either with your file tools — never load one whole. \
             Don't call read in a loop to wait for a session: use notify.""";
 
     static final String SEND_DESCRIPTION = """

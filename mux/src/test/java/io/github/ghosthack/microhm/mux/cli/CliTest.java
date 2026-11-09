@@ -182,6 +182,16 @@ class CliTest {
     }
 
     @Test
+    void historyOption() {
+        assertEquals(0, Cli.historyLines(Args.parse(List.of(), Set.of("--history"), Set.of())));
+        assertEquals(500, Cli.historyLines(Args.parse(List.of("--history", "500"), Set.of("--history"), Set.of())));
+        assertThrows(Args.UsageException.class,
+                () -> Cli.historyLines(Args.parse(List.of("--history=-1"), Set.of("--history"), Set.of())));
+        assertThrows(Args.UsageException.class,
+                () -> Cli.historyLines(Args.parse(List.of("--history=lots"), Set.of("--history"), Set.of())));
+    }
+
+    @Test
     void homeOptionOverridesTheDefaultEverywhere() {
         assertEquals(0, run("has", "foo", "--home=" + home));
         assertEquals("false", out().strip());

@@ -18,7 +18,7 @@ import java.util.function.Consumer;
  * such session, a refused request); the controller turns those into tool errors.
  *
  * <p>A daemon outlives app upgrades, so the one running may predate some of these calls
- * (input, wait, watch, label, capture formats other than text): it refuses them with a
+ * (input, wait, watch, label, capture formats other than text, capture history): it refuses them with a
  * {@code SessionServerException} whose {@code isUnsupported()} is true, and capture
  * reports {@code outputBytes} as -1 (unknown). The controller degrades on those.
  */
@@ -29,6 +29,12 @@ public interface DaemonControl {
 
     /** The screen in {@code format}; empty when the session (or the daemon) is gone. */
     Optional<Session.Capture> capture(String name, CaptureFormat format);
+
+    /** {@link #capture} plus the scrollback lines added after the first {@code since} ever
+     * added, those still held ({@link Session.Capture#history()}): pass back the previous
+     * capture's {@code added} to get each line once. A daemon that predates history refuses
+     * it as unsupported. */
+    Optional<Session.Capture> captureSince(String name, CaptureFormat format, long since);
 
     /** {@code text} (null = none) pasted or typed, then the named {@code keys} (null or
      * empty = none). An unknown key name fails before anything is written. */

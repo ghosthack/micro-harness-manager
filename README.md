@@ -30,8 +30,13 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
 - **Agents (MCP).** An optional MCP server whose tools (`list`, `read`, `send`, `keys`,
   `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. For
   output that has scrolled off the screen, `list` and whole-screen `read` replies give
-  the path of the harness's own transcript file (Claude Code, Codex, Muse and Grok), for
-  the agent to grep or tail. It is off by default: turn it on in Settings → Agents, and
+  two paths for the agent to grep or tail: the harness's own transcript file (Claude
+  Code, Codex, Muse and Grok), and a plain-text log of the session's output (any harness)
+  that the app keeps in the asking agent's own project, in `.microhm-sessions/`, so a
+  sandboxed agent can read it too. The log holds the lines that scrolled off (for a
+  full-screen program, a copy of the screen each time it settles); past 8,000 lines it
+  rolls into numbered `.log.gz` parts, and nothing is deleted. The folder ignores itself
+  for git. It is off by default: turn it on in Settings → Agents, and
   sessions created or resumed from then on get it registered. It keeps working after you
   quit the app: a small background
   host serves the same tools on the same port until the last session ends, and hands
@@ -149,7 +154,7 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,261 tests: vt 517, pty 32, mux 159, app 553. Each platform skips the
+`mvn test` runs 1,273 tests: vt 519, pty 32, mux 163, app 559. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
 

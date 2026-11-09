@@ -207,8 +207,9 @@ final class SessionControllerTest {
         String[] rows = list.split("\n");
         assertEquals(2, rows.length);
         assertTrue(rows[0].startsWith("mhm-api · API · codex · "), rows[0]);
-        assertTrue(rows[0].endsWith(" · /proj/mhm-api · transcript: " + Path.of("/codex/rollout-x.jsonl")), rows[0]);
-        assertEquals("mhm-sh · - · shell · IDLE · " + Path.of("/tmp/sh") + " · transcript: - (you)", rows[1]);
+        assertTrue(rows[0].endsWith(" · /proj/mhm-api · transcript: " + Path.of("/codex/rollout-x.jsonl")
+                + " · log: -"), "the caller's folder doesn't exist: " + rows[0]);
+        assertEquals("mhm-sh · - · shell · IDLE · " + Path.of("/tmp/sh") + " · transcript: - · log: - (you)", rows[1]);
     }
 
     @Test
@@ -222,10 +223,12 @@ final class SessionControllerTest {
         registry.put(SessionEntry.newlyCreated("mhm-solo", "/alone", HarnessType.CLAUDE_CODE, null));
 
         String[] rows = ok(null, "list", "{}").split("\n");
-        assertTrue(rows[0].endsWith("transcript: " + Path.of("/claude/shared/id-1.jsonl")), "its own file: " + rows[0]);
+        assertTrue(rows[0].endsWith("transcript: " + Path.of("/claude/shared/id-1.jsonl") + " · log: -"),
+                "its own file: " + rows[0]);
         assertTrue(rows[1].contains("transcript: " + Path.of("/claude/shared") + java.io.File.separator + " (id unknown"),
                 "the folder, not a guess: " + rows[1]);
-        assertTrue(rows[2].endsWith("transcript: " + Path.of("/claude/alone/newest.jsonl")), "alone in its project: " + rows[2]);
+        assertTrue(rows[2].endsWith("transcript: " + Path.of("/claude/alone/newest.jsonl") + " · log: -"),
+                "alone in its project: " + rows[2]);
     }
 
     @Test
@@ -280,6 +283,114 @@ final class SessionControllerTest {
         shell("mhm-sh").show(lines(1, 3));
         assertFalse(ok(null, "read", "{\"session\":\"mhm-sh\"}").contains("transcript"),
                 "no transcript, no note");
+    }
+
+    // ------------------------------------------------------------------ screen logs
+
+    /** A shell session working in a fresh folder of {@link #dir}: the caller whose logs go there. */
+    private Path callerIn(String name) throws Exception {
+        Path project = java.nio.file.Files.createDirectories(dir.resolve("project-" + name));
+        shell(name).show("$ ").workdir = project;
+        return project;
+    }
+
+    private static String read(Path file) throws Exception {
+        return java.nio.file.Files.readString(file);
+    }
+
+    @Test
+    void theCallersProjectGetsAPlainLogOfEachSessionsScrollbackEachLineOnce() throws Exception {
+        Path project = callerIn("mhm-me");
+        FakeDaemon.FakeSession s = daemon.add("mhm-m");
+        s.labels.put("harness", "muse");
+        s.show(lines(10, 12));
+        s.history = List.of("line 1", "line 2");
+
+        Path log = project.resolve(".microhm-sessions").resolve("mhm-m.log");
+        String list = ok("mhm-me", "list", "{}");
+        assertTrue(list.contains("mhm-m · - · muse · ") && list.contains(" · log: " + log), list);
+        assertTrue(list.contains(project + " · transcript: - · log: - (you)"),
+                "none of your own session: " + list);
+        assertEquals("line 1\nline 2\n", read(log), "the scrollback the session holds, at once");
+        assertEquals("*\n", read(project.resolve(".microhm-sessions/.gitignore")), "kept out of git");
+
+        s.history = List.of("line 1", "line 2", "line 3", "line 4");
+        controller.tick();
+        controller.tick();
+        assertEquals("line 1\nline 2\nline 3\nline 4\n", read(log), "kept up on the monitor's tick, each line once");
+
+        s.historyDropped = 10; // 10 more scrolled off; only the last 4 are still held
+        s.history = List.of("line 11", "line 12", "line 13", "line 14");
+        controller.tick();
+        assertTrue(read(log).endsWith("line 4\n--- microhm · " + clock.instant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
+                + " · 6 lines scrolled past before they could be copied ---\nline 11\nline 12\nline 13\nline 14\n"),
+                read(log));
+
+        String full = ok("mhm-me", "read", "{\"session\":\"mhm-m\",\"full\":true}");
+        assertTrue(full.endsWith("… (earlier output is in the transcript, " + Path.of("/muse/sessions/2026/11/08/m1/session.jsonl")
+                + ", and in the screen log, " + log + ": grep or tail them)"), full);
+
+        // a new session under the same name counts its scrollback afresh
+        s.processId = 5151;
+        s.historyDropped = 0;
+        s.history = List.of("fresh 1");
+        controller.tick();
+        assertTrue(read(log).endsWith("line 14\n--- microhm · " + clock.instant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
+                + " · a new session (pid 5151) ---\nfresh 1\n"), read(log));
+
+        // the session ends: its last lines, then no more
+        s.history = List.of("fresh 1", "bye");
+        s.alive = false;
+        controller.tick();
+        s.history = List.of("fresh 1", "bye", "never");
+        controller.tick();
+        assertTrue(read(log).endsWith("fresh 1\nbye\n"), read(log));
+    }
+
+    @Test
+    void aFullScreenProgramsLogGetsTheScreenEachTimeItSettlesOnSomethingNew() throws Exception {
+        Path project = callerIn("mhm-me");
+        FakeDaemon.FakeSession s = daemon.add("mhm-g");
+        s.labels.put("harness", "grok");
+        s.alternateScreen = true;
+        s.show("Grok\nthinking 1s\n\n");
+        Path log = project.resolve(".microhm-sessions").resolve("mhm-g.log");
+        ok("mhm-me", "read", "{\"session\":\"mhm-g\"}");
+        s.show("Grok\nthinking 2s\n");
+        controller.tick();
+        assertFalse(java.nio.file.Files.exists(log) && !read(log).isEmpty(), "still changing: nothing yet");
+        s.show("Grok\nThe answer is 42.\n\n");
+        controller.tick();
+        controller.tick();
+        controller.tick();
+        String stamp = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString();
+        assertEquals("--- microhm · " + stamp + " · screen ---\nGrok\nThe answer is 42.\n", read(log),
+                "once settled, once only");
+    }
+
+    @Test
+    void onADaemonWithoutScrollbackReadsTheLogCopiesSettledScreens() throws Exception {
+        Path project = callerIn("mhm-me");
+        daemon.noHistory = true;
+        shell("mhm-sh").show("$ make\nok\n");
+        Path log = project.resolve(".microhm-sessions").resolve("mhm-sh.log");
+        assertTrue(ok("mhm-me", "list", "{}").contains(" · log: " + log));
+        controller.tick();
+        assertTrue(read(log).endsWith(" · screen ---\n$ make\nok\n"), read(log));
+    }
+
+    @Test
+    void logsOfACallerThatEndedStop() throws Exception {
+        Path project = callerIn("mhm-me");
+        FakeDaemon.FakeSession s = shell("mhm-sh").show("$ ");
+        s.history = List.of("one");
+        ok("mhm-me", "list", "{}");
+        Path log = project.resolve(".microhm-sessions").resolve("mhm-sh.log");
+        assertEquals("one\n", read(log));
+        daemon.sessions.remove("mhm-me");
+        s.history = List.of("one", "two");
+        controller.tick();
+        assertEquals("one\n", read(log), "its caller is gone: no longer kept");
     }
 
     @Test

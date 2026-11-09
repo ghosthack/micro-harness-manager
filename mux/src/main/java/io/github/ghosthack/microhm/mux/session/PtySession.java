@@ -240,7 +240,23 @@ public final class PtySession implements Session {
 
     @Override
     public Capture capture(CaptureFormat format) {
+        return capture(format, t -> null);
+    }
+
+    @Override
+    public Capture capture(CaptureFormat format, int historyLines) {
+        return capture(format, t -> historyLines > 0 ? t.history(historyLines) : null);
+    }
+
+    @Override
+    public Capture captureSince(CaptureFormat format, long since) {
+        return capture(format, t -> t.historySince(since));
+    }
+
+    private Capture capture(CaptureFormat format,
+                            java.util.function.Function<HeadlessTerminal, HeadlessTerminal.History> scrollback) {
         String text;
+        HeadlessTerminal.History history;
         String title;
         int cols;
         int rws;
@@ -260,10 +276,12 @@ public final class PtySession implements Session {
             alive = !exited;
             bytes = outputBytes;
             cursorVisible = terminal.modes().cursorVisible();
+            history = scrollback.apply(terminal);
         }
         alive = alive && process.isAlive();
         String foreground = alive ? foregroundProbe.probe(process.pid(), bytes).command() : "";
-        return new Capture(text, alive, foreground, process.pid(), title, cols, rws, bytes, cursorVisible);
+        return new Capture(text, alive, foreground, process.pid(), title, cols, rws, bytes, cursorVisible,
+                history);
     }
 
     @Override
