@@ -27,8 +27,7 @@ import java.util.zip.GZIPOutputStream;
  *
  * <p>A session's log is {@code <session>.log}: the lines that scrolled off the top of its
  * screen, each once, in order. A full-screen program (the alternate screen) scrolls nothing
- * off, so for it — and for every session on a daemon that predates scrollback reads — the
- * log gets a copy of the screen each time it settles on something new, under a
+ * off, so for it the log gets a copy of the screen each time it settles on something new, under a
  * {@code --- microhm · <time> · screen ---} line. Other such lines mark a restarted session
  * and lines that scrolled past before they could be copied.
  *
@@ -128,22 +127,20 @@ final class SessionLogs {
             save();
         }
 
-        /** Appends what {@code capture} adds: its new scrollback, and a copy of the screen
-         * when it has settled on something new (or the session ended) and nothing scrolls
-         * off — the alternate screen, or a daemon that sends no scrollback (history null). */
+        /** Appends what {@code capture} (taken with its scrollback) adds: its new scrollback,
+         * and on the alternate screen, where nothing scrolls off, a copy of the screen when
+         * it has settled on something new (or the session ended). */
         void record(Session.Capture capture, Instant now) {
             StringBuilder out = new StringBuilder();
-            HeadlessTerminal.History history = capture.history();
-            if (history != null) {
-                long fresh = history.added() - Math.min(added, history.added());
-                long got = count(history.text());
-                if (fresh > got) {
-                    out.append(marker(now, (fresh - got) + " lines scrolled past before they could be copied"));
-                }
-                out.append(history.text());
-                added = history.added();
+            HeadlessTerminal.History history = java.util.Objects.requireNonNull(capture.history(), "history");
+            long fresh = history.added() - Math.min(added, history.added());
+            long got = count(history.text());
+            if (fresh > got) {
+                out.append(marker(now, (fresh - got) + " lines scrolled past before they could be copied"));
             }
-            if (history == null || history.alternateScreen()) {
+            out.append(history.text());
+            added = history.added();
+            if (history.alternateScreen()) {
                 String screen = withoutTrailingBlankLines(capture.text() == null ? "" : capture.text());
                 boolean settled = screen.equals(lastScreen) || !capture.alive();
                 if (settled && !screen.isBlank() && screen.hashCode() != snapshotHash) {

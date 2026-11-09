@@ -369,14 +369,15 @@ final class SessionControllerTest {
     }
 
     @Test
-    void onADaemonWithoutScrollbackReadsTheLogCopiesSettledScreens() throws Exception {
+    void aDaemonWithoutScrollbackReadsKeepsNoLog() throws Exception {
         Path project = callerIn("mhm-me");
         daemon.noHistory = true;
         shell("mhm-sh").show("$ make\nok\n");
-        Path log = project.resolve(".microhm-sessions").resolve("mhm-sh.log");
-        assertTrue(ok("mhm-me", "list", "{}").contains(" · log: " + log));
+        assertTrue(ok("mhm-me", "list", "{}").contains("mhm-sh · - · shell · "), "list still works");
+        assertTrue(ok("mhm-me", "list", "{}").lines().filter(l -> l.startsWith("mhm-sh")).findFirst().orElseThrow()
+                .endsWith(" · log: -"));
         controller.tick();
-        assertTrue(read(log).endsWith(" · screen ---\n$ make\nok\n"), read(log));
+        assertFalse(java.nio.file.Files.exists(project.resolve(".microhm-sessions").resolve("mhm-sh.log")));
     }
 
     @Test

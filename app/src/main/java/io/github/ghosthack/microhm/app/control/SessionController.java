@@ -379,20 +379,9 @@ public final class SessionController implements McpToolset {
         logs.close(file);
     }
 
-    /** The screen as text with the scrollback added since {@code since}; just the screen
-     * from a daemon that predates scrollback reads (the log then copies screens). */
+    /** The screen as text with the scrollback added since {@code since}. */
     private Optional<Session.Capture> captureForLog(String name, long since) {
-        if (compat.has(DaemonCompat.Feature.HISTORY)) {
-            try {
-                return daemon.captureSince(name, CaptureFormat.TEXT, since);
-            } catch (RuntimeException e) {
-                if (!DaemonCompat.isUnsupported(e)) {
-                    throw e;
-                }
-                compat.markMissing(DaemonCompat.Feature.HISTORY);
-            }
-        }
-        return daemon.capture(name, CaptureFormat.TEXT);
+        return daemon.captureSince(name, CaptureFormat.TEXT, since);
     }
 
     /** One pass over the logs being kept: drops those whose caller has gone, and brings
