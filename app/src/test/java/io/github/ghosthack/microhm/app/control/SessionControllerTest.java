@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -148,6 +149,10 @@ final class SessionControllerTest {
             def.inputSchema().path("properties").forEach(p ->
                     assertFalse(p.path("description").asText().isBlank(), def.name()));
         }
+        ToolDef read = controller.tools().get(1);
+        assertEquals("integer", read.inputSchema().path("properties").path("history").path("type").asText());
+        assertTrue(read.description().contains("history=N"), read.description());
+        assertTrue(controller.tools().get(0).description().contains("claude-code, codex, muse, grok"));
         ToolDef keys = controller.tools().get(3);
         assertTrue(keys.description().contains("C-c"));
         assertTrue(keys.description().contains("PageDown"));
@@ -257,6 +262,107 @@ final class SessionControllerTest {
 
         // seen-tracking is per caller: another reader starts with the whole screen
         assertEquals(12, ok("mhm-other", "read", "{\"session\":\"mhm-a\"}").split("\n").length);
+    }
+
+    /** {@code count} history lines {@code "old <i>"}, oldest first. */
+    private static List<String> olds(int count) {
+        return java.util.stream.IntStream.rangeClosed(1, count).mapToObj(i -> "old " + i).toList();
+    }
+
+    @Test
+    void historyReadsTheScrollbackDownIntoTheScreen() {
+        FakeDaemon.FakeSession s = shell("mhm-a").show("line A\n$ ▮\n");
+        s.history = olds(10);
+        String page = ok("mhm-me", "read", "{\"session\":\"mhm-a\",\"history\":4}");
+        List<String> rows = page.lines().toList();
+        assertTrue(rows.getFirst().startsWith("mhm-a · shell · "), rows.getFirst());
+        assertTrue(rows.getFirst().endsWith(" · scrollback lines 4–1 above the screen, of 10 held"), rows.getFirst());
+        assertEquals(List.of("old 7", "old 8", "old 9", "old 10", SessionController.SCREEN_STARTS, "line A", "$ ▮"),
+                rows.subList(1, rows.size()), "nothing left over: no continuation line");
+
+        String all = ok("mhm-me", "read", "{\"session\":\"mhm-a\",\"history\":2000}");
+        rows = all.lines().toList();
+        assertTrue(rows.getFirst().endsWith(" · scrollback lines 10–1 above the screen, of 10 held "
+                + "(you asked for 2000: this is the oldest kept)"), rows.getFirst());
+        assertEquals("old 1", rows.get(1));
+        assertEquals(List.of(4, 2000), daemon.historyRequests);
+    }
+
+    @Test
+    void historyPagesContinueUntilEveryLineIsRead() {
+        FakeDaemon.FakeSession s = shell("mhm-a").show("$ ▮\n");
+        String pad = "-".repeat(40);
+        List<String> history = java.util.stream.IntStream.rangeClosed(1, 1500)
+                .mapToObj(i -> "old " + i + " " + pad).toList();
+        s.history = history;
+        List<String> seenLines = new ArrayList<>();
+        int next = 2000;
+        int pages = 0;
+        while (true) {
+            String page = ok(null, "read", "{\"session\":\"mhm-a\",\"history\":" + next + "}");
+            pages++;
+            List<String> rows = page.lines().toList();
+            String body = page.substring(page.indexOf('\n') + 1);
+            assertTrue(body.length() <= SessionController.MAX_HISTORY_CHARS + 120, "" + body.length());
+            String last = rows.getLast();
+            if (last.contains("continue with history=")) {
+                seenLines.addAll(rows.subList(1, rows.size() - 1));
+                next = Integer.parseInt(last.replaceAll(".*history=(\\d+)\\)$", "$1"));
+                assertTrue(last.startsWith("… (" + next + " more scrollback lines before the screen"), last);
+            } else {
+                seenLines.addAll(rows.subList(1, rows.size()));
+                break;
+            }
+            assertTrue(pages < 10, "it ends");
+        }
+        assertTrue(pages > 1, "more than one page of 20000 characters");
+        List<String> expected = new ArrayList<>(history);
+        expected.add(SessionController.SCREEN_STARTS);
+        expected.add("$ ▮");
+        assertEquals(expected, seenLines, "every line once, in order");
+    }
+
+    @Test
+    void historyOfAFullScreenProgramSaysThereIsNoneAndPointsAtTheTranscript() {
+        shell("mhm-a").show("full screen ui\n");
+        String read = ok(null, "read", "{\"session\":\"mhm-a\",\"history\":100}");
+        assertTrue(read.contains(" · no scrollback above the screen"), read);
+        assertTrue(read.contains("transcript"), read);
+        assertFalse(read.contains("full screen ui"), "a history read, not a screen read");
+    }
+
+    @Test
+    void historyReadsLeaveTheIncrementalReadAlone() {
+        FakeDaemon.FakeSession s = shell("mhm-a").show(lines(1, 5));
+        s.history = olds(3);
+        ok("mhm-me", "read", "{\"session\":\"mhm-a\"}");
+        ok("mhm-me", "read", "{\"session\":\"mhm-a\",\"history\":3}");
+        assertTrue(ok("mhm-me", "read", "{\"session\":\"mhm-a\"}").endsWith(" · unchanged"));
+        assertTrue(ok("mhm-me", "read", "{\"session\":\"mhm-a\",\"history\":0}").endsWith(" · unchanged"),
+                "history=0 is a screen read");
+    }
+
+    @Test
+    void historyMustBeAWholeNonNegativeNumber() {
+        shell("mhm-a").show("x\n");
+        for (String bad : List.of("-1", "1.5", "\"10\"", "true", "99999999999")) {
+            String e = error(null, "read", "{\"session\":\"mhm-a\",\"history\":" + bad + "}");
+            assertTrue(e.startsWith("history must be a whole number"), bad + ": " + e);
+        }
+        assertTrue(daemon.historyRequests.isEmpty());
+    }
+
+    @Test
+    void historyFromADaemonThatPredatesItIsAClearErrorAskedOnce() {
+        shell("mhm-a").show("x\n");
+        daemon.noHistory = true;
+        String e = error(null, "read", "{\"session\":\"mhm-a\",\"history\":50}");
+        assertTrue(e.contains("needs a newer daemon"), e);
+        assertTrue(e.contains("transcript"), e);
+        assertEquals(1, daemon.unsupportedCalls.get());
+        error(null, "read", "{\"session\":\"mhm-a\",\"history\":50}");
+        assertEquals(1, daemon.unsupportedCalls.get(), "remembered: not asked again");
+        assertFalse(ok(null, "read", "{\"session\":\"mhm-a\"}").isBlank(), "screen reads still work");
     }
 
     @Test

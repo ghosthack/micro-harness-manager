@@ -78,7 +78,9 @@ final class JsonDecoding {
                 node.path(Protocol.F_COLUMNS).asInt(0),
                 node.path(Protocol.F_ROWS).asInt(0),
                 outputBytes(node),
-                node.path(Protocol.F_CURSOR_VISIBLE).asBoolean(true));
+                node.path(Protocol.F_CURSOR_VISIBLE).asBoolean(true),
+                node.has(Protocol.F_HISTORY_SIZE) ? text(node, Protocol.F_HISTORY_TEXT) : null,
+                node.path(Protocol.F_HISTORY_SIZE).asInt(0));
     }
 
     /** The byte counter, or -1 = unknown: the daemon predates the counter. */

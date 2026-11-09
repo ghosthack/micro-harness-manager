@@ -61,7 +61,7 @@ final class JsonEncoding {
     }
 
     static ObjectNode capture(Session.Capture capture, CaptureFormat format) {
-        return Json.ok()
+        ObjectNode reply = Json.ok()
                 .put(Protocol.F_TEXT, capture.text())
                 .put(Protocol.F_ALIVE, capture.alive())
                 .put(Protocol.F_FOREGROUND_COMMAND, capture.foregroundCommand())
@@ -72,6 +72,11 @@ final class JsonEncoding {
                 .put(Protocol.F_FORMAT, format.wireName())
                 .put(Protocol.F_OUTPUT_BYTES, capture.outputBytes())
                 .put(Protocol.F_CURSOR_VISIBLE, capture.cursorVisible());
+        if (capture.history() != null) {
+            reply.put(Protocol.F_HISTORY_TEXT, capture.history())
+                    .put(Protocol.F_HISTORY_SIZE, capture.historySize());
+        }
+        return reply;
     }
 
     /** An integer field with a default, tolerant of a missing or non-numeric value. */

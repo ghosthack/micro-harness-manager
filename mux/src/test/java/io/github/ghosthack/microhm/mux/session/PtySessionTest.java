@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -465,6 +466,28 @@ class PtySessionTest {
         HeadlessTerminal replica = new HeadlessTerminal(80, 24, 0, bytes -> { });
         replica.apply(tokensOf(ansi.text().getBytes(StandardCharsets.UTF_8)));
         assertEquals(text.text(), replica.screenText());
+    }
+
+    @Test
+    void captureWithHistoryReturnsTheLinesScrolledOffAboveTheScreen() throws Exception {
+        session.sendKeys("i=1; while [ $i -le 60 ]; do echo row-$i; i=$((i+1)); done", true);
+        Await.until("the last row", () -> session.capture().text().contains("row-60"));
+        session.awaitQuiet(-1, 300, 5000);
+        Session.Capture plain = session.capture(CaptureFormat.TEXT);
+        assertNull(plain.history(), "none asked for");
+        Session.Capture all = session.capture(CaptureFormat.TEXT, 10_000);
+        assertEquals(plain.text(), all.text(), "the screen is the same either way");
+        assertTrue(all.history().contains("row-1\n"), all.history());
+        assertFalse(all.text().contains("row-1\n"), "row-1 has scrolled off the 24-row screen");
+        assertEquals(all.historySize(), all.history().split("\n", -1).length - 1, "every line held");
+        // history then screen reads as one continuous log
+        String joined = all.history() + all.text();
+        for (int i = 1; i < 60; i++) {
+            assertTrue(joined.indexOf("row-" + i + "\n") < joined.indexOf("row-" + (i + 1) + "\n"), "row " + i);
+        }
+        Session.Capture three = session.capture(CaptureFormat.ANNOTATED, 3);
+        assertEquals(3, three.history().split("\n").length);
+        assertTrue(all.history().endsWith(three.history()), "the newest lines, just above the screen");
     }
 
     @Test

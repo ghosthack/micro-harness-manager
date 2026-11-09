@@ -33,6 +33,11 @@ public final class ClientDaemonControl implements DaemonControl {
     }
 
     @Override
+    public Optional<Session.Capture> capture(String name, CaptureFormat format, int historyLines) {
+        return client.capture(name, format, historyLines);
+    }
+
+    @Override
     public void input(String name, String text, boolean paste, boolean requireBracketedPaste, List<String> keys) {
         client.input(name, text, paste, requireBracketedPaste, keys);
     }

@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 /**
  * What the running daemon is known not to support. The daemon outlives app upgrades
  * — it keeps running until its last session ends — so the controller may talk to one that
- * predates input, wait, watch or annotated capture. The first refusal of a feature
+ * predates input, wait, watch, annotated capture or capture history. The first refusal of a feature
  * ({@link #isUnsupported}) is remembered for that daemon, identified by the pid its ping
  * reports, so the controller stops asking and takes its fallback at once; everything is
  * forgotten once a different daemon (or none) answers.
@@ -24,7 +24,7 @@ final class DaemonCompat {
 
     /** A protocol feature newer daemons have and old ones refuse. */
     enum Feature {
-        ANNOTATED_CAPTURE, INPUT, WAIT, WATCH
+        ANNOTATED_CAPTURE, INPUT, WAIT, WATCH, HISTORY
     }
 
     private final Supplier<OptionalLong> pid;

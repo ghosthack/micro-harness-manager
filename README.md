@@ -28,7 +28,10 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   quit it.
 - **Usage.** A budget panel and a usage dialog for the providers' plan limits.
 - **Agents (MCP).** An optional MCP server whose tools (`list`, `read`, `send`, `keys`,
-  `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. It is
+  `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. An
+  agent can always get a session's whole output: `read` pages through the terminal's
+  scrollback (`history`), and `list` points at the harness's own transcript file for
+  Claude Code, Codex, Muse and Grok (Grok, being full screen, has no scrollback). It is
   off by default: turn it on in Settings → Agents, and sessions created or resumed from
   then on get it registered. It keeps working after you quit the app: a small headless
   host serves the same tools on the same port until the last session ends, and hands
@@ -64,6 +67,7 @@ on demand from the same jar and keeps running after you quit the app.
 ```sh
 ./microhm-mux list               # list sessions
 ./microhm-mux capture mhm-foo    # print a session's screen as text
+./microhm-mux capture mhm-foo --history 2000   # ... with up to 2000 scrollback lines above it
 ./microhm-mux attach mhm-foo     # attach this terminal (Ctrl+] detaches; not on Windows)
 ./microhm-mux shutdown           # stop the daemon and every session on it
 ```
@@ -134,7 +138,7 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,146 tests: vt 463, pty 32, mux 154, app 497. Each platform skips the
+`mvn test` runs 1,198 tests: vt 467, pty 32, mux 163, app 536. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
 

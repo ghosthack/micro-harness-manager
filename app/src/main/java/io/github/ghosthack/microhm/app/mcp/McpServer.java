@@ -77,8 +77,10 @@ public final class McpServer implements AutoCloseable {
             returns before the next step.
             - To wait for another session, use `notify` instead of polling with `read`: you get a \
             line typed into your session when the event happens.
-            - The screen is only the visible terminal; a session's history lives in its transcript \
-            file — tail or grep it with your file tools rather than loading it whole.""";
+            - The screen is only the visible terminal. For what scrolled off it, page through the \
+            terminal's scrollback with `read` history=N, or tail/grep the session's transcript file \
+            (see `list`; claude-code, codex, muse and grok have one) with your file tools rather \
+            than loading it whole. Full-screen programs (grok) keep no scrollback: use the transcript.""";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;

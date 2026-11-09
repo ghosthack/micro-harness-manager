@@ -45,6 +45,27 @@ final class HarnessTranscriptsTest {
     }
 
     @Test
+    void museAndGrokAskTheirLocatorsWithThePanesPid() {
+        Path muse = dir.resolve("muse/sessions/2026/11/08/01a1/session.jsonl");
+        Path grok = dir.resolve("grok/sessions/%2Fp/01b2/chat_history.jsonl");
+        HarnessTranscripts transcripts = new HarnessTranscripts(dir.resolve("projects"),
+                new CodexSessionNameResolver(dir, pid -> Optional.empty()),
+                pid -> pid == 42 ? Optional.of(muse) : Optional.empty(),
+                pid -> pid == 43 ? Optional.of(grok) : Optional.empty());
+        assertEquals(Optional.of(muse), transcripts.transcript(HarnessType.MUSE, Path.of("/p"), Optional.empty(), 42));
+        assertEquals(Optional.empty(), transcripts.transcript(HarnessType.MUSE, Path.of("/p"), Optional.empty(), 43));
+        assertEquals(Optional.of(grok), transcripts.transcript(HarnessType.GROK, Path.of("/p"), Optional.empty(), 43));
+        assertEquals(Optional.empty(), transcripts.transcript(HarnessType.GROK, Path.of("/p"), Optional.empty(), -1),
+                "no pane pid, no lookup");
+        HarnessTranscripts failing = new HarnessTranscripts(dir, new CodexSessionNameResolver(dir, pid -> Optional.empty()),
+                pid -> {
+                    throw new IllegalStateException("lsof exploded");
+                }, pid -> Optional.empty());
+        assertEquals(Optional.empty(), failing.transcript(HarnessType.MUSE, Path.of("/p"), Optional.empty(), 42),
+                "never throws");
+    }
+
+    @Test
     void codexAsksTheResolverForThePanesOpenRollout() {
         Path rollout = dir.resolve("sessions/rollout-2026-01-01T00-00-00-0199a0b1-0000-7000-8000-000000000001.jsonl");
         HarnessTranscripts transcripts = new HarnessTranscripts(dir.resolve("projects"),

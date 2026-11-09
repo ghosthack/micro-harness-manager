@@ -77,6 +77,10 @@ public final class SessionController implements McpToolset {
     static final String LABEL_SPAWNED_BY = "spawned-by";
 
     static final int MAX_BODY_CHARS = 8000;
+    /** Cap on one page of a scrollback read ({@code read} with {@code history}). */
+    static final int MAX_HISTORY_CHARS = 20000;
+    /** The most scrollback lines one read asks the daemon for (it keeps 2000 by default). */
+    static final int MAX_HISTORY_REQUEST = 100_000;
     /** Cap on the changed lines a read shows when only status lines changed. */
     static final int MAX_STATUS_CHARS = 2000;
     static final String NOTICE_PREFIX = "[micro-harness-manager] ";
@@ -289,6 +293,10 @@ public final class SessionController implements McpToolset {
 
     private String read(String caller, JsonNode args) {
         Target target = resolve(requiredText(args, "session"));
+        int history = historyArgument(args);
+        if (history > 0) {
+            return readHistory(target, history);
+        }
         boolean full = args.path("full").asBoolean(false);
         Optional<Observation> obs = observe(target);
         if (obs.isEmpty()) {
@@ -500,6 +508,106 @@ public final class SessionController implements McpToolset {
 
     // ------------------------------------------------------------------ reading
 
+    /** read's {@code history}: 0 when absent (a screen read), else a positive line count. */
+    private static int historyArgument(JsonNode args) {
+        JsonNode node = args.get("history");
+        if (node == null || node.isNull()) {
+            return 0;
+        }
+        if (!node.isIntegralNumber() || !node.canConvertToInt() || node.asInt() < 0) {
+            throw new ToolError("history must be a whole number of lines above the screen (1 or more; "
+                    + "0 or absent reads the screen)");
+        }
+        return node.asInt();
+    }
+
+    /**
+     * One page of the session's scrollback, read downward from {@code linesAbove} lines
+     * above the top of the screen and running on into the screen while it fits
+     * {@link #MAX_HISTORY_CHARS}; a closing line says where the next page starts. It does
+     * not change what an incremental read compares against.
+     */
+    private String readHistory(Target target, int linesAbove) {
+        if (!compat.has(DaemonCompat.Feature.HISTORY)) {
+            throw new ToolError(historyNeedsNewerDaemon());
+        }
+        int wanted = Math.min(linesAbove, MAX_HISTORY_REQUEST);
+        Optional<Session.Capture> captured;
+        try {
+            captured = daemon.capture(target.name(), CaptureFormat.ANNOTATED, wanted);
+        } catch (RuntimeException e) {
+            if (!DaemonCompat.isUnsupported(e)) {
+                throw e;
+            }
+            compat.markMissing(DaemonCompat.Feature.HISTORY);
+            throw new ToolError(historyNeedsNewerDaemon());
+        }
+        Optional<Observation> observed = observe(target, captured.map(c -> new Captured(c, true)));
+        if (observed.isEmpty()) {
+            return target.name() + " · exited";
+        }
+        Observation obs = observed.get();
+        String header = header(target, obs);
+        int held = obs.capture().historySize();
+        List<String> history = obs.capture().history() == null ? List.of()
+                : obs.capture().history().lines().toList();
+        if (held == 0 || history.isEmpty()) {
+            return header + " · no scrollback above the screen: a full-screen program (one on the terminal's "
+                    + "alternate screen, as grok is) keeps none, nor does a session that cleared it. "
+                    + "Its transcript (see list) has the history; read without history for the screen.";
+        }
+        int start = history.size(); // lines above the screen this page starts at
+        List<String> screen = obs.body();
+        List<String> page = new ArrayList<>();
+        int used = 0;
+        int historyShown = 0;
+        for (String line : history) {
+            if (used + line.length() + 1 > MAX_HISTORY_CHARS && !page.isEmpty()) {
+                break;
+            }
+            page.add(line);
+            used += line.length() + 1;
+            historyShown++;
+        }
+        int screenShown = 0;
+        if (historyShown == history.size()) {
+            page.add(SCREEN_STARTS);
+            for (String line : screen) {
+                if (used + line.length() + 1 > MAX_HISTORY_CHARS) {
+                    break;
+                }
+                page.add(line);
+                used += line.length() + 1;
+                screenShown++;
+            }
+        }
+        StringBuilder sb = new StringBuilder(header)
+                .append(" · scrollback lines ").append(start).append('–').append(start - historyShown + 1)
+                .append(" above the screen, of ").append(held).append(" held");
+        if (linesAbove > start) {
+            sb.append(" (you asked for ").append(linesAbove).append(": this is the oldest kept)");
+        }
+        sb.append('\n').append(String.join("\n", page));
+        if (historyShown < history.size()) {
+            int next = start - historyShown;
+            sb.append("\n… (").append(next)
+                    .append(" more scrollback lines before the screen: continue with history=").append(next)
+                    .append(')');
+        } else if (screenShown < screen.size()) {
+            sb.append("\n… (").append(screen.size() - screenShown)
+                    .append(" more screen lines: read with full=true for the whole screen)");
+        }
+        return sb.toString();
+    }
+
+    /** The line a scrollback page puts between the scrollback and the screen. */
+    static final String SCREEN_STARTS = "… (the screen starts here)";
+
+    private String historyNeedsNewerDaemon() {
+        return "reading the scrollback (history) needs a newer daemon; the running one (pid " + compat.pid()
+                + ") predates it. " + OLD_DAEMON_REPLACED + " Until then read the transcript (see list).";
+    }
+
     /** The read-style answer for {@code obs}, recording what {@code caller} has now seen. */
     private String render(String caller, Target target, Observation obs, boolean full) {
         String header = header(target, obs);
@@ -570,7 +678,11 @@ public final class SessionController implements McpToolset {
 
     /** Captures the screen and classifies it; empty when the session is gone. */
     private Optional<Observation> observe(Target target) {
-        Optional<Captured> captured = capture(target.name());
+        return observe(target, capture(target.name()));
+    }
+
+    /** {@link #observe(Target)} of a capture already taken. */
+    private Optional<Observation> observe(Target target, Optional<Captured> captured) {
         if (captured.isEmpty()) {
             if (!reachable()) {
                 throw new Unreachable(); // not gone: the daemon may be restarting
@@ -1381,7 +1493,11 @@ public final class SessionController implements McpToolset {
                 new ToolDef(TOOL_READ, READ_DESCRIPTION, required(schema(
                         prop("session", "string", SESSION_ARG),
                         prop("full", "boolean", "true: return the whole screen even if you have seen it. "
-                                + "Default false: only what changed since your last read.")),
+                                + "Default false: only what changed since your last read."),
+                        prop("history", "integer", "Read the terminal's scrollback instead: start this many "
+                                + "lines above the top of the screen and read down (into the screen when it "
+                                + "fits). A large number, e.g. 2000, starts at the oldest line kept; the reply "
+                                + "ends with the history= value that continues it. Omit for a screen read.")),
                         "session")),
                 new ToolDef(TOOL_SEND, SEND_DESCRIPTION, required(schema(
                         prop("session", "string", SESSION_ARG),
@@ -1421,10 +1537,14 @@ public final class SessionController implements McpToolset {
             WAITING_FOR_INPUT (a question, approval or menu waits for an answer) or IDLE (at its \
             prompt, or its harness is not running). Address a session by its name or display name.
             transcript is the harness's own conversation log (JSONL) when micro-harness-manager can find \
-            it (claude-code, codex), else "-" — or, when it can't tell which file is a session's, \
-            the folder with a note saying so. History lives there, not on screen: search it with \
-            your file tools (grep, tail, read a line range) — never load a whole transcript, they \
-            get large.""";
+            it (claude-code, codex, muse, grok), else "-" — or, when it can't tell which file is a \
+            session's, the folder with a note saying so. History lives there, not on screen: search \
+            it with your file tools (grep, tail, read a line range) — never load a whole transcript, \
+            they get large. Where the replies are: claude-code rows with "type":"assistant"; codex \
+            "type":"response_item" rows whose payload is an assistant message; muse \
+            "assistant_message_committed" events (session.jsonl); grok rows with "type":"assistant" \
+            (chat_history.jsonl). Without a transcript, read with history=N pages through the \
+            terminal's scrollback.""";
 
     static final String READ_DESCRIPTION = """
             Show a session's terminal screen. The first line is \
@@ -1444,8 +1564,15 @@ public final class SessionController implements McpToolset {
             Markers: a line starting with `▶ ` is highlighted — usually the selected option of a \
             menu; `▮` is where the cursor is. If the header ends with `(old daemon: no \
             selection/cursor markers)` there are none. Output is capped at 8000 characters (oldest lines \
-            dropped). Only the visible screen is shown; for earlier history read the transcript \
-            (see list). Don't call read in a loop to wait for a session: use notify.""";
+            dropped). Don't call read in a loop to wait for a session: use notify.
+            Earlier output: what scrolled off the top of the screen is not in a screen read. Pass \
+            history=N to page through the terminal's scrollback instead: lines from N above the \
+            screen downward, up to 20000 characters a page, ending with the history= value that \
+            continues (history=2000 starts at the oldest line kept). Use it to get the whole of a \
+            long answer from any harness that prints into the terminal (claude-code, codex, muse, \
+            shells, …). Full-screen programs such as grok keep no scrollback; for them, and for \
+            anything older than the scrollback, read the transcript (see list). A history read does \
+            not change what the next incremental read compares against.""";
 
     static final String SEND_DESCRIPTION = """
             Type a message into another session, as a user would at its prompt, and press Enter \
