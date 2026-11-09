@@ -677,6 +677,34 @@ class SessionServerTest {
     }
 
     @Test
+    void captureHistoryIsTheNewestScrollbackAndOnlyWhenAskedFor() throws Exception {
+        client.newSession("h", home, 80, 24, null);
+        FakeSession fake = manager.session("h");
+        Session.Capture none = client.capture("h", CaptureFormat.ANNOTATED, 0).orElseThrow();
+        assertEquals(FakeSession.ANNOTATED_TEXT, none.text());
+        assertNull(none.history(), "none asked for, none sent");
+        Session.Capture two = client.capture("h", CaptureFormat.ANNOTATED, 2).orElseThrow();
+        assertEquals(FakeSession.ANNOTATED_TEXT, two.text(), "the screen is unchanged");
+        assertEquals("old 2\nold 3\n", two.history().text());
+        assertEquals(3, two.history().held());
+        assertEquals(3, two.history().added());
+        assertEquals("old 1\nold 2\nold 3\n",
+                client.capture("h", CaptureFormat.TEXT, 50).orElseThrow().history().text());
+        assertEquals("old 3\n", client.captureSince("h", CaptureFormat.TEXT, 2).orElseThrow().history().text());
+        assertEquals("", client.captureSince("h", CaptureFormat.TEXT, 3).orElseThrow().history().text());
+        assertEquals(List.of(2L, 3L), fake.sinceRequests);
+        assertEquals(List.of(2, 50), fake.historyRequests);
+
+        JsonNode plain = raw("{\"op\":\"capture\",\"protocol\":1,\"name\":\"h\"}");
+        assertFalse(plain.has(Protocol.F_HISTORY_SIZE), "no history fields unless asked");
+        assertFalse(plain.has(Protocol.F_HISTORY_TEXT));
+        JsonNode negative = raw("{\"op\":\"capture\",\"protocol\":1,\"name\":\"h\",\"history\":-4}");
+        assertTrue(negative.get(Protocol.F_OK).asBoolean());
+        assertFalse(negative.has(Protocol.F_HISTORY_SIZE), "a negative count is none");
+        assertEquals(List.of(2, 50), fake.historyRequests);
+    }
+
+    @Test
     void waitPassesClampedArgumentsAndReturnsTheResult() throws Exception {
         client.newSession("w", home, 80, 24, null);
         FakeSession fake = manager.session("w");

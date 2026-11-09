@@ -4,6 +4,7 @@ import io.github.ghosthack.microhm.mux.protocol.Protocol;
 import io.github.ghosthack.microhm.mux.session.CaptureFormat;
 import io.github.ghosthack.microhm.mux.session.Session;
 import io.github.ghosthack.microhm.mux.session.SessionEvent;
+import io.github.ghosthack.microhm.vt.HeadlessTerminal;
 import io.github.ghosthack.microhm.vt.KeyNames;
 
 import java.io.ByteArrayOutputStream;
@@ -31,6 +32,8 @@ final class FakeSession implements Session {
     static final String CAPTURE_TEXT = "captured screen\n";
     static final String ANNOTATED_TEXT = "▶ captured screen▮\n";
     static final String ANSI_TEXT = "\u001b[0mcaptured screen\n";
+    /** The scrollback a history capture returns lines of (newest last). */
+    static final List<String> HISTORY = List.of("old 1", "old 2", "old 3");
 
     /** One {@link #awaitQuiet} call as the server made it. */
     record Wait(long sinceBytes, long quietMs, long timeoutMs) {
@@ -56,6 +59,10 @@ final class FakeSession implements Session {
     final List<List<String>> inputs = new CopyOnWriteArrayList<>();
     final List<Wait> waits = new CopyOnWriteArrayList<>();
     final List<CaptureFormat> captureFormats = new CopyOnWriteArrayList<>();
+    /** The historyLines of every history capture (only those asking for some). */
+    final List<Integer> historyRequests = new CopyOnWriteArrayList<>();
+    /** The since of every {@link #captureSince}. */
+    final List<Long> sinceRequests = new CopyOnWriteArrayList<>();
     final List<Watcher> watchers = new CopyOnWriteArrayList<>();
     final AtomicLong outputBytes = new AtomicLong();
     private final Map<String, String> labels = new TreeMap<>(); // guarded by lock
@@ -182,6 +189,29 @@ final class FakeSession implements Session {
             case ANSI -> ANSI_TEXT;
         };
         return new Capture(text, alive, "sh", 4242, "the title", columns, rows, outputBytes.get(), false);
+    }
+
+    @Override
+    public Capture capture(CaptureFormat format, int historyLines) {
+        Capture screen = capture(format);
+        if (historyLines <= 0) {
+            return screen;
+        }
+        historyRequests.add(historyLines);
+        return screen.withHistory(history(Math.max(0, HISTORY.size() - historyLines)));
+    }
+
+    @Override
+    public Capture captureSince(CaptureFormat format, long since) {
+        sinceRequests.add(since);
+        return capture(format).withHistory(history(since > HISTORY.size() ? 0 : (int) since));
+    }
+
+    /** {@link #HISTORY} from line {@code from} on, every line held and added. */
+    private static HeadlessTerminal.History history(int from) {
+        StringBuilder text = new StringBuilder();
+        HISTORY.subList(from, HISTORY.size()).forEach(line -> text.append(line).append('\n'));
+        return new HeadlessTerminal.History(text.toString(), HISTORY.size(), HISTORY.size(), false);
     }
 
     @Override

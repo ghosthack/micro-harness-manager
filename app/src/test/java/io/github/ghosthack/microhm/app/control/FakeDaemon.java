@@ -5,6 +5,7 @@ import io.github.ghosthack.microhm.mux.protocol.Protocol;
 import io.github.ghosthack.microhm.mux.session.CaptureFormat;
 import io.github.ghosthack.microhm.mux.session.Session;
 import io.github.ghosthack.microhm.mux.session.SessionEvent;
+import io.github.ghosthack.microhm.vt.HeadlessTerminal;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -36,6 +37,14 @@ final class FakeDaemon implements DaemonControl {
         boolean alive = true;
         /** Whether its program enabled bracketed paste (DEC 2004), as agents do. */
         boolean bracketedPaste = true;
+        /** The scrollback above the screen, oldest first. */
+        List<String> history = List.of();
+        /** Scrollback lines that fell out before {@link #history}: added = this + its size. */
+        long historyDropped;
+        /** Whether a full-screen program shows the alternate screen. */
+        boolean alternateScreen;
+        /** The pid capture reports. */
+        long processId = 4242;
 
         FakeSession(String name) {
             this.name = name;
@@ -76,6 +85,10 @@ final class FakeDaemon implements DaemonControl {
     volatile Runnable afterList = () -> { };
     /** Plays a daemon that predates everything but list/capture-text/send-keys/kill. */
     volatile boolean old;
+    /** Plays a daemon that has everything but capture history. */
+    volatile boolean noHistory;
+    /** The since of every history capture. */
+    final List<Long> historyRequests = new CopyOnWriteArrayList<>();
     /** What ping reports; -1 = no daemon answers. */
     volatile long pid = 100;
     final AtomicInteger pings = new AtomicInteger();
@@ -130,8 +143,26 @@ final class FakeDaemon implements DaemonControl {
             throw new SessionServerException("capture failed: java.io.IOException: Broken pipe");
         }
         String text = format == CaptureFormat.TEXT ? ScreenDiff.plain(s.text) : s.text;
-        return Optional.of(new Session.Capture(text, s.alive, s.foreground, 4242, s.title, 120, 32,
+        return Optional.of(new Session.Capture(text, s.alive, s.foreground, s.processId, s.title, 120, 32,
                 old ? -1 : s.outputBytes, true));
+    }
+
+    @Override
+    public synchronized Optional<Session.Capture> captureSince(String name, CaptureFormat format, long since) {
+        FakeSession s = sessions.get(name);
+        if (s != null && !down && (old || noHistory)) {
+            throw unsupported("capture history");
+        }
+        historyRequests.add(since);
+        return capture(name, format).map(c -> {
+            long added = s.historyDropped + s.history.size();
+            long start = since < 0 || since > added ? 0 : since;
+            int n = (int) Math.min(added - start, s.history.size());
+            StringBuilder text = new StringBuilder();
+            s.history.subList(s.history.size() - n, s.history.size()).forEach(line -> text.append(line).append('\n'));
+            return c.withHistory(new HeadlessTerminal.History(text.toString(), s.history.size(), added,
+                    s.alternateScreen));
+        });
     }
 
     @Override

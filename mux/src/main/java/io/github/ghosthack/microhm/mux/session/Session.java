@@ -2,6 +2,8 @@ package io.github.ghosthack.microhm.mux.session;
 
 import io.github.ghosthack.microhm.mux.protocol.Protocol;
 
+import io.github.ghosthack.microhm.vt.HeadlessTerminal;
+
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Collections;
@@ -89,9 +91,25 @@ public interface Session {
 
     /** Foreground command, PID and title as {@code capture} reports them, plus the byte
      * counter the text corresponds to (-1 = unknown: the daemon predates the counter) and
-     * whether the cursor is shown. */
+     * whether the cursor is shown. {@code history} is the scrollback above the screen that
+     * a {@link #capture(CaptureFormat, int)} or {@link #captureSince} asked for, with its
+     * counters; null when none was asked for (or the daemon predates history). */
     record Capture(String text, boolean alive, String foregroundCommand, long processId,
-                   String title, int columns, int rows, long outputBytes, boolean cursorVisible) {
+                   String title, int columns, int rows, long outputBytes, boolean cursorVisible,
+                   HeadlessTerminal.History history) {
+
+        /** Without history (no scrollback asked for). */
+        public Capture(String text, boolean alive, String foregroundCommand, long processId,
+                       String title, int columns, int rows, long outputBytes, boolean cursorVisible) {
+            this(text, alive, foregroundCommand, processId, title, columns, rows, outputBytes, cursorVisible,
+                    null);
+        }
+
+        /** This capture with {@code history} attached. */
+        public Capture withHistory(HeadlessTerminal.History history) {
+            return new Capture(text, alive, foregroundCommand, processId, title, columns, rows, outputBytes,
+                    cursorVisible, history);
+        }
 
         /** Without the byte counter and cursor visibility (callers that predate them). */
         public Capture(String text, boolean alive, String foregroundCommand, long processId,
@@ -143,6 +161,26 @@ public interface Session {
 
     /** The visible screen in {@code format}, taken under the session lock. */
     Capture capture(CaptureFormat format);
+
+    /** {@link #capture(CaptureFormat)} plus up to {@code historyLines} lines of the
+     * scrollback just above the screen, as plain text, taken together. 0 = none (the
+     * capture's {@code history} is then null). Default: no scrollback kept, so an empty
+     * history. */
+    default Capture capture(CaptureFormat format, int historyLines) {
+        Capture screen = capture(format);
+        return historyLines > 0 ? screen.withHistory(NO_HISTORY) : screen;
+    }
+
+    /** {@link #capture(CaptureFormat)} plus the scrollback lines added after the first
+     * {@code since} ever added (see {@link HeadlessTerminal#historySince}), taken together:
+     * a reader that passes back the {@code added} it got sees each line once. Default: no
+     * scrollback kept. */
+    default Capture captureSince(CaptureFormat format, long since) {
+        return capture(format).withHistory(NO_HISTORY);
+    }
+
+    /** The history of a session that keeps none. */
+    HeadlessTerminal.History NO_HISTORY = new HeadlessTerminal.History("", 0, 0, false);
 
     /** Raw PTY bytes read so far (before any filtering); monotonic. */
     long outputBytes();

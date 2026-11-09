@@ -151,8 +151,11 @@ final class RequestDispatcher {
         if (format.isEmpty()) {
             return Json.error("unknown capture format: " + formatName + " (text, annotated or ansi)");
         }
-        return withSession(request, session ->
-                JsonEncoding.capture(session.capture(format.get()), format.get()));
+        int history = Math.max(0, JsonEncoding.intField(request, Protocol.F_HISTORY, 0));
+        long since = JsonEncoding.longField(request, Protocol.F_HISTORY_SINCE, -1);
+        return withSession(request, session -> JsonEncoding.capture(since >= 0
+                ? session.captureSince(format.get(), since)
+                : session.capture(format.get(), history), format.get()));
     }
 
     private ObjectNode label(JsonNode request) {

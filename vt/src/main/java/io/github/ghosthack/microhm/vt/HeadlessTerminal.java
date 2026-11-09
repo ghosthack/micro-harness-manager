@@ -125,6 +125,49 @@ public final class HeadlessTerminal implements AutoCloseable {
         }
     }
 
+    /** Scrollback lines above the main screen, oldest first, in {@link #screenText()}'s
+     * shape (one row per line, trailing whitespace trimmed, each ending with {@code \n});
+     * {@code held} is how many lines the history holds, {@code added} how many have ever
+     * scrolled into it (monotonic: the oldest falling out of a full history or a clear does
+     * not lower it), and {@code alternateScreen} whether a full-screen program is showing
+     * (the main screen's history then stays as it was). */
+    public record History(String text, int held, long added, boolean alternateScreen) {
+    }
+
+    /** The newest {@code maxLines} history lines (fewer when it holds fewer). */
+    public History history(int maxLines) {
+        emulator.lock().lock();
+        try {
+            return historyLocked(Math.max(0, maxLines));
+        } finally {
+            emulator.lock().unlock();
+        }
+    }
+
+    /** The history lines added after the first {@code since} ever added, those still held:
+     * a reader that keeps {@link History#added()} gets each line once by passing it back.
+     * A {@code since} beyond {@code added} (another session's count) is taken as 0. */
+    public History historySince(long since) {
+        emulator.lock().lock();
+        try {
+            long added = emulator.historyLinesAdded();
+            long start = since < 0 || since > added ? 0 : since;
+            return historyLocked((int) Math.min(added - start, Integer.MAX_VALUE));
+        } finally {
+            emulator.lock().unlock();
+        }
+    }
+
+    private History historyLocked(int maxLines) {
+        int held = emulator.mainHistorySize();
+        int n = Math.min(maxLines, held);
+        StringBuilder sb = new StringBuilder();
+        for (int i = -n; i < 0; i++) {
+            sb.append(trimTrailing(emulator.mainLine(i).toString())).append('\n');
+        }
+        return new History(sb.toString(), held, emulator.historyLinesAdded(), emulator.alternateScreen());
+    }
+
     /**
      * {@link #screenText()} with two hints a reader of plain text would otherwise lose:
      * <ul>

@@ -301,9 +301,43 @@ public final class SessionServerClient {
     /** {@link #capture(String, CaptureFormat)} plus the server's echoed format (a daemon
      * that predates formats only ever sends {@link CaptureFormat#TEXT}). */
     public Optional<FormattedCapture> captureWithFormat(String name, CaptureFormat format) {
+        return captureWithFormat(name, format, 0);
+    }
+
+    /** {@link #capture(String, CaptureFormat)} plus up to {@code historyLines} lines of the
+     * scrollback above the screen ({@link Session.Capture#history()}). A daemon that
+     * predates history answers without it; asking it for history ({@code historyLines > 0})
+     * then throws {@link SessionServerException#unsupported}. */
+    public Optional<Session.Capture> capture(String name, CaptureFormat format, int historyLines) {
+        return captureWithFormat(name, format, historyLines).map(FormattedCapture::capture);
+    }
+
+    /** {@link #capture(String, CaptureFormat, int)} plus the server's echoed format. */
+    public Optional<FormattedCapture> captureWithFormat(String name, CaptureFormat format, int historyLines) {
+        return captureWithFormat(name, format, historyLines > 0 ? Protocol.F_HISTORY : null, historyLines);
+    }
+
+    /** {@link #capture(String, CaptureFormat)} plus the scrollback lines added after the
+     * first {@code since} ever added, those the session still holds: pass back the
+     * previous reply's {@link io.github.ghosthack.microhm.vt.HeadlessTerminal.History#added()}
+     * to get each line once. A daemon that predates history throws
+     * {@link SessionServerException#unsupported}. */
+    public Optional<Session.Capture> captureSince(String name, CaptureFormat format, long since) {
+        return captureWithFormat(name, format, Protocol.F_HISTORY_SINCE, Math.max(0, since))
+                .map(FormattedCapture::capture);
+    }
+
+    /** A capture whose request carries {@code historyField} = {@code historyValue} (none
+     * when the field is null). */
+    private Optional<FormattedCapture> captureWithFormat(String name, CaptureFormat format, String historyField,
+                                                         long historyValue) {
         Optional<JsonNode> reply;
         try {
-            reply = request(Protocol.OP_CAPTURE, named(name).put(Protocol.F_FORMAT, format.wireName()));
+            ObjectNode query = named(name).put(Protocol.F_FORMAT, format.wireName());
+            if (historyField != null) {
+                query.put(historyField, historyValue);
+            }
+            reply = request(Protocol.OP_CAPTURE, query);
         } catch (SessionServerException e) {
             if (e.getMessage() != null && e.getMessage().startsWith("no such session")) {
                 return Optional.empty();
@@ -317,6 +351,9 @@ public final class SessionServerClient {
             if (actual != format) {
                 throw SessionServerException.unsupported("capture format " + format.wireName()
                         + (echoed.isEmpty() ? "" : " (it answered " + echoed + ")"));
+            }
+            if (historyField != null && !node.has(Protocol.F_HISTORY_ADDED)) {
+                throw SessionServerException.unsupported("capture history");
             }
             return new FormattedCapture(JsonDecoding.capture(node), actual);
         });

@@ -79,7 +79,18 @@ public final class GrokPlugin implements HarnessPlugin {
                     + "|ctrl\\+x:shortcuts"
                     + "|esc:cancel"
                     + "|enter:send"
-                    + "|^\\s*worked for [0-9.]+s\\s*$)");
+                    + "|^\\s*worked for [0-9.]+s\\s*$"
+                    // the in-flight status row, e.g. "⠙ Responding… 3.6s   10s ⇣1.68k [stop]"
+                    + "|^\\s*[\\u2800-\\u28ff]\\s"
+                    + "|\\[stop\\]\\s*$"
+                    // the header's context counter, e.g. "1.3K / 256K │ [Dashboard]"
+                    + "|\\d[\\d.]*[km]? / \\d[\\d.]*[km]\\b"
+                    // the "more above" arrow of the scrolled answer pane
+                    + "|^\\s*[▲▼]\\s*$)");
+
+    /** The answer pane's scrollbar: a block in the last column of the rows it spans, which
+     * moves as the pane scrolls — verified live at 120 columns. */
+    private static final Pattern SCROLLBAR = Pattern.compile("\\s*[█▐▌]\\s*$");
 
     /** The idle hint bar carries both legends with no "Esc:cancel" between them — verified
      * live as "Shift+Tab:mode  │  Ctrl+x:shortcuts". */
@@ -165,12 +176,12 @@ public final class GrokPlugin implements HarnessPlugin {
     }
 
     /** Each bubble's flush-right clock stripped (see {@link #TRAILING_CLOCK}), then every
-     * {@link #CHROME} line dropped — the composer box, hint bars, activity rows and the
-     * "Worked for Ns" footer. */
+     * {@link #CHROME} line dropped — the composer box, hint bars, activity and status rows,
+     * the context counter and the "Worked for Ns" footer — and the scrollbar column cut. */
     @Override
     public String maskChrome(String screenText) {
         return ScreenMask.join(ScreenMask.lines(stripVolatile(screenText)).stream()
-                .map(GrokPlugin::stripTrailingClock)
+                .map(line -> stripTrailingClock(SCROLLBAR.matcher(line).replaceAll("")))
                 .filter(line -> !CHROME.matcher(ScreenMask.plain(line)).find())
                 .toList());
     }

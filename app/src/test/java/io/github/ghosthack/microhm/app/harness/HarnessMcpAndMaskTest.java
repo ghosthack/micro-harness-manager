@@ -217,6 +217,26 @@ final class HarnessMcpAndMaskTest {
     }
 
     @Test
+    void grokMaskDropsTheStatusRowCounterAndScrollArrowAndCutsTheScrollbar() {
+        HarnessPlugin grok = HarnessPlugins.of(HarnessType.GROK);
+        // as recorded live at 120 columns, mid-answer
+        String working = """
+                  /p/t/c/-/5/scratchpad/grokprobe                                      19K / 256K │ [Dashboard]
+
+                                                                           ▲
+                     99. Sperm whales can dive for more than an hour.
+                    100. Narwhals are Arctic whales known for a long spiral tusk.      █
+                                                                                       █
+                   ⠙ Responding… 3.6s                                          10s ⇣1.68k [stop]
+                """;
+        String masked = "     99. Sperm whales can dive for more than an hour.\n"
+                + "    100. Narwhals are Arctic whales known for a long spiral tusk.";
+        assertEquals(masked, grok.maskChrome(working));
+        assertEquals(masked, grok.maskChrome(working.replace("19K", "21K").replace("⠙ Responding… 3.6s", "⠴ Responding… 5.3s")
+                .replace("tusk.      █", "tusk.       ")), "spinner, counter and scrollbar moves are no change");
+    }
+
+    @Test
     void cursorAgentMaskDropsTheFollowUpBoxAndStatusLines() {
         HarnessPlugin cursor = HarnessPlugins.of(HarnessType.CURSOR_AGENT);
         String idle = """

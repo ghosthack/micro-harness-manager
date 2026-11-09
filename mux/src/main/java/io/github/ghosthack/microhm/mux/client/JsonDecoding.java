@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.github.ghosthack.microhm.mux.protocol.Protocol;
 import io.github.ghosthack.microhm.mux.session.Session;
 import io.github.ghosthack.microhm.mux.session.SessionEvent;
+import io.github.ghosthack.microhm.vt.HeadlessTerminal;
 
 import java.nio.file.Path;
 import java.time.Instant;
@@ -78,7 +79,12 @@ final class JsonDecoding {
                 node.path(Protocol.F_COLUMNS).asInt(0),
                 node.path(Protocol.F_ROWS).asInt(0),
                 outputBytes(node),
-                node.path(Protocol.F_CURSOR_VISIBLE).asBoolean(true));
+                node.path(Protocol.F_CURSOR_VISIBLE).asBoolean(true),
+                node.has(Protocol.F_HISTORY_SIZE) ? new HeadlessTerminal.History(
+                        text(node, Protocol.F_HISTORY_TEXT),
+                        node.path(Protocol.F_HISTORY_SIZE).asInt(0),
+                        node.path(Protocol.F_HISTORY_ADDED).asLong(0),
+                        node.path(Protocol.F_ALTERNATE_SCREEN).asBoolean(false)) : null);
     }
 
     /** The byte counter, or -1 = unknown: the daemon predates the counter. */

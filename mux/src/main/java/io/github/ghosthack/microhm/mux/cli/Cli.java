@@ -53,7 +53,7 @@ public final class Cli {
               label NAME [KEY=VALUE...]   (KEY= removes the label)
               wait NAME [--quiet MS] [--timeout MS] [--since BYTES]
               watch [NAME...] [--quiet MS]
-              capture NAME [--format text|annotated|ansi] [--json]
+              capture NAME [--format text|annotated|ansi] [--history N] [--json]
               path NAME
               attach NAME [--size CxR]
               shutdown
@@ -70,7 +70,7 @@ public final class Cli {
             """;
 
     private static final Set<String> VALUE_OPTIONS = Set.of("--home", "--dir", "--size", "--history-lines",
-            "--client-buffer", "--text", "--format", "--quiet", "--timeout", "--since");
+            "--history", "--client-buffer", "--text", "--format", "--quiet", "--timeout", "--since");
     private static final Set<String> FLAG_OPTIONS = Set.of("--json", "--daemon", "--keep-alive", "--no-enter",
             "--help", "--paste");
 
@@ -147,7 +147,7 @@ public final class Cli {
             case "watch":
                 return watch(client, args);
             case "capture":
-                return capture(client, args.positional(0, "NAME"), captureFormat(args), json);
+                return capture(client, args.positional(0, "NAME"), captureFormat(args), historyLines(args), json);
             case "path":
                 out.println(client.currentPath(args.positional(0, "NAME")));
                 return 0;
@@ -332,6 +332,15 @@ public final class Cli {
                 .orElse(CaptureFormat.TEXT);
     }
 
+    /** {@code --history N}: scrollback lines to print above the screen (default 0). */
+    static int historyLines(Args args) {
+        int lines = args.intValue("--history", 0);
+        if (lines < 0) {
+            throw new Args.UsageException("--history must be zero or greater, not " + lines);
+        }
+        return lines;
+    }
+
     private static ObjectNode labelsNode(Map<String, String> labels) {
         ObjectNode node = Json.object();
         labels.forEach(node::put);
@@ -356,16 +365,17 @@ public final class Cli {
             io.github.ghosthack.microhm.mux.protocol.Json.MAPPER.writer()
                     .with(com.fasterxml.jackson.core.json.JsonWriteFeature.ESCAPE_NON_ASCII);
 
-    private int capture(SessionServerClient client, String name, CaptureFormat format, boolean json) {
+    private int capture(SessionServerClient client, String name, CaptureFormat format, int historyLines,
+                        boolean json) {
         // The client folds the server's "no such session" into empty (the app maps
         // it to a dead pane); only blame a missing server when none answers.
-        SessionServerClient.FormattedCapture captured = client.captureWithFormat(name, format)
+        SessionServerClient.FormattedCapture captured = client.captureWithFormat(name, format, historyLines)
                 .orElseThrow(() -> client.isServerRunning()
                         ? new SessionServerException("no such session: " + name)
                         : SessionServerException.noServer(name));
         Session.Capture capture = captured.capture();
         if (json) {
-            printJson(Json.object()
+            ObjectNode node = Json.object()
                     .put(Protocol.F_TEXT, capture.text())
                     .put(Protocol.F_ALIVE, capture.alive())
                     .put(Protocol.F_FOREGROUND_COMMAND, capture.foregroundCommand())
@@ -375,8 +385,18 @@ public final class Cli {
                     .put(Protocol.F_ROWS, capture.rows())
                     .put(Protocol.F_FORMAT, captured.format().wireName())
                     .put(Protocol.F_OUTPUT_BYTES, capture.outputBytes())
-                    .put(Protocol.F_CURSOR_VISIBLE, capture.cursorVisible()));
+                    .put(Protocol.F_CURSOR_VISIBLE, capture.cursorVisible());
+            if (capture.history() != null) {
+                node.put(Protocol.F_HISTORY_TEXT, capture.history().text())
+                        .put(Protocol.F_HISTORY_SIZE, capture.history().held())
+                        .put(Protocol.F_HISTORY_ADDED, capture.history().added())
+                        .put(Protocol.F_ALTERNATE_SCREEN, capture.history().alternateScreen());
+            }
+            printJson(node);
         } else {
+            if (capture.history() != null) {
+                out.print(capture.history().text());
+            }
             out.print(capture.text());
             out.flush();
         }

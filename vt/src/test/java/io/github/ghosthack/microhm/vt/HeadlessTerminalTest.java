@@ -46,6 +46,45 @@ class HeadlessTerminalTest {
     }
 
     @Test
+    void historyIsTheScrollbackAboveTheMainScreenOldestFirst() {
+        HeadlessTerminal term = new HeadlessTerminal(20, 3, 100, b -> {
+        });
+        assertEquals(new HeadlessTerminal.History("", 0, 0, false), term.history(10));
+        term.apply(tokens("l1   \r\nl2\r\nl3\r\nl4\r\nl5\r\nl6"));
+        assertEquals(new HeadlessTerminal.History("l1\nl2\nl3\n", 3, 3, false), term.history(10));
+        assertEquals("l2\nl3\n", term.history(2).text());
+        assertEquals("", term.history(0).text());
+        assertEquals("", term.history(-1).text());
+        assertEquals("l4\nl5\nl6\n", term.screenText());
+        // a full-screen program on the alternate screen: the main screen's history stays
+        term.apply(tokens("\u001b[?1049hfull\r\n\r\n\r\n\r\n"));
+        assertEquals(new HeadlessTerminal.History("l1\nl2\nl3\n", 3, 3, true), term.history(10));
+        term.apply(tokens("\u001b[?1049l"));
+        assertEquals("l1\nl2\nl3\n", term.history(10).text());
+    }
+
+    @Test
+    void historySinceGivesEachLineOnceAndSaysWhenOldOnesFellOut() {
+        HeadlessTerminal term = new HeadlessTerminal(20, 2, 3, b -> {
+        });
+        term.apply(tokens("a\r\nb\r\nc"));
+        HeadlessTerminal.History first = term.historySince(0);
+        assertEquals("a\n", first.text());
+        assertEquals(1, first.added());
+        assertEquals("", term.historySince(first.added()).text(), "nothing new");
+        term.apply(tokens("\r\nd\r\ne"));
+        HeadlessTerminal.History next = term.historySince(first.added());
+        assertEquals("b\nc\n", next.text());
+        assertEquals(3, next.added());
+        term.apply(tokens("\r\nf\r\ng\r\nh\r\ni\r\nj"));
+        HeadlessTerminal.History later = term.historySince(next.added());
+        assertEquals(8, later.added(), "five more scrolled off");
+        assertEquals("f\ng\nh\n", later.text(), "only the three the history still holds: d and e fell out");
+        assertEquals("f\ng\nh\n", term.historySince(99).text(),
+                "a count past added is another session's: everything held");
+    }
+
+    @Test
     void closedTerminalIgnoresInput() {
         HeadlessTerminal term = new HeadlessTerminal(20, 5, 0, b -> {
         });
