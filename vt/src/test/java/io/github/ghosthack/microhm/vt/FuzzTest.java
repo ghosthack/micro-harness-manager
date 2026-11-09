@@ -52,6 +52,32 @@ class FuzzTest {
         }
     }
 
+    /** {@link TerminalEmulator#feed} and {@link TerminalEmulator#apply} of the same
+     * tokens agree on unrestricted random streams, fed in random pieces (ops split mid
+     * sequence and mid character). */
+    @ParameterizedTest
+    @MethodSource("seeds")
+    void feedingMatchesApplyingTokens(long seed) {
+        int[] size = size(seed);
+        TerminalEmulator fed = new TerminalEmulator(size[0], size[1], 100);
+        TerminalEmulator applied = new TerminalEmulator(size[0], size[1], 100);
+        VtTokenizer tokenizer = new VtTokenizer();
+        VtFuzz fuzz = new VtFuzz(seed, fed, VtFuzz.Mode.ANY);
+        java.util.Random rnd = new java.util.Random(seed);
+        java.io.ByteArrayOutputStream stream = new java.io.ByteArrayOutputStream();
+        for (int i = 0; i < OPS; i++) {
+            stream.writeBytes(fuzz.next().getBytes(StandardCharsets.UTF_8));
+        }
+        byte[] bytes = stream.toByteArray();
+        for (int off = 0; off < bytes.length; ) {
+            int n = Math.min(1 + rnd.nextInt(40), bytes.length - off);
+            fed.feed(bytes, off, n);
+            applied.apply(tokenizer.feed(bytes, off, n).tokens());
+            off += n;
+        }
+        ModelAssert.assertSameState(fed, applied, 100);
+    }
+
     private static void remember(Deque<String> recent, String op) {
         recent.addLast(op);
         if (recent.size() > 12) {

@@ -15,12 +15,15 @@ MODE="${1:-all}"
 VERSION="${2:-${APP_VERSION:-1.0.0}}"
 APP_NAME="micro-harness-manager"
 APP_ID="io.github.ghosthack.microhm"
-# The macOS bundle name (menu bar, Finder) is capped at 16 characters.
-MAC_PACKAGE_NAME="micro-harness"
+# The name people see in the OS: the macOS bundle name (menu bar, Finder; at most 16
+# characters) and the Windows Start-menu folder. Launchers, paths, package ids and
+# artifacts keep APP_NAME.
+DISPLAY_NAME="Microhm"
+MAC_PACKAGE_NAME="$DISPLAY_NAME"
 MAIN_CLASS="io.github.ghosthack.microhm.app.MicroHarnessManagerApp"
 MUX_CLASS="io.github.ghosthack.microhm.mux.Main"
 MUX_LAUNCHER="microhm-mux"
-RUNTIME_MODULES="java.desktop,java.net.http,java.logging,java.sql,jdk.httpserver,jdk.unsupported,jdk.charsets"
+RUNTIME_MODULES="java.desktop,java.management,jdk.management,java.net.http,java.logging,java.sql,jdk.httpserver,jdk.unsupported,jdk.charsets"
 # Windows Installer relates every release of the app through this identity. Never
 # change it, or upgrades install side by side instead of replacing the old version.
 WINDOWS_UPGRADE_UUID="c724e8e7-827f-438a-9bf2-464b0afa89d2"
@@ -134,9 +137,32 @@ if [[ "$MODE" != "installer" ]]; then
 
     # The daemon CLI and session daemon: ServerLauncher looks for this launcher
     # next to the app's own, so the GUI starts the daemon through it.
+    # Long-lived processes with small heaps: serial GC, a heap that starts small and gives
+    # memory back (see mux JvmOptions, which the source launches use).
+    JAVA_OPTIONS="-XX:+UseSerialGC -Xms16m -Xmx2g -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 --enable-native-access=ALL-UNNAMED"
     MUX_PROPERTIES="$PACKAGE_ROOT/$MUX_LAUNCHER-launcher.properties"
-    printf 'main-jar=%s\nmain-class=%s\nwin-console=true\njava-options=--enable-native-access=ALL-UNNAMED\n' \
-        "$MAIN_JAR" "$MUX_CLASS" > "$MUX_PROPERTIES"
+    printf 'main-jar=%s\nmain-class=%s\nwin-console=true\njava-options=%s\n' \
+        "$MAIN_JAR" "$MUX_CLASS" "$JAVA_OPTIONS" > "$MUX_PROPERTIES"
+
+    # The app's AOT cache (it halves the time to a visible window): the app's launcher
+    # always names a per-user, per-version file under ~/.micro-harness-manager/aot, which
+    # the app makes in the background on its first launch (see AotCache). Until then the
+    # JVM starts without it. jpackage leaves $HOME / $USERPROFILE for the launcher to
+    # expand; only the app's launcher uses the cache.
+    configure_aot_cache() {
+        local cfg home_var
+        case "$PLATFORM" in
+            macos) cfg="$IMAGE_PATH/Contents/app/$APP_NAME.cfg"; home_var='$HOME' ;;
+            linux) cfg="$IMAGE_PATH/lib/app/$APP_NAME.cfg"; home_var='$HOME' ;;
+            windows) cfg="$IMAGE_PATH/app/$APP_NAME.cfg"; home_var='$USERPROFILE' ;;
+        esac
+        # appended to the [JavaOptions] section, which jpackage writes last
+        [[ "$(grep '^\[' "$cfg" | tail -1 | tr -d '\r')" == "[JavaOptions]" ]] \
+            || { echo "error: [JavaOptions] is not the last section of $cfg" >&2; exit 1; }
+        # quiet: until the cache exists, the JVM would print an error for it on each launch
+        printf 'java-options=-Xlog:aot=off\njava-options=-XX:AOTCache=%s/.micro-harness-manager/aot/microhm-%s.aot\n' \
+            "$home_var" "$VERSION" >> "$cfg"
+    }
 
     echo "==> Creating the self-contained application image"
     IMAGE_ARGS=(
@@ -155,7 +181,7 @@ if [[ "$MODE" != "installer" ]]; then
         # (ControllingTerminal) that takes the controlling terminal, run from
         # <java.home>/bin/java. jpackage strips native commands by default.
         --jlink-options "--strip-debug --no-man-pages --no-header-files"
-        --java-options "--enable-native-access=ALL-UNNAMED"
+        --java-options "$JAVA_OPTIONS"
         --add-launcher "$MUX_LAUNCHER=$MUX_PROPERTIES"
         --icon "$ICON"
     )
@@ -180,6 +206,8 @@ exec "\$(dirname "\$0")/.$MUX_LAUNCHER-native" "\$@"
 EOF
         chmod +x "$IMAGE_PATH/bin/$MUX_LAUNCHER"
     fi
+
+    configure_aot_cache
 
     if [[ "$PLATFORM" == "macos" && -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
         echo "==> Signing the macOS application image"
@@ -236,7 +264,7 @@ case "$PLATFORM" in
             --win-upgrade-uuid "$WINDOWS_UPGRADE_UUID"
             --win-dir-chooser
             --win-menu
-            --win-menu-group "$APP_NAME"
+            --win-menu-group "$DISPLAY_NAME"
             --win-shortcut
         )
         ;;

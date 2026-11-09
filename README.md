@@ -2,7 +2,7 @@
   <img src="packaging/icons/micro-harness-manager.png" width="128" height="128" alt="micro-harness-manager resistor logo">
 </p>
 
-# micro-harness-manager
+# Microhm
 
 A desktop app for running coding agents (Claude Code, Codex, Cursor Agent, Grok,
 OpenCode, Pi, Muse) and shells side by side. A sidebar lists your sessions with what
@@ -31,10 +31,19 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. For
   output that has scrolled off the screen, `list` and whole-screen `read` replies give
   the path of the harness's own transcript file (Claude Code, Codex, Muse and Grok), for
-  the agent to grep or tail. It is off by default: turn it on in Settings → Agents, and sessions created or resumed from
-  then on get it registered. It keeps working after you quit the app: a small headless
+  the agent to grep or tail. It is off by default: turn it on in Settings → Agents, and
+  sessions created or resumed from then on get it registered. It keeps working after you
+  quit the app: a small background
   host serves the same tools on the same port until the last session ends, and hands
   back to the app when you reopen it (its log is `~/.micro-harness-manager/mcp-host.log`).
+- **Background icon.** While sessions run with the app closed, a menu-bar icon (macOS) or
+  system-tray icon (Windows; Linux desktops with a tray) shows how many are running and
+  whether MCP is serving, and opens the app (end sessions from the app). On by default;
+  Settings → Sessions → Background icon, or "Hide This Icon" in its menu, turns it off.
+- **Shell.** Sessions start in your login shell, or in the one you pick in Settings →
+  Sessions → Shell (zsh, bash, fish, sh, or any program); the New dialog shows which.
+  zsh, bash, sh and fish start agents themselves, so nothing is typed while the shell
+  starts up; turning off "Start agents in one step" types the command in instead.
 - **Terminal.** Right-click (Ctrl+click on macOS) for Copy, Paste, Select All, Page Up and
   Page Down; when the program tracks the mouse the click goes to it, and
   Shift+right-click still opens the menu. On macOS, Option+letter is Meta by default
@@ -42,6 +51,10 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   turns that off so Option composes accents natively (Option+e, e types é).
 - **Look.** Light and dark FlatLaf themes, and the terminal font and palette of your
   choice.
+- **Performance.** Settings → Performance… shows this run's startup time, whether the
+  startup cache was used, memory, garbage collection, CPU time and threads, with Copy for
+  bug reports. The installed app makes its startup cache after its first launch, and from
+  then on opens its window in about half the time.
 
 ## Install
 
@@ -136,7 +149,7 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,188 tests: vt 466, pty 32, mux 159, app 531. Each platform skips the
+`mvn test` runs 1,261 tests: vt 517, pty 32, mux 159, app 553. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
 

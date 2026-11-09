@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.app.ui;
 
+import io.github.ghosthack.microhm.app.session.SessionShell;
 import io.github.ghosthack.microhm.app.settings.AppSettings;
 
 import javax.swing.BorderFactory;
@@ -9,6 +10,7 @@ import javax.swing.JComponent;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
@@ -60,7 +62,10 @@ final class SettingsDialog {
                   boolean mcpServerEnabled,
                   int mcpPort,
                   boolean mcpTokenRegenerated,
-                  boolean mcpChanged) {
+                  boolean mcpChanged,
+                  boolean trayIcon,
+                  String sessionShell,
+                  boolean directLaunch) {
     }
 
     /**
@@ -183,6 +188,16 @@ final class SettingsDialog {
                         new Choice<>("Once, on select", AppSettings.ActiveTabPollMode.ONCE),
                         new Choice<>("Scheduled while selected", AppSettings.ActiveTabPollMode.SCHEDULED));
 
+        boolean macOs = MacWindowAppearance.isMac(System.getProperty("os.name", ""));
+        JCheckBox trayIconBox = new JCheckBox(macOs
+                ? "Show a menu-bar icon while sessions run with the app closed"
+                : "Show a system-tray icon while sessions run with the app closed",
+                AppSettings.trayIconEnabled());
+
+        JComboBox<Choice<String>> shellCombo = shellCombo(AppSettings.sessionShell(), parent);
+        JCheckBox directLaunchBox = new JCheckBox("Start agents in one step (zsh, bash, sh, fish)",
+                AppSettings.directLaunch());
+
         boolean mcpWasEnabled = AppSettings.mcpServerEnabled();
         int mcpWasPort = AppSettings.mcpPort();
         JCheckBox mcpServerBox = new JCheckBox(
@@ -254,6 +269,13 @@ final class SettingsDialog {
         sessions.addRow("", note("Off freezes status badges and pane titles."));
         sessions.addRow("Active tab, if polling off:", activeTabPollModeCombo);
         sessions.addRow("", note("Keeps the selected tab's badge fresh even with polling off."));
+        sessions.addRow("Shell:", shellCombo);
+        sessions.addRow("", note("For new sessions. Your default is your login shell; others read their own setup files."));
+        sessions.addRow("Agent start:", directLaunchBox);
+        sessions.addRow("", note("On by default: the shell starts the agent itself, so nothing is typed during startup."));
+        sessions.addRow("", note("Off types the agent's command once the shell is up. Other shells always type it."));
+        sessions.addRow("Background icon:", trayIconBox);
+        sessions.addRow("", note("On by default. Opens the app; takes effect next time you quit."));
 
         agents.addRow("MCP server:", mcpServerBox);
         agents.addRow("MCP port:", mcpPortSpinner);
@@ -294,7 +316,10 @@ final class SettingsDialog {
                     (Integer) mcpPortSpinner.getValue(),
                     regenerateMcpToken.get(),
                     mcpChanged(mcpWasEnabled, mcpWasPort, mcpServerBox.isSelected(),
-                            (Integer) mcpPortSpinner.getValue(), regenerateMcpToken.get()))));
+                            (Integer) mcpPortSpinner.getValue(), regenerateMcpToken.get()),
+                    trayIconBox.isSelected(),
+                    selected(shellCombo),
+                    directLaunchBox.isSelected())));
             dialog.dispose();
         });
         cancel.addActionListener(e -> dialog.dispose());
@@ -306,7 +331,16 @@ final class SettingsDialog {
         JLabel saveHint = note("Save applies changes from every section.");
         saveHint.setBorder(BorderFactory.createEmptyBorder(0, 16, 12, 12));
         saveHint.setToolTipText(AppSettings.settingsFile().toString());
-        footer.add(saveHint, BorderLayout.WEST);
+        JButton performance = new JButton("Performance…");
+        performance.setToolTipText("Startup time, startup cache, memory and other figures for this run");
+        performance.addActionListener(e -> PerformanceDialog.show(dialog));
+        JPanel footerLeft = new JPanel(new BorderLayout());
+        JPanel performanceRow = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
+        performanceRow.setBorder(BorderFactory.createEmptyBorder(0, 12, 6, 12));
+        performanceRow.add(performance);
+        footerLeft.add(performanceRow, BorderLayout.NORTH);
+        footerLeft.add(saveHint, BorderLayout.SOUTH);
+        footer.add(footerLeft, BorderLayout.WEST);
         footer.add(DialogChrome.buttons(save, cancel), BorderLayout.EAST);
         DialogChrome.layout(dialog, sections, footer);
         DialogChrome.show(dialog, parent, save, cancel);
@@ -370,6 +404,49 @@ final class SettingsDialog {
                 combo.setSelectedItem(choice);
             }
         }
+        return combo;
+    }
+
+    /** Your default, then the shells installed here, then any custom path in use, then
+     * "Other…", which picks a program and adds it. */
+    private static JComboBox<Choice<String>> shellCombo(String current, Window parent) {
+        SessionShell shells = SessionShell.system();
+        JComboBox<Choice<String>> combo = new JComboBox<>();
+        combo.addItem(new Choice<>(shells.describe(SessionShell.DEFAULT), SessionShell.DEFAULT));
+        for (String name : shells.installedNames()) {
+            combo.addItem(new Choice<>(shells.displayName(name), name));
+        }
+        boolean listed = false;
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            if (combo.getItemAt(i).value().equals(current)) {
+                combo.setSelectedIndex(i);
+                listed = true;
+            }
+        }
+        if (!listed) {
+            Choice<String> custom = new Choice<>(shells.describe(current), current);
+            combo.addItem(custom);
+            combo.setSelectedItem(custom);
+        }
+        Choice<String> other = new Choice<>("Other…", null);
+        combo.addItem(other);
+        int[] previous = {combo.getSelectedIndex()};
+        combo.addActionListener(e -> {
+            if (combo.getSelectedItem() != other) {
+                previous[0] = combo.getSelectedIndex();
+                return;
+            }
+            JFileChooser chooser = new JFileChooser("/bin");
+            chooser.setDialogTitle("Choose a shell");
+            if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
+                String path = chooser.getSelectedFile().getAbsolutePath();
+                Choice<String> picked = new Choice<>(shells.describe(path), path);
+                combo.insertItemAt(picked, combo.getItemCount() - 1);
+                combo.setSelectedItem(picked);
+            } else {
+                combo.setSelectedIndex(previous[0]);
+            }
+        });
         return combo;
     }
 

@@ -63,6 +63,17 @@ public final class VtTokenizer {
     public record Batch(List<VtToken> tokens, byte[] openStringFragment) {
     }
 
+    /**
+     * Receives tokens as they complete, without a {@link VtToken} or a copy per token: the
+     * client emulator's path. {@code b[off, off + len)} holds the token's exact bytes and is
+     * valid only during the call (it is the caller's chunk or the tokenizer's own buffer).
+     * A CONTROL token is its one byte.
+     */
+    @FunctionalInterface
+    public interface Sink {
+        void token(VtToken.Kind kind, byte[] b, int off, int len);
+    }
+
     private static final byte[] EMPTY = new byte[0];
 
     private State state = State.GROUND;
@@ -92,8 +103,22 @@ public final class VtTokenizer {
     private boolean stringSawEsc;
 
     public Batch feed(byte[] chunk, int off, int len) {
-        List<VtToken> out = new ArrayList<>();
+        Collector out = new Collector();
+        run(chunk, off, len, out);
+        return new Batch(out.tokens, endOfFeed(true));
+    }
 
+    /**
+     * Feeds a chunk, handing each completed token to {@code sink} in order. Same parsing as
+     * {@link #feed(byte[], int, int)}, but nothing is collected or copied, and no open-string
+     * fragment is computed (a client has no one to forward it to).
+     */
+    public void feed(byte[] chunk, int off, int len, Sink sink) {
+        run(chunk, off, len, sink);
+        endOfFeed(false);
+    }
+
+    private void run(byte[] chunk, int off, int len, Sink out) {
         int end = off + len;
         for (int i = off; i < end; i++) {
             int b = chunk[i] & 0xFF;
@@ -107,14 +132,28 @@ public final class VtTokenizer {
                     } else if (b < 0x20 || b == 0x7F) {
                         // C0 control (other than ESC, handled above) or DEL: its own token.
                         flushText(out);
-                        out.add(CONTROLS[b]);
+                        out.token(VtToken.Kind.CONTROL, chunk, i, 1);
                     } else {
-                        // A run of printable bytes (every byte >= 0x80 is text): copy it whole.
+                        // A run of printable bytes (every byte >= 0x80 is text). It ends at a
+                        // boundary or at the end of the chunk, where the text is flushed
+                        // anyway, so flush it now: straight from the chunk when nothing is
+                        // held (the usual case), holding back an incomplete UTF-8 tail.
                         int runEnd = i + 1;
                         while (runEnd < end && isPrintable(chunk[runEnd])) {
                             runEnd++;
                         }
-                        text.write(chunk, i, runEnd - i);
+                        if (text.size() == 0) {
+                            int tail = incompleteUtf8TailLength(chunk, i, runEnd);
+                            if (runEnd - tail > i) {
+                                out.token(VtToken.Kind.TEXT, chunk, i, runEnd - tail - i);
+                            }
+                            if (tail > 0) {
+                                text.write(chunk, runEnd - tail, tail);
+                            }
+                        } else {
+                            text.write(chunk, i, runEnd - i);
+                            flushText(out);
+                        }
                         i = runEnd - 1;
                     }
                 }
@@ -136,11 +175,11 @@ public final class VtTokenizer {
                         state = State.IN_ESC_INTER;
                     } else if (b >= 0x30 && b <= 0x7E) {
                         seq.write(b);
-                        out.add(new VtToken(VtToken.Kind.ESCAPE, seq.toByteArray()));
+                        out.token(VtToken.Kind.ESCAPE, seq.array(), 0, seq.size());
                         state = State.GROUND;
                     } else {
                         // Aborted: emit the lone ESC as ESCAPE and reprocess this byte fresh.
-                        out.add(new VtToken(VtToken.Kind.ESCAPE, seq.toByteArray()));
+                        out.token(VtToken.Kind.ESCAPE, seq.array(), 0, seq.size());
                         state = State.GROUND;
                         i--; // reprocess b in GROUND
                     }
@@ -148,7 +187,7 @@ public final class VtTokenizer {
                 case IN_CSI -> {
                     if (b >= 0x40 && b <= 0x7E) {
                         seq.write(b);
-                        out.add(new VtToken(VtToken.Kind.CSI, seq.toByteArray()));
+                        out.token(VtToken.Kind.CSI, seq.array(), 0, seq.size());
                         state = State.GROUND;
                     } else if (seq.size() >= MAX_CSI_LENGTH) {
                         // Overlong CSI without a final byte: flush as TEXT, reprocess b fresh.
@@ -169,11 +208,11 @@ public final class VtTokenizer {
                         seq.write(b); // another intermediate
                     } else if (b >= 0x30 && b <= 0x7E) {
                         seq.write(b);
-                        out.add(new VtToken(VtToken.Kind.ESCAPE, seq.toByteArray()));
+                        out.token(VtToken.Kind.ESCAPE, seq.array(), 0, seq.size());
                         state = State.GROUND;
                     } else {
                         // Aborted intermediate sequence: emit what we have, reprocess b fresh.
-                        out.add(new VtToken(VtToken.Kind.ESCAPE, seq.toByteArray()));
+                        out.token(VtToken.Kind.ESCAPE, seq.array(), 0, seq.size());
                         state = State.GROUND;
                         i--;
                     }
@@ -202,11 +241,15 @@ public final class VtTokenizer {
             // Emit the completed text of this feed, holding back an incomplete UTF-8 tail.
             flushText(out);
         }
+    }
 
+    /** After a chunk: the bytes of a still-open string that arrived in it (when
+     * {@code wantFragment}), and the reset of an overlong one. */
+    private byte[] endOfFeed(boolean wantFragment) {
         byte[] fragment = EMPTY;
         if (state == State.IN_STRING) {
             int size = stringBuf.size();
-            if (size > stringForwarded) {
+            if (wantFragment && size > stringForwarded) {
                 fragment = stringBuf.copy(stringForwarded, size);
             }
             stringForwarded = size;
@@ -219,7 +262,7 @@ public final class VtTokenizer {
                 state = State.GROUND;
             }
         }
-        return new Batch(out, fragment);
+        return fragment;
     }
 
     public Batch feed(byte[] chunk) {
@@ -246,11 +289,11 @@ public final class VtTokenizer {
     /** End of stream: emits the held tail as ESCAPE/TEXT and any open string body as a
      * STRING/OSC token (with {@code alreadyForwarded} set), resetting the parser. */
     public Batch flush() {
-        List<VtToken> out = new ArrayList<>();
+        Collector out = new Collector();
         switch (state) {
             case GROUND -> flushText(out);
-            case AFTER_ESC, IN_ESC_INTER -> out.add(new VtToken(VtToken.Kind.ESCAPE, seq.toByteArray()));
-            case IN_CSI -> out.add(new VtToken(VtToken.Kind.TEXT, seq.toByteArray()));
+            case AFTER_ESC, IN_ESC_INTER -> out.token(VtToken.Kind.ESCAPE, seq.array(), 0, seq.size());
+            case IN_CSI -> out.token(VtToken.Kind.TEXT, seq.array(), 0, seq.size());
             case IN_STRING -> emitString(out);
         }
         state = State.GROUND;
@@ -259,19 +302,19 @@ public final class VtTokenizer {
         stringBuf.reset();
         stringForwarded = 0;
         stringSawEsc = false;
-        return new Batch(out, EMPTY);
+        return new Batch(out.tokens, EMPTY);
     }
 
     /** Flush {@link #text} as one or more TEXT tokens, holding back an incomplete trailing
      * UTF-8 code point for the next feed. */
-    private void flushText(List<VtToken> out) {
+    private void flushText(Sink out) {
         int size = text.size();
         if (size == 0) {
             return;
         }
         int tail = incompleteUtf8TailLength(text.array(), size);
         if (size - tail > 0) {
-            out.add(new VtToken(VtToken.Kind.TEXT, text.copy(0, size - tail)));
+            out.token(VtToken.Kind.TEXT, text.array(), 0, size - tail);
         }
         // Re-hold an incomplete code point at the front so the next feed can complete it.
         text.keepTail(tail);
@@ -282,10 +325,9 @@ public final class VtTokenizer {
         text.prepend(seq.array(), seq.size());
     }
 
-    private void emitString(List<VtToken> out) {
-        byte[] all = stringBuf.toByteArray();
+    private void emitString(Sink out) {
         VtToken.Kind kind = stringIsOsc ? VtToken.Kind.OSC : VtToken.Kind.STRING;
-        out.add(new VtToken(kind, all, stringForwarded));
+        out.token(kind, stringBuf.array(), 0, stringBuf.size()); // the Collector reads stringForwarded
         stringBuf.reset();
         stringForwarded = 0;
         stringSawEsc = false;
@@ -310,13 +352,18 @@ public final class VtTokenizer {
      * Stray continuation bytes with no lead, and already-complete sequences, are not held.
      */
     static int incompleteUtf8TailLength(byte[] b, int len) {
-        int i = len - 1;
+        return incompleteUtf8TailLength(b, 0, len);
+    }
+
+    /** {@link #incompleteUtf8TailLength(byte[], int)} over {@code b[from, to)}. */
+    static int incompleteUtf8TailLength(byte[] b, int from, int to) {
+        int i = to - 1;
         int cont = 0;
-        while (i >= 0 && (b[i] & 0xC0) == 0x80 && cont < 3) {
+        while (i >= from && (b[i] & 0xC0) == 0x80 && cont < 3) {
             i--;
             cont++;
         }
-        if (i < 0) {
+        if (i < from) {
             return 0; // only continuation bytes in view: not completable
         }
         int lead = b[i] & 0xFF;
@@ -336,6 +383,20 @@ public final class VtTokenizer {
             return 0; // complete (or overlong) sequence: nothing to hold
         }
         return cont + 1; // lead byte plus the continuations seen so far
+    }
+
+    /** The {@link Batch} path: each token as a {@link VtToken} with its own bytes. */
+    private final class Collector implements Sink {
+        final List<VtToken> tokens = new ArrayList<>();
+
+        @Override
+        public void token(VtToken.Kind kind, byte[] b, int off, int len) {
+            tokens.add(switch (kind) {
+                case CONTROL -> CONTROLS[b[off] & 0xFF];
+                case OSC, STRING -> new VtToken(kind, Arrays.copyOfRange(b, off, off + len), stringForwarded);
+                default -> new VtToken(kind, Arrays.copyOfRange(b, off, off + len));
+            });
+        }
     }
 
     /** A growable byte buffer without {@link java.io.ByteArrayOutputStream}'s locking:
