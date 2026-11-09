@@ -240,14 +240,7 @@ public final class PtySession implements Session {
 
     @Override
     public Capture capture(CaptureFormat format) {
-        return capture(format, 0);
-    }
-
-    @Override
-    public Capture capture(CaptureFormat format, int historyLines) {
         String text;
-        String history = null;
-        int historySize = 0;
         String title;
         int cols;
         int rws;
@@ -267,15 +260,10 @@ public final class PtySession implements Session {
             alive = !exited;
             bytes = outputBytes;
             cursorVisible = terminal.modes().cursorVisible();
-            if (historyLines > 0) {
-                history = terminal.historyText(historyLines);
-                historySize = terminal.historySize();
-            }
         }
         alive = alive && process.isAlive();
         String foreground = alive ? foregroundProbe.probe(process.pid(), bytes).command() : "";
-        return new Capture(text, alive, foreground, process.pid(), title, cols, rws, bytes, cursorVisible,
-                history, historySize);
+        return new Capture(text, alive, foreground, process.pid(), title, cols, rws, bytes, cursorVisible);
     }
 
     @Override

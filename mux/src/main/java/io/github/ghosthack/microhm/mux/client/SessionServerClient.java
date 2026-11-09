@@ -301,26 +301,9 @@ public final class SessionServerClient {
     /** {@link #capture(String, CaptureFormat)} plus the server's echoed format (a daemon
      * that predates formats only ever sends {@link CaptureFormat#TEXT}). */
     public Optional<FormattedCapture> captureWithFormat(String name, CaptureFormat format) {
-        return captureWithFormat(name, format, 0);
-    }
-
-    /** {@link #capture(String, CaptureFormat)} plus up to {@code historyLines} lines of the
-     * scrollback above the screen ({@link Session.Capture#history()}). A daemon that
-     * predates history answers without it; asking it for history ({@code historyLines > 0})
-     * then throws {@link SessionServerException#unsupported}. */
-    public Optional<Session.Capture> capture(String name, CaptureFormat format, int historyLines) {
-        return captureWithFormat(name, format, historyLines).map(FormattedCapture::capture);
-    }
-
-    /** {@link #capture(String, CaptureFormat, int)} plus the server's echoed format. */
-    public Optional<FormattedCapture> captureWithFormat(String name, CaptureFormat format, int historyLines) {
         Optional<JsonNode> reply;
         try {
-            ObjectNode query = named(name).put(Protocol.F_FORMAT, format.wireName());
-            if (historyLines > 0) {
-                query.put(Protocol.F_HISTORY, historyLines);
-            }
-            reply = request(Protocol.OP_CAPTURE, query);
+            reply = request(Protocol.OP_CAPTURE, named(name).put(Protocol.F_FORMAT, format.wireName()));
         } catch (SessionServerException e) {
             if (e.getMessage() != null && e.getMessage().startsWith("no such session")) {
                 return Optional.empty();
@@ -334,9 +317,6 @@ public final class SessionServerClient {
             if (actual != format) {
                 throw SessionServerException.unsupported("capture format " + format.wireName()
                         + (echoed.isEmpty() ? "" : " (it answered " + echoed + ")"));
-            }
-            if (historyLines > 0 && !node.has(Protocol.F_HISTORY_SIZE)) {
-                throw SessionServerException.unsupported("capture history");
             }
             return new FormattedCapture(JsonDecoding.capture(node), actual);
         });

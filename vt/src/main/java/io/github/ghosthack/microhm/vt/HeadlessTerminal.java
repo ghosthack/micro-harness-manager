@@ -125,34 +125,6 @@ public final class HeadlessTerminal implements AutoCloseable {
         }
     }
 
-    /** The newest {@code maxLines} scrollback lines above the screen (fewer when the history
-     * holds fewer), oldest first, in {@link #screenText()}'s shape: one row per line,
-     * trailing whitespace trimmed, each ending with {@code \n}. Empty while the alternate
-     * screen is shown: a full-screen program keeps no scrollback. */
-    public String historyText(int maxLines) {
-        emulator.lock().lock();
-        try {
-            int n = Math.min(Math.max(0, maxLines), emulator.historySize());
-            StringBuilder sb = new StringBuilder();
-            for (int i = -n; i < 0; i++) {
-                sb.append(trimTrailing(emulator.line(i).toString())).append('\n');
-            }
-            return sb.toString();
-        } finally {
-            emulator.lock().unlock();
-        }
-    }
-
-    /** Lines of scrollback currently held above the screen (0 on the alternate screen). */
-    public int historySize() {
-        emulator.lock().lock();
-        try {
-            return emulator.historySize();
-        } finally {
-            emulator.lock().unlock();
-        }
-    }
-
     /**
      * {@link #screenText()} with two hints a reader of plain text would otherwise lose:
      * <ul>

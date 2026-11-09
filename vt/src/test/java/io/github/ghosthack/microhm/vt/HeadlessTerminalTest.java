@@ -46,26 +46,6 @@ class HeadlessTerminalTest {
     }
 
     @Test
-    void historyTextIsTheNewestScrollbackAboveTheScreenOldestFirst() {
-        HeadlessTerminal term = new HeadlessTerminal(20, 3, 100, b -> {
-        });
-        assertEquals("", term.historyText(10));
-        term.apply(tokens("l1   \r\nl2\r\nl3\r\nl4\r\nl5\r\nl6"));
-        assertEquals(3, term.historySize());
-        assertEquals("l1\nl2\nl3\n", term.historyText(10));
-        assertEquals("l2\nl3\n", term.historyText(2));
-        assertEquals("", term.historyText(0));
-        assertEquals("", term.historyText(-1));
-        assertEquals("l4\nl5\nl6\n", term.screenText());
-        // a full-screen program on the alternate screen has none
-        term.apply(tokens("\u001b[?1049hfull"));
-        assertEquals(0, term.historySize());
-        assertEquals("", term.historyText(10));
-        term.apply(tokens("\u001b[?1049l"));
-        assertEquals("l1\nl2\nl3\n", term.historyText(10));
-    }
-
-    @Test
     void closedTerminalIgnoresInput() {
         HeadlessTerminal term = new HeadlessTerminal(20, 5, 0, b -> {
         });

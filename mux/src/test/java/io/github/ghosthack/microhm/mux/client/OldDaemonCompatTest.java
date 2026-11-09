@@ -38,7 +38,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -115,16 +114,6 @@ class OldDaemonCompatTest {
             assertTrue(e.getMessage().startsWith("unsupported by this session daemon: capture format " + format.wireName()),
                     e.getMessage());
         }
-    }
-
-    @Test
-    void historyTheDaemonDoesNotSendIsUnsupportedNotAnEmptyScrollback() {
-        SessionServerException e = assertThrows(SessionServerException.class,
-                () -> client.capture("s", CaptureFormat.TEXT, 100));
-        assertTrue(e.isUnsupported());
-        assertTrue(e.getMessage().startsWith(SessionServerException.UNSUPPORTED_PREFIX + "capture history"),
-                e.getMessage());
-        assertNull(client.capture("s", CaptureFormat.TEXT, 0).orElseThrow().history(), "none asked for");
     }
 
     @Test

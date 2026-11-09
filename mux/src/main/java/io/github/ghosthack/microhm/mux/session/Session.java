@@ -89,26 +89,9 @@ public interface Session {
 
     /** Foreground command, PID and title as {@code capture} reports them, plus the byte
      * counter the text corresponds to (-1 = unknown: the daemon predates the counter) and
-     * whether the cursor is shown. {@code history} is the scrollback above the screen that
-     * a {@link #capture(CaptureFormat, int)} asked for, in {@link CaptureFormat#TEXT}'s
-     * shape, and {@code historySize} how many lines of scrollback the session holds in all;
-     * {@code history} is null when none was asked for (or the daemon predates history). */
+     * whether the cursor is shown. */
     record Capture(String text, boolean alive, String foregroundCommand, long processId,
-                   String title, int columns, int rows, long outputBytes, boolean cursorVisible,
-                   String history, int historySize) {
-
-        /** Without history (no scrollback asked for). */
-        public Capture(String text, boolean alive, String foregroundCommand, long processId,
-                       String title, int columns, int rows, long outputBytes, boolean cursorVisible) {
-            this(text, alive, foregroundCommand, processId, title, columns, rows, outputBytes, cursorVisible,
-                    null, 0);
-        }
-
-        /** This capture with {@code history} (of {@code historySize} lines held) attached. */
-        public Capture withHistory(String history, int historySize) {
-            return new Capture(text, alive, foregroundCommand, processId, title, columns, rows, outputBytes,
-                    cursorVisible, history, historySize);
-        }
+                   String title, int columns, int rows, long outputBytes, boolean cursorVisible) {
 
         /** Without the byte counter and cursor visibility (callers that predate them). */
         public Capture(String text, boolean alive, String foregroundCommand, long processId,
@@ -160,15 +143,6 @@ public interface Session {
 
     /** The visible screen in {@code format}, taken under the session lock. */
     Capture capture(CaptureFormat format);
-
-    /** {@link #capture(CaptureFormat)} plus up to {@code historyLines} lines of the
-     * scrollback just above the screen, as plain text, taken together. 0 = none (the
-     * capture's {@code history} is then null). Default: no scrollback kept, so an empty
-     * history. */
-    default Capture capture(CaptureFormat format, int historyLines) {
-        Capture screen = capture(format);
-        return historyLines > 0 ? screen.withHistory("", 0) : screen;
-    }
 
     /** Raw PTY bytes read so far (before any filtering); monotonic. */
     long outputBytes();

@@ -36,8 +36,6 @@ final class FakeDaemon implements DaemonControl {
         boolean alive = true;
         /** Whether its program enabled bracketed paste (DEC 2004), as agents do. */
         boolean bracketedPaste = true;
-        /** The scrollback above the screen, oldest first. */
-        List<String> history = List.of();
 
         FakeSession(String name) {
             this.name = name;
@@ -78,10 +76,6 @@ final class FakeDaemon implements DaemonControl {
     volatile Runnable afterList = () -> { };
     /** Plays a daemon that predates everything but list/capture-text/send-keys/kill. */
     volatile boolean old;
-    /** Plays a daemon that has everything but capture history. */
-    volatile boolean noHistory;
-    /** The historyLines of every history capture. */
-    final List<Integer> historyRequests = new CopyOnWriteArrayList<>();
     /** What ping reports; -1 = no daemon answers. */
     volatile long pid = 100;
     final AtomicInteger pings = new AtomicInteger();
@@ -138,24 +132,6 @@ final class FakeDaemon implements DaemonControl {
         String text = format == CaptureFormat.TEXT ? ScreenDiff.plain(s.text) : s.text;
         return Optional.of(new Session.Capture(text, s.alive, s.foreground, 4242, s.title, 120, 32,
                 old ? -1 : s.outputBytes, true));
-    }
-
-    @Override
-    public synchronized Optional<Session.Capture> capture(String name, CaptureFormat format, int historyLines) {
-        if (historyLines <= 0) {
-            return capture(name, format);
-        }
-        FakeSession s = sessions.get(name);
-        if (s != null && !down && (old || noHistory)) {
-            throw unsupported("capture history");
-        }
-        historyRequests.add(historyLines);
-        return capture(name, format).map(c -> {
-            List<String> newest = s.history.subList(Math.max(0, s.history.size() - historyLines), s.history.size());
-            StringBuilder text = new StringBuilder();
-            newest.forEach(line -> text.append(line).append('\n'));
-            return c.withHistory(text.toString(), s.history.size());
-        });
     }
 
     @Override
