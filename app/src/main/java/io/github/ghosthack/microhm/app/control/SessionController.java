@@ -256,8 +256,6 @@ public final class SessionController implements McpToolset {
             return "no sessions are running";
         }
         List<Target> targets = infos.stream().map(this::target).toList();
-        Map<String, Long> sameHarnessAndProject = targets.stream()
-                .collect(Collectors.groupingBy(t -> t.harness().id() + "\0" + t.project(), Collectors.counting()));
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < infos.size(); i++) {
             Session.Info info = infos.get(i);
@@ -265,15 +263,7 @@ public final class SessionController implements McpToolset {
             Optional<Observation> obs = observe(target);
             String state = obs.map(o -> o.classification().state().name()).orElse("EXITED");
             long pid = obs.map(o -> o.capture().processId()).orElse(info.pid());
-            Optional<String> id = target.entry().flatMap(SessionEntry::harnessSessionIdOpt);
-            String transcript = transcripts.transcript(target.harness(), Path.of(target.project()), id, pid)
-                    .map(found -> id.isEmpty() && target.harness() == HarnessType.CLAUDE_CODE
-                            && sameHarnessAndProject.get(target.harness().id() + "\0" + target.project()) > 1
-                            // the newest file there may well be a sibling's: point at the folder
-                            ? found.getParent() + java.io.File.separator + " (id unknown and other claude-code sessions share this"
-                                    + " project: one of these files, not necessarily the newest)"
-                            : found.toString())
-                    .orElse("-");
+            String transcript = transcriptOf(target, pid, targets).orElse("-");
             sb.append(target.name()).append(" · ").append(target.display() != null ? target.display() : "-")
                     .append(" · ").append(target.harness().id())
                     .append(" · ").append(state)
@@ -288,13 +278,33 @@ public final class SessionController implements McpToolset {
     }
 
     private String read(String caller, JsonNode args) {
-        Target target = resolve(requiredText(args, "session"));
+        List<Session.Info> infos = liveSessions();
+        Target target = resolve(requiredText(args, "session"), infos);
         boolean full = args.path("full").asBoolean(false);
         Optional<Observation> obs = observe(target);
         if (obs.isEmpty()) {
             return target.name() + " · exited";
         }
-        return render(caller, target, obs.get(), full);
+        long pid = obs.get().capture().processId();
+        return render(caller, target, obs.get(), full, () -> transcriptOf(target, pid,
+                infos.stream().map(this::target).toList())
+                .map(where -> "… (earlier output is in the transcript, " + where + ": grep or tail it)"));
+    }
+
+    /** The session's transcript as list shows it: the file, or — for a claude-code session
+     * whose id is unknown while other claude-code sessions share its project — the folder
+     * with a note. Empty when there is none. {@code all} is every live session. */
+    private Optional<String> transcriptOf(Target target, long pid, List<Target> all) {
+        Optional<String> id = target.entry().flatMap(SessionEntry::harnessSessionIdOpt);
+        long siblings = all.stream()
+                .filter(t -> t.harness() == target.harness() && t.project().equals(target.project()))
+                .count();
+        return transcripts.transcript(target.harness(), Path.of(target.project()), id, pid)
+                .map(found -> id.isEmpty() && target.harness() == HarnessType.CLAUDE_CODE && siblings > 1
+                        // the newest file there may well be a sibling's: point at the folder
+                        ? found.getParent() + java.io.File.separator + " (id unknown and other claude-code sessions"
+                                + " share this project: one of these files, not necessarily the newest)"
+                        : found.toString());
     }
 
     private String send(String caller, JsonNode args) {
@@ -502,6 +512,13 @@ public final class SessionController implements McpToolset {
 
     /** The read-style answer for {@code obs}, recording what {@code caller} has now seen. */
     private String render(String caller, Target target, Observation obs, boolean full) {
+        return render(caller, target, obs, full, Optional::empty);
+    }
+
+    /** As above; {@code wholeScreenNote}, when it has one, ends a reply that shows the
+     * whole screen (asked lazily: finding a transcript may fork lsof). */
+    private String render(String caller, Target target, Observation obs, boolean full,
+                          java.util.function.Supplier<Optional<String>> wholeScreenNote) {
         String header = header(target, obs);
         List<String> lines = obs.body();
         long bytes = obs.capture().outputBytes();
@@ -524,7 +541,8 @@ public final class SessionController implements McpToolset {
                         + ScreenDiff.cap(delta.get().lines(), MAX_BODY_CHARS);
             }
         }
-        return header + "\n" + ScreenDiff.cap(lines, MAX_BODY_CHARS);
+        String screen = header + "\n" + ScreenDiff.cap(lines, MAX_BODY_CHARS);
+        return wholeScreenNote.get().map(note -> screen + "\n" + note).orElse(screen);
     }
 
     private static String header(Target target, Observation obs) {
@@ -1421,10 +1439,13 @@ public final class SessionController implements McpToolset {
             WAITING_FOR_INPUT (a question, approval or menu waits for an answer) or IDLE (at its \
             prompt, or its harness is not running). Address a session by its name or display name.
             transcript is the harness's own conversation log (JSONL) when micro-harness-manager can find \
-            it (claude-code, codex), else "-" — or, when it can't tell which file is a session's, \
-            the folder with a note saying so. History lives there, not on screen: search it with \
-            your file tools (grep, tail, read a line range) — never load a whole transcript, they \
-            get large.""";
+            it (claude-code, codex, muse, grok), else "-" — or, when it can't tell which file is a \
+            session's, the folder with a note saying so. History lives there, not on screen: search \
+            it with your file tools (grep, tail, read a line range) — never load a whole transcript, \
+            they get large. Where the replies are: claude-code rows with "type":"assistant"; codex \
+            "type":"response_item" rows whose payload is an assistant message; muse \
+            "assistant_message_committed" events (session.jsonl); grok rows with "type":"assistant" \
+            (chat_history.jsonl).""";
 
     static final String READ_DESCRIPTION = """
             Show a session's terminal screen. The first line is \
@@ -1444,8 +1465,11 @@ public final class SessionController implements McpToolset {
             Markers: a line starting with `▶ ` is highlighted — usually the selected option of a \
             menu; `▮` is where the cursor is. If the header ends with `(old daemon: no \
             selection/cursor markers)` there are none. Output is capped at 8000 characters (oldest lines \
-            dropped). Only the visible screen is shown; for earlier history read the transcript \
-            (see list). Don't call read in a loop to wait for a session: use notify.""";
+            dropped). Only the visible screen is shown. A reply showing the whole screen ends with \
+            `… (earlier output is in the transcript, <path>: grep or tail it)` when the session has \
+            one (claude-code, codex, muse, grok): for anything that scrolled off, such as the start \
+            of a long answer, grep or tail that file with your file tools — never load it whole. \
+            Don't call read in a loop to wait for a session: use notify.""";
 
     static final String SEND_DESCRIPTION = """
             Type a message into another session, as a user would at its prompt, and press Enter \

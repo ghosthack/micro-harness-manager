@@ -28,9 +28,12 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   quit it.
 - **Usage.** A budget panel and a usage dialog for the providers' plan limits.
 - **Agents (MCP).** An optional MCP server whose tools (`list`, `read`, `send`, `keys`,
-  `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. It is
-  off by default: turn it on in Settings → Agents, and sessions created or resumed from
-  then on get it registered. It keeps working after you quit the app: a small background
+  `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. For
+  output that has scrolled off the screen, `list` and whole-screen `read` replies give
+  the path of the harness's own transcript file (Claude Code, Codex, Muse and Grok), for
+  the agent to grep or tail. It is off by default: turn it on in Settings → Agents, and
+  sessions created or resumed from then on get it registered. It keeps working after you
+  quit the app: a small background
   host serves the same tools on the same port until the last session ends, and hands
   back to the app when you reopen it (its log is `~/.micro-harness-manager/mcp-host.log`).
 - **Background icon.** While sessions run with the app closed, a menu-bar icon (macOS) or
@@ -146,7 +149,7 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,146 tests: vt 463, pty 32, mux 154, app 497. Each platform skips the
+`mvn test` runs 1,261 tests: vt 517, pty 32, mux 159, app 553. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
 

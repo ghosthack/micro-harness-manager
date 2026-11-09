@@ -65,6 +65,7 @@ final class SessionControllerTest {
                 (harness, project, id, pid) -> switch (harness) {
                     case CODEX -> Optional.of(Path.of("/codex/rollout-x.jsonl"));
                     case CLAUDE_CODE -> Optional.of(Path.of("/claude" + project, id.orElse("newest") + ".jsonl"));
+                    case MUSE -> Optional.of(Path.of("/muse/sessions/2026/11/08/m1/session.jsonl"));
                     default -> Optional.empty();
                 },
                 sleeps::add, deliveries, timings);
@@ -148,6 +149,8 @@ final class SessionControllerTest {
             def.inputSchema().path("properties").forEach(p ->
                     assertFalse(p.path("description").asText().isBlank(), def.name()));
         }
+        assertTrue(controller.tools().get(0).description().contains("claude-code, codex, muse, grok"));
+        assertTrue(controller.tools().get(1).description().contains("earlier output is in the transcript"));
         ToolDef keys = controller.tools().get(3);
         assertTrue(keys.description().contains("C-c"));
         assertTrue(keys.description().contains("PageDown"));
@@ -257,6 +260,26 @@ final class SessionControllerTest {
 
         // seen-tracking is per caller: another reader starts with the whole screen
         assertEquals(12, ok("mhm-other", "read", "{\"session\":\"mhm-a\"}").split("\n").length);
+    }
+
+    @Test
+    void wholeScreenReadsEndWithWhereTheTranscriptIs() {
+        FakeDaemon.FakeSession s = daemon.add("mhm-m");
+        s.labels.put("harness", "muse");
+        s.show(lines(1, 5));
+        String note = "… (earlier output is in the transcript, "
+                + Path.of("/muse/sessions/2026/11/08/m1/session.jsonl") + ": grep or tail it)";
+        String first = ok("mhm-me", "read", "{\"session\":\"mhm-m\"}");
+        assertTrue(first.endsWith("\nline 5\n" + note), first);
+        assertTrue(ok("mhm-me", "read", "{\"session\":\"mhm-m\"}").endsWith(" · unchanged"), "no note");
+        s.show(lines(3, 8));
+        assertFalse(ok("mhm-me", "read", "{\"session\":\"mhm-m\"}").contains("transcript"),
+                "an incremental read has no note");
+        assertTrue(ok("mhm-me", "read", "{\"session\":\"mhm-m\",\"full\":true}").endsWith(note));
+
+        shell("mhm-sh").show(lines(1, 3));
+        assertFalse(ok(null, "read", "{\"session\":\"mhm-sh\"}").contains("transcript"),
+                "no transcript, no note");
     }
 
     @Test

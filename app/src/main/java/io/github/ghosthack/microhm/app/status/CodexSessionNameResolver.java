@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  * transcript ({@link #transcript}). Thread-safe. A call may block for a couple of
  * seconds ({@code lsof}) the first time it meets a Codex process, so never call it on
  * the EDT; after that the process's rollout and the parsed index are cached
- * ({@link CodexRolloutLocator}, {@link CodexSessionIndex}). */
+ * ({@link OpenFileLocator}, {@link CodexSessionIndex}). */
 public final class CodexSessionNameResolver {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -51,8 +51,16 @@ public final class CodexSessionNameResolver {
     }
 
     private CodexSessionNameResolver(Path codexHome) {
-        this(codexHome, new CodexRolloutLocator(
-                codexHome.toAbsolutePath().normalize().resolve("sessions")));
+        this(codexHome, rolloutLocator(codexHome.toAbsolutePath().normalize().resolve("sessions")));
+    }
+
+    /** The {@code rollout-*.jsonl} under {@code sessionsRoot} a {@code codex} process has open. */
+    private static OpenFileLocator rolloutLocator(Path sessionsRoot) {
+        return OpenFileLocator.overLsof(name -> name.equals("codex"), open -> {
+            String file = open.getFileName() == null ? "" : open.getFileName().toString();
+            return file.startsWith("rollout-") && file.endsWith(".jsonl") && open.startsWith(sessionsRoot)
+                    ? Optional.of(open) : Optional.empty();
+        });
     }
 
     /** Over an explicit Codex home, finding a pane's open rollout file with
