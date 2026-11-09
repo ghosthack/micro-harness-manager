@@ -348,24 +348,22 @@ final class SessionControllerTest {
     }
 
     @Test
-    void aFullScreenProgramsLogGetsTheScreenEachTimeItSettlesOnSomethingNew() throws Exception {
+    void aFullScreenProgramsLogGetsEachNewLineOfItsScreenOnceWithoutItsChrome() throws Exception {
         Path project = callerIn("mhm-me");
         FakeDaemon.FakeSession s = daemon.add("mhm-g");
         s.labels.put("harness", "grok");
         s.alternateScreen = true;
-        s.show("Grok\nthinking 1s\n\n");
+        s.show("Grok\n   ⠙ Responding… 1.0s        1s ⇣1.0k [stop]\n\n");
         Path log = project.resolve(".microhm-sessions").resolve("mhm-g.log");
         ok("mhm-me", "read", "{\"session\":\"mhm-g\"}");
-        s.show("Grok\nthinking 2s\n");
-        controller.tick();
-        assertFalse(java.nio.file.Files.exists(log) && !read(log).isEmpty(), "still changing: nothing yet");
-        s.show("Grok\nThe answer is 42.\n\n");
-        controller.tick();
-        controller.tick();
-        controller.tick();
         String stamp = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString();
-        assertEquals("--- microhm · " + stamp + " · screen ---\nGrok\nThe answer is 42.\n", read(log),
-                "once settled, once only");
+        s.show("Grok\nThe answer\n   ⠴ Responding… 2.0s        2s ⇣1.0k [stop]\n");
+        controller.tick();
+        s.show("Grok\nThe answer\nis 42.\n\n");
+        controller.tick();
+        controller.tick();
+        assertEquals("--- microhm · " + stamp + " · screen ---\nGrok\nThe answer\nis 42.\n", read(log),
+                "each line once, no status row");
     }
 
     @Test

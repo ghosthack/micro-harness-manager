@@ -34,7 +34,7 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   Code, Codex, Muse and Grok), and a plain-text log of the session's output (any harness)
   that the app keeps in the asking agent's own project, in `.microhm-sessions/`, so a
   sandboxed agent can read it too. The log holds the lines that scrolled off (for a
-  full-screen program, a copy of the screen each time it settles); past 8,000 lines it
+  full-screen program, each new line of its screen once, without its status bars); past 8,000 lines it
   rolls into numbered `.log.gz` parts, and nothing is deleted. The folder ignores itself
   for git. It is off by default: turn it on in Settings → Agents, and
   sessions created or resumed from then on get it registered. It keeps working after you
@@ -154,7 +154,7 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,273 tests: vt 519, pty 32, mux 163, app 559. Each platform skips the
+`mvn test` runs 1,275 tests: vt 519, pty 32, mux 163, app 561. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
 

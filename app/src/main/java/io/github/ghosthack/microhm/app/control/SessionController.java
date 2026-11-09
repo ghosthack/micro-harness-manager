@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.ghosthack.microhm.app.harness.HarnessPlugins;
 import io.github.ghosthack.microhm.app.harness.HarnessType;
 import io.github.ghosthack.microhm.app.mcp.McpToolset;
 import io.github.ghosthack.microhm.app.mcp.ToolDef;
@@ -310,8 +311,8 @@ public final class SessionController implements McpToolset {
 
     // ------------------------------------------------------------------ screen logs
 
-    /** Whose log, of which session, in which folder. */
-    private record Mirror(String caller, String session, Path dir) {
+    /** Whose log, of which session (and harness), in which folder. */
+    private record Mirror(String caller, String session, HarnessType harness, Path dir) {
     }
 
     /** The project folder of the calling session, where its logs go; empty when the caller
@@ -335,7 +336,7 @@ public final class SessionController implements McpToolset {
             return Optional.empty();
         }
         Path file = SessionLogs.file(callerDir.get(), target.name());
-        Mirror mirror = new Mirror(caller, target.name(), callerDir.get());
+        Mirror mirror = new Mirror(caller, target.name(), target.harness(), callerDir.get());
         mirrors.put(file, mirror);
         try {
             syncLog(file, mirror);
@@ -367,7 +368,7 @@ public final class SessionController implements McpToolset {
                 stopLog(file);
                 return;
             }
-            log.record(capture.get(), clock.instant());
+            log.record(capture.get(), HarnessPlugins.of(mirror.harness())::maskChrome, clock.instant());
             if (!capture.get().alive()) {
                 stopLog(file);
             }
@@ -1568,8 +1569,9 @@ public final class SessionController implements McpToolset {
             log is a plain-text copy of the session's output kept inside your own project, in \
             .microhm-sessions/ (git-ignored), for any harness — use it when the transcript is \
             outside what you may read, or for a shell. It holds the lines that scrolled off the \
-            screen (the screen itself is what read shows); for a full-screen program, a copy of \
-            the screen each time it settles, under `--- microhm · <time> · screen ---`. It is \
+            screen (the screen itself is what read shows); for a full-screen program, its \
+            screen's lines as they appear, each new line once and without the harness's status \
+            bars, under `--- microhm · <time> · screen ---`. It is \
             kept up to date from your first list or read on, starting with the scrollback the \
             session still holds; older parts are beside it as <name>.0001.log.gz, .0002… \
             (zgrep them). "-" when your session has no project folder.""";

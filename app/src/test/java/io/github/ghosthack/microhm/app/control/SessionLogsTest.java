@@ -52,9 +52,9 @@ final class SessionLogsTest {
         Path folder = project.resolve(SessionLogs.FOLDER);
         assertEquals(folder.resolve("mhm-x.log"), log.file());
 
-        log.record(scrolled(numbered(1, 1500), 1500), NOW);
+        log.record(scrolled(numbered(1, 1500), 1500), s -> s, NOW);
         for (int from = 1501; from <= 9001; from += 1500) {
-            log.record(scrolled(numbered(from, from + 1499), log.since() + 1500), NOW);
+            log.record(scrolled(numbered(from, from + 1499), log.since() + 1500), s -> s, NOW);
         }
         assertEquals(10_500, log.since());
         Path first = folder.resolve("mhm-x.0001.log.gz");
@@ -67,10 +67,39 @@ final class SessionLogsTest {
         SessionLogs.Log again = new SessionLogs().open(project, "mhm-x");
         assertEquals(10_500, again.since());
         assertEquals(77, again.pid());
-        again.record(scrolled(numbered(10_501, 16_000), 16_000), NOW);
+        again.record(scrolled(numbered(10_501, 16_000), 16_000), s -> s, NOW);
         assertEquals(numbered(7501, 10_500), gunzip(folder.resolve("mhm-x.0002.log.gz")),
                 "it knew how full the live file was");
         assertEquals(numbered(10_501, 16_000), Files.readString(again.file()));
+    }
+
+    /** A full-screen capture showing {@code screen}, with no scrollback. */
+    private static Session.Capture fullScreen(String screen) {
+        return new Session.Capture(screen, true, "grok", 77, "", 80, 24, 0, true)
+                .withHistory(new HeadlessTerminal.History("", 0, 0, true));
+    }
+
+    @Test
+    void aFullScreenProgramsLinesAreWrittenAsTheyAppearEachOnceAndWithoutItsChrome() throws Exception {
+        SessionLogs.Log log = new SessionLogs().open(project, "mhm-g");
+        java.util.function.UnaryOperator<String> chrome =
+                screen -> screen.lines().filter(l -> !l.startsWith("status")).reduce("", (a, l) -> a + l + "\n");
+        log.record(fullScreen("Grok\nstatus 1s\n"), chrome, NOW);
+        log.record(fullScreen("Grok\n1. one\nstatus 2s\n"), chrome, NOW.plusSeconds(1));
+        log.record(fullScreen("Grok\n1. one\n2. two\nstatus 3s\n"), chrome, NOW.plusSeconds(2));
+        log.record(fullScreen("Grok\n2. two\n3. thr\nstatus 4s\n"), chrome, NOW.plusSeconds(3)); // scrolled in place
+        assertEquals("--- microhm · 2026-11-09T06:00:01Z · screen ---\nGrok\n1. one\n2. two\n",
+                Files.readString(log.file()), "the bottom row waits: it may be still being drawn");
+        log.record(fullScreen("Grok\n2. two\n3. three\nstatus 5s\n"), chrome, NOW.plusSeconds(4));
+        log.record(fullScreen("Grok\n2. two\n3. three\nstatus 6s\n"), chrome, NOW.plusSeconds(5));
+        String expected = "--- microhm · 2026-11-09T06:00:01Z · screen ---\nGrok\n1. one\n2. two\n3. three\n";
+        assertEquals(expected, Files.readString(log.file()), "until it holds");
+
+        // a restarted app remembers what it wrote lately
+        SessionLogs.Log again = new SessionLogs().open(project, "mhm-g");
+        again.record(fullScreen("Grok\n3. three\n4. four\n"), chrome, NOW.plusSeconds(9));
+        again.record(fullScreen("Grok\n3. three\n4. four\n"), chrome, NOW.plusSeconds(9));
+        assertEquals(expected + "--- microhm · 2026-11-09T06:00:09Z · screen ---\n4. four\n", Files.readString(log.file()));
     }
 
     @Test

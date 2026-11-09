@@ -16,7 +16,12 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.function.UnaryOperator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPOutputStream;
 
@@ -27,9 +32,14 @@ import java.util.zip.GZIPOutputStream;
  *
  * <p>A session's log is {@code <session>.log}: the lines that scrolled off the top of its
  * screen, each once, in order. A full-screen program (the alternate screen) scrolls nothing
- * off, so for it the log gets a copy of the screen each time it settles on something new, under a
- * {@code --- microhm · <time> · screen ---} line. Other such lines mark a restarted session
- * and lines that scrolled past before they could be copied.
+ * off, so for it the log gets its screen's lines, without the harness's chrome, as they
+ * appear: each line not among the last {@link #RECENT_LINES} written (the bottom one once
+ * it has held for a sample, as it may be still being drawn), under a
+ * {@code --- microhm · <time> · screen ---} line when it took over the screen. Other such
+ * lines mark a restarted session and lines that scrolled past before they could be copied.
+ * (Sampling the screen each second and keeping only unseen lines keeps a streamed answer
+ * whole, in order and about once, where copying the screen whenever it stopped changing
+ * logged the same lines many times over, mid-answer and while the user typed.)
  *
  * <p>Nothing is deleted: once the live file would pass {@link #MAX_LIVE_LINES} lines it is
  * compressed to {@code <session>.<NNNN>.log.gz} (0001 the oldest) and started afresh. The
@@ -43,6 +53,8 @@ final class SessionLogs {
 
     static final String FOLDER = ".microhm-sessions";
     static final int MAX_LIVE_LINES = 8000;
+    /** How many of the lines last written a full-screen program's line is checked against. */
+    static final int RECENT_LINES = 400;
 
     private final ConcurrentHashMap<Path, Log> logs = new ConcurrentHashMap<>();
 
@@ -76,9 +88,14 @@ final class SessionLogs {
         private long added;
         private int lines;
         private int parts;
-        private int snapshotHash;
-        /** The screen the previous record saw, to tell when it has settled. */
-        private String lastScreen;
+        /** Whether the previous record saw the alternate screen. */
+        private boolean onAlternateScreen;
+        /** The last row of the full screen the previous record saw. */
+        private String lastRow;
+        /** The last {@link #RECENT_LINES} lines written, oldest first, and how often each
+         * is among them. */
+        private final ArrayDeque<String> recent = new ArrayDeque<>();
+        private final Map<String, Integer> recentCounts = new HashMap<>();
 
         private Log(Path folder, String base) {
             this.folder = folder;
@@ -122,15 +139,16 @@ final class SessionLogs {
             write(marker(now, "a new session (pid " + newPid + ")"));
             pid = newPid;
             added = 0;
-            lastScreen = null;
-            snapshotHash = 0;
+            onAlternateScreen = false;
+            lastRow = null;
             save();
         }
 
         /** Appends what {@code capture} (taken with its scrollback) adds: its new scrollback,
-         * and on the alternate screen, where nothing scrolls off, a copy of the screen when
-         * it has settled on something new (or the session ended). */
-        void record(Session.Capture capture, Instant now) {
+         * and on the alternate screen, where nothing scrolls off, the lines of its screen
+         * reduced by {@code chrome} (the harness's {@code maskChrome}) that are not among
+         * those written lately. */
+        void record(Session.Capture capture, UnaryOperator<String> chrome, Instant now) {
             StringBuilder out = new StringBuilder();
             HeadlessTerminal.History history = java.util.Objects.requireNonNull(capture.history(), "history");
             long fresh = history.added() - Math.min(added, history.added());
@@ -140,20 +158,54 @@ final class SessionLogs {
             }
             out.append(history.text());
             added = history.added();
+            remember(history.text());
             if (history.alternateScreen()) {
-                String screen = withoutTrailingBlankLines(capture.text() == null ? "" : capture.text());
-                boolean settled = screen.equals(lastScreen) || !capture.alive();
-                if (settled && !screen.isBlank() && screen.hashCode() != snapshotHash) {
-                    out.append(marker(now, "screen")).append(screen);
-                    snapshotHash = screen.hashCode();
+                String screen = chrome.apply(capture.text() == null ? "" : capture.text());
+                List<String> rows = screen.lines().map(String::stripTrailing).filter(l -> !l.isBlank()).toList();
+                // the last row may be still being drawn: it waits until it has held for a sample
+                String last = rows.isEmpty() ? null : rows.getLast();
+                boolean lastHeld = last != null && (last.equals(lastRow) || !capture.alive());
+                lastRow = last;
+                StringBuilder unseen = new StringBuilder();
+                for (int i = 0; i < rows.size(); i++) {
+                    String line = rows.get(i);
+                    if ((i < rows.size() - 1 || lastHeld) && !recentCounts.containsKey(line)) {
+                        unseen.append(line).append('\n');
+                        remember(line + "\n");
+                    }
                 }
-                lastScreen = screen;
+                if (!unseen.isEmpty()) {
+                    if (!onAlternateScreen) {
+                        out.append(marker(now, "screen"));
+                    }
+                    out.append(unseen);
+                    onAlternateScreen = true;
+                }
             } else {
-                lastScreen = null;
+                onAlternateScreen = false;
+                lastRow = null;
             }
             pid = capture.processId();
             write(out.toString());
             save();
+        }
+
+        /** Adds {@code text}'s lines to the recent ones, letting the oldest go. */
+        private void remember(String text) {
+            if (text.isEmpty()) {
+                return;
+            }
+            for (String line : text.split("\n")) {
+                line = line.stripTrailing();
+                if (line.isBlank()) {
+                    continue;
+                }
+                recent.addLast(line);
+                recentCounts.merge(line, 1, Integer::sum);
+                if (recent.size() > RECENT_LINES) {
+                    recentCounts.computeIfPresent(recent.removeFirst(), (k, n) -> n == 1 ? null : n - 1);
+                }
+            }
         }
 
         private void write(String text) {
@@ -199,19 +251,11 @@ final class SessionLogs {
                 pid = number(p, "pid");
                 added = number(p, "added");
                 parts = (int) number(p, "parts");
-                snapshotHash = (int) number(p, "snapshot");
             }
             if (Files.exists(live)) {
-                try (InputStream in = Files.newInputStream(live)) {
-                    byte[] buffer = new byte[64 * 1024];
-                    for (int read; (read = in.read(buffer)) > 0; ) {
-                        for (int i = 0; i < read; i++) {
-                            if (buffer[i] == '\n') {
-                                lines++;
-                            }
-                        }
-                    }
-                }
+                List<String> all = Files.readAllLines(live, StandardCharsets.UTF_8);
+                lines = all.size();
+                remember(String.join("\n", all.subList(Math.max(0, all.size() - RECENT_LINES), all.size())));
             }
         }
 
@@ -220,7 +264,6 @@ final class SessionLogs {
             p.setProperty("pid", Long.toString(pid));
             p.setProperty("added", Long.toString(added));
             p.setProperty("parts", Integer.toString(parts));
-            p.setProperty("snapshot", Integer.toString(snapshotHash));
             Path partial = folder.resolve("." + base + ".state.tmp");
             try {
                 try (Writer out = Files.newBufferedWriter(partial, StandardCharsets.UTF_8)) {
@@ -252,12 +295,6 @@ final class SessionLogs {
                 }
             }
             return n;
-        }
-
-        /** {@code text} without blank lines at its end, ending with one newline (or empty). */
-        private static String withoutTrailingBlankLines(String text) {
-            String stripped = text.stripTrailing();
-            return stripped.isEmpty() ? "" : stripped + "\n";
         }
     }
 }
