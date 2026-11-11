@@ -157,6 +157,30 @@ class SessionManagerImplTest {
     }
 
     @Test
+    void closeKillsEverySessionAndRefusesNewOnes(@TempDir Path dir) {
+        SessionManagerImpl m = newManager();
+        Session a = m.create("a", dir, 80, 24, SH);
+        m.close();
+        assertFalse(a.isAlive());
+        assertTrue(m.sessions().isEmpty());
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> m.create("b", dir, 80, 24, SH));
+        assertEquals(SessionManager.CLOSED, e.getMessage());
+        assertTrue(m.sessions().isEmpty(), "nothing was spawned for the refused create");
+    }
+
+    @Test
+    void closeIfIdleOnlyClosesAManagerWithoutSessions(@TempDir Path dir) {
+        SessionManagerImpl m = newManager();
+        Session a = m.create("a", dir, 80, 24, SH);
+        assertFalse(m.closeIfIdle(), "a session exists: the idle exit is off");
+        Session b = m.create("b", dir, 80, 24, SH);
+        assertTrue(a.isAlive() && b.isAlive());
+        m.killAll();
+        assertTrue(m.closeIfIdle());
+        assertThrows(IllegalStateException.class, () -> m.create("c", dir, 80, 24, SH));
+    }
+
+    @Test
     void theShellSeesTheEnvironmentGivenAtCreation(@TempDir Path dir) {
         SessionManagerImpl m = newManager();
         Session session = m.create("env", dir, 80, 24, SH, Map.of(),

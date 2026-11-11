@@ -149,7 +149,9 @@ public final class Protocol {
     /** {name, columns, rows} → {ok}; the connection is then in attach mode. */
     public static final String OP_ATTACH = "attach";
     /** → {ok}; the server stops accepting, kills every session (closing the PTY masters
-     * would SIGHUP the shells anyway, so the kill is explicit and ordered), and exits. */
+     * would SIGHUP the shells anyway, so the kill is explicit and ordered), and exits.
+     * The one request honoured whatever its {@code protocol} says, so a client of another
+     * version can always stop the server (builds before this refused it as a mismatch). */
     public static final String OP_SHUTDOWN = "shutdown";
 
     /** Server-side pause between typed text and the Enter key on {@link #OP_SEND_KEYS}:

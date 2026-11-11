@@ -126,8 +126,17 @@ final class RequestDispatcher {
         }
         List<String> command = new ArrayList<>();
         JsonNode commandNode = request.get(Protocol.F_COMMAND);
-        if (commandNode != null && commandNode.isArray()) {
-            commandNode.forEach(arg -> command.add(arg.asText()));
+        if (commandNode != null && !commandNode.isNull()) {
+            // Anything else would silently start a login shell in place of what was asked.
+            if (!commandNode.isArray()) {
+                return Json.error("command must be an array of strings");
+            }
+            for (JsonNode arg : commandNode) {
+                if (!arg.isTextual()) {
+                    return Json.error("command must be an array of strings");
+                }
+                command.add(arg.asText());
+            }
         }
         try {
             Session session = manager.create(name, Path.of(workdir), columns, rows, command, labels, env);
@@ -303,7 +312,11 @@ final class RequestDispatcher {
     private ObjectNode withSession(JsonNode request, Function<Session, ObjectNode> body) {
         String name = name(request);
         Optional<Session> session = name.isEmpty() ? Optional.empty() : manager.find(name);
-        return session.map(body).orElseGet(() -> noSuchSession(name));
+        try {
+            return session.map(body).orElseGet(() -> noSuchSession(name));
+        } catch (Session.InputRejectedException e) {
+            return Json.error(e.getMessage()); // the sender's to act on, not an internal error
+        }
     }
 
     private static String name(JsonNode request) {

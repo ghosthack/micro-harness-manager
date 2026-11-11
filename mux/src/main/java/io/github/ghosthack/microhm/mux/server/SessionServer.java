@@ -65,7 +65,8 @@ public final class SessionServer implements AutoCloseable {
      */
     public boolean start() throws IOException {
         Path home = options.home();
-        Files.createDirectories(home);
+        // Before anything is created in it: private to this user, or not ours to serve from.
+        ServerHome.secure(home);
         Optional<ServerLock> acquired = ServerLock.tryAcquire(ServerHome.lock(home));
         if (acquired.isEmpty()) {
             log.info("another server owns {}; exiting", home);
@@ -90,6 +91,9 @@ public final class SessionServer implements AutoCloseable {
                 }
                 throw e;
             }
+            // bind creates it with the umask's permissions; nobody else got to it in
+            // between because the directory around it is already private.
+            ServerHome.restrict(socket);
             lock.writePid(pid);
         } catch (IOException | RuntimeException e) {
             lock.close();
@@ -145,9 +149,11 @@ public final class SessionServer implements AutoCloseable {
         }
         log.info("shutting down");
         try {
-            manager.killAll();
+            // Closes before it kills: a `new` still arriving on the open listener is refused
+            // instead of being answered ok and dying with the process.
+            manager.close();
         } catch (RuntimeException e) {
-            log.warn("killAll failed; continuing shutdown", e);
+            log.warn("killing the sessions failed; continuing shutdown", e);
         }
         closeListener();
         // Socket file and lock go before the connections: the client that asked for the
@@ -187,6 +193,9 @@ public final class SessionServer implements AutoCloseable {
         if (options.keepAlive()) {
             log.info("no sessions left; --keep-alive keeps the server up");
             return;
+        }
+        if (!manager.closeIfIdle()) {
+            return; // a session was created after the timer fired; its end re-arms the timer
         }
         log.info("no sessions left; exiting");
         // Off the manager's timer thread: shutdown calls back into the manager.

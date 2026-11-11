@@ -583,4 +583,34 @@ class PtySessionTest {
         tokens.addAll(tokenizer.flush().tokens());
         return tokens;
     }
+
+    @Test
+    void inputForAProgramThatDoesNotReadIsBoundedAndRefused() throws Exception {
+        ShellCommand idle = ShellCommand.build("deaf", List.of("/bin/sh", "-c", "sleep 100"), System.getenv());
+        PtySession deaf = PtySession.spawn("deaf", workdir, 80, 24, idle, HISTORY, (s, code) -> { });
+        try {
+            // Lines, so the terminal holds them for a reader that never comes and the PTY
+            // stops taking more; from then on everything written waits in the session.
+            byte[] chunk = ("x".repeat(1023) + "\n").repeat(64).getBytes(StandardCharsets.UTF_8);
+            long accepted = 0;
+            Session.InputRejectedException refused = null;
+            long budget = 16L * PtySession.MAX_PENDING_INPUT_BYTES;
+            while (refused == null && accepted < budget) {
+                try {
+                    deaf.write(chunk);
+                    accepted += chunk.length;
+                } catch (Session.InputRejectedException e) {
+                    refused = e;
+                }
+            }
+            assertNotNull(refused, "accepted " + accepted + " bytes without ever refusing");
+            assertTrue(refused.getMessage().contains("not reading its input"), refused.getMessage());
+            assertThrows(Session.InputRejectedException.class, () -> deaf.sendKeys("more", false));
+            assertThrows(Session.InputRejectedException.class, () -> deaf.paste("more"));
+            assertThrows(Session.InputRejectedException.class, () -> deaf.input(List.of("enter")));
+            assertTrue(deaf.isAlive(), "refusing input does not hurt the session");
+        } finally {
+            deaf.kill();
+        }
+    }
 }

@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -22,7 +21,8 @@ import java.nio.file.Path;
 public final class DaemonMode {
 
     public static void enter(Path log) throws IOException {
-        Files.createDirectories(log.toAbsolutePath().getParent());
+        ServerHome.secure(log.toAbsolutePath().getParent());
+        ServerHome.createLog(log);
         PrintStream out = new PrintStream(new FileOutputStream(log.toFile(), true), true, StandardCharsets.UTF_8);
         System.setOut(out);
         System.setErr(out);
