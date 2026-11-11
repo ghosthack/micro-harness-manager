@@ -45,6 +45,9 @@ public final class SessionTerminal {
     private final ExecutorService writer;
     private final Thread reader;
     private boolean detached;
+    /** Run on the EDT when the stream ends by itself (the session ended, or the daemon
+     * went away), not when {@link #detach} closed it. */
+    private Runnable onEnded = () -> { };
 
     /** The settings a terminal is built with. */
     record Config(Color background, boolean light, int[] palette, boolean scrollbarHidden,
@@ -145,7 +148,17 @@ public final class SessionTerminal {
         } catch (IOException | RuntimeException ended) {
             // a closed or broken stream ends the terminal like EOF does
         }
-        SwingUtilities.invokeLater(view::markEnded);
+        SwingUtilities.invokeLater(() -> {
+            view.markEnded();
+            if (!detached) {
+                onEnded.run();
+            }
+        });
+    }
+
+    /** Sets what runs when the stream ends without a {@link #detach}. Call on the EDT. */
+    public void onEnded(Runnable action) {
+        this.onEnded = java.util.Objects.requireNonNull(action, "action");
     }
 
     /** The Swing component to show as the session's card. */
@@ -231,6 +244,11 @@ public final class SessionTerminal {
 
     public void pageDown() {
         view.pageDown();
+    }
+
+    /** Whether the program is on the alternate screen (a full-screen program). */
+    public boolean alternateScreen() {
+        return view.alternateScreen();
     }
 
     public void scrollToTop() {

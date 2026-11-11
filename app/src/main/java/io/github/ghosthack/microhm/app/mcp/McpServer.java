@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +23,9 @@ import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -188,7 +192,8 @@ public final class McpServer implements AutoCloseable {
             sendStatus(exchange, 403, "forbidden origin");
             return;
         }
-        if (!authorized(uri.getRawQuery(), exchange.getRequestHeaders().getFirst("Authorization"))) {
+        if (!authorized(path.caller(), uri.getRawQuery(),
+                exchange.getRequestHeaders().getFirst("Authorization"))) {
             sendStatus(exchange, 401, "missing or invalid token");
             return;
         }
@@ -253,10 +258,10 @@ public final class McpServer implements AutoCloseable {
         }
     }
 
-    private boolean authorized(String rawQuery, String authorization) {
+    private boolean authorized(String caller, String rawQuery, String authorization) {
         if (authorization != null) {
             String a = authorization.trim();
-            if (a.regionMatches(true, 0, "Bearer ", 0, 7) && matches(a.substring(7).trim())) {
+            if (a.regionMatches(true, 0, "Bearer ", 0, 7) && matches(caller, a.substring(7).trim())) {
                 return true;
             }
         }
@@ -270,7 +275,7 @@ public final class McpServer implements AutoCloseable {
                     } catch (IllegalArgumentException e) {
                         continue;
                     }
-                    if (matches(value)) {
+                    if (matches(caller, value)) {
                         return true;
                     }
                 }
@@ -279,8 +284,32 @@ public final class McpServer implements AutoCloseable {
         return false;
     }
 
-    private boolean matches(String candidate) {
-        return MessageDigest.isEqual(token, candidate.getBytes(StandardCharsets.UTF_8));
+    /** The server's own token opens every path (it is the user's key, for manual
+     * clients); a session's token opens only that session's path, so an agent cannot
+     * call as another session. Both comparisons always run, in constant time. */
+    private boolean matches(String caller, String candidate) {
+        byte[] given = candidate.getBytes(StandardCharsets.UTF_8);
+        boolean owner = MessageDigest.isEqual(token, given);
+        boolean session = caller != null
+                && MessageDigest.isEqual(sessionToken(caller).getBytes(StandardCharsets.UTF_8), given);
+        return owner | session;
+    }
+
+    /**
+     * The token a launched session is given: derived from the server's token and the
+     * session's name (HMAC-SHA256), so it authenticates {@code /mcp/<caller>} and no other
+     * caller's path, and reveals nothing about the server's token.
+     */
+    public String sessionToken(String caller) {
+        Objects.requireNonNull(caller, "caller");
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(token, "HmacSHA256"));
+            return Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(mac.doFinal(caller.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HmacSHA256 unavailable", e);
+        }
     }
 
     /** The body, or {@code null} when it exceeds {@link #MAX_BODY_BYTES}. */

@@ -7,6 +7,7 @@ import io.github.ghosthack.microhm.mux.protocol.FrameCodec;
 import io.github.ghosthack.microhm.mux.protocol.FrameType;
 import io.github.ghosthack.microhm.mux.protocol.Json;
 import io.github.ghosthack.microhm.mux.protocol.Protocol;
+import io.github.ghosthack.microhm.mux.server.ServerHome;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -42,6 +43,12 @@ final class ServerConnection implements AutoCloseable {
     }
 
     static Optional<ServerConnection> open(Path socket) {
+        try {
+            // Not "no server": whoever owns that directory owns whatever listens in it.
+            ServerHome.requireOwned(socket.toAbsolutePath().getParent());
+        } catch (IOException e) {
+            throw new SessionServerException(e.getMessage(), e);
+        }
         SocketChannel channel = null;
         try {
             channel = SocketChannel.open(StandardProtocolFamily.UNIX);

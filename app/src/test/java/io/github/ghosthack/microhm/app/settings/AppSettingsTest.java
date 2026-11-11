@@ -391,6 +391,24 @@ final class AppSettingsTest {
         assertFalse(regenerated.equals(first), "a fresh random token");
     }
 
+    /** A hand-edited Windows path holds a backslash-u that is no unicode escape:
+     * Properties rejects the whole file for it, which used to stop the app starting. */
+    @Test
+    void aMalformedUnicodeEscapeDoesNotLoseTheSettings() throws IOException {
+        settings("mcp.port=9100\nsession.shell=C:\\users\\me\\pwsh.exe\n");
+        assertEquals(9100, AppSettings.mcpPort());
+        AppSettings.saveMcpPort(9200);
+        assertEquals(9200, AppSettings.mcpPort(), "and the file can still be saved");
+    }
+
+    @Test
+    void theMcpTokenIsStableWhileTheSettingsFileCannotBeWritten() throws IOException {
+        // the settings file's place is taken by a folder: nothing can be saved there
+        Files.createDirectories(dir.resolve("settings.properties").resolve("x"));
+        String first = AppSettings.mcpToken();
+        assertEquals(first, AppSettings.mcpToken());
+    }
+
     @Test
     void regeneratingTheMcpTokenReplacesAndPersistsIt() {
         String first = AppSettings.mcpToken();

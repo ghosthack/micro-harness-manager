@@ -9,6 +9,7 @@ import io.github.ghosthack.microhm.mux.server.ServerHome;
 import io.github.ghosthack.microhm.mux.session.CaptureFormat;
 import io.github.ghosthack.microhm.mux.session.Session;
 import io.github.ghosthack.microhm.mux.session.SessionEvent;
+import io.github.ghosthack.microhm.mux.session.SessionManager;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -153,7 +154,18 @@ public final class SessionServerClient {
             ObjectNode envNode = args.putObject(Protocol.F_ENV);
             env.forEach(envNode::put);
         }
-        Optional<JsonNode> reply = request(Protocol.OP_NEW, args);
+        Optional<JsonNode> reply;
+        try {
+            reply = request(Protocol.OP_NEW, args);
+        } catch (SessionServerException e) {
+            if (!SessionManager.CLOSED.equals(e.getMessage())) {
+                throw e;
+            }
+            // Caught the server on its way out (idle exit or a shutdown): the same as
+            // finding none, once it has let go of the home.
+            awaitServerGone();
+            reply = Optional.empty();
+        }
         if (reply.isEmpty()) {
             ensureServer();
             reply = request(Protocol.OP_NEW, args);
@@ -435,7 +447,9 @@ public final class SessionServerClient {
             throw new SessionServerException("the session daemon " + JsonDecoding.text(reply, Protocol.F_VERSION)
                     + " (pid " + reply.path(Protocol.F_PID).asLong(0) + ") speaks protocol "
                     + reply.path(Protocol.F_PROTOCOL).asInt(0) + "; this app needs " + Protocol.VERSION
-                    + ". Finish its sessions or run `microhm-mux shutdown`, then retry");
+                    + ". Finish its sessions or run `microhm-mux shutdown`, then retry (a daemon too old"
+                    + " to take that shutdown answers with this same message: stop it with `kill "
+                    + reply.path(Protocol.F_PID).asLong(0) + "`)");
         }
         throw new SessionServerException(error.isEmpty() ? "request refused" : error);
     }
@@ -464,6 +478,25 @@ public final class SessionServerClient {
                 throw cause;
             }
             throw new SessionServerException("starting the session server failed", e.getCause());
+        }
+    }
+
+    /** Waits, up to the connect deadline, for an exiting server to stop listening. Past the
+     * deadline the caller's retry simply reports whatever that server answers. */
+    private void awaitServerGone() {
+        long deadline = System.nanoTime() + CONNECT_TIMEOUT_SECONDS * 1_000_000_000L;
+        while (System.nanoTime() < deadline) {
+            Optional<ServerConnection> opened = ServerConnection.open(ServerHome.socket(home));
+            if (opened.isEmpty()) {
+                return;
+            }
+            opened.get().close();
+            try {
+                Thread.sleep(SPAWN_POLL_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
     }
 

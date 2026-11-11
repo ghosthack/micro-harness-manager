@@ -41,6 +41,13 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   quit the app: a small background
   host serves the same tools on the same port until the last session ends, and hands
   back to the app when you reopen it (its log is `~/.micro-harness-manager/mcp-host.log`).
+  **What turning it on grants.** Every agent you start can then read and type into your
+  other sessions, and `spawn` a new one (a shell included) in any folder: an agent that
+  is sandboxed to its project, or one that is following instructions it read somewhere,
+  gets the reach of your own terminal through these tools. Leave it off for agents you
+  would not give that. Each session gets its own token, good for calling as itself only;
+  the logs in `.microhm-sessions/` hold other sessions' output as plain text, so they
+  travel with anything that copies the project folder (they are ignored by git only).
 - **Background icon.** While sessions run with the app closed, a menu-bar icon (macOS) or
   system-tray icon (Windows; Linux desktops with a tray) shows how many are running and
   whether MCP is serving, and opens the app (end sessions from the app). On by default;
@@ -49,6 +56,11 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   Sessions → Shell (zsh, bash, fish, sh, or any program); the New dialog shows which.
   zsh, bash, sh and fish start agents themselves, so nothing is typed while the shell
   starts up; turning off "Start agents in one step" types the command in instead.
+- **Keys.** Cmd+T, Cmd+W and Cmd+D (macOS), or Ctrl+Shift+T, Ctrl+Shift+W and
+  Ctrl+Shift+D (Linux, Windows), open a shell beside the selected session, close it and
+  duplicate it; plain Ctrl+D, Ctrl+W and Ctrl+T go to the session. Ctrl+Tab and
+  Ctrl+1..9 switch sessions. Page Up/Down, Home and End page the scrollback, except in a
+  full-screen program (vim, less), which gets them.
 - **Terminal.** Right-click (Ctrl+click on macOS) for Copy, Paste, Select All, Page Up and
   Page Down; when the program tracks the mouse the click goes to it, and
   Shift+right-click still opens the menu. On macOS, Option+letter is Meta by default

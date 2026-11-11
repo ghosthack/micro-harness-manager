@@ -12,8 +12,10 @@ package io.github.ghosthack.microhm.vt;
  * probes its terminal.
  *
  * <ul>
- *   <li>DA1 — CSI, final {@code c}, no {@code >} prefix, any parameters ({@code CSI c},
- *       {@code CSI 0 c}, {@code CSI = c}): stripped; the emulator answers all of them.</li>
+ *   <li>DA1 — CSI, final {@code c}, no private marker or intermediate, first parameter
+ *       absent or 0 ({@code CSI c}, {@code CSI 0 c}): stripped. {@code CSI ? Ps c} (the
+ *       Linux console's cursor shape, not a query) and {@code CSI = c} pass through —
+ *       nobody answers them.</li>
  *   <li>DA2 — CSI, {@code >} prefix, final {@code c}, first parameter absent or 0:
  *       stripped. {@code CSI > 1 c} passes through — nobody answers it.</li>
  *   <li>DSR/CPR — CSI, final {@code n}, no {@code ?} prefix, first parameter 5 or 6:
@@ -48,8 +50,9 @@ public final class QueryFilter {
                     // DA2: strip only when the first parameter is absent or 0.
                     return leadingInt(body, 1) == 0;
                 }
-                // DA1 (primary/tertiary): answered for any parameters with no '>' prefix.
-                return true;
+                // DA1: no private marker or intermediate, first parameter absent or 0.
+                // CSI ? Ps c (the Linux console's cursor) and CSI = c pass through.
+                return plainParameters(body) && leadingInt(body, 0) == 0;
             }
             case 'n' -> {
                 String body = token.csiBody();
@@ -82,11 +85,23 @@ public final class QueryFilter {
             if (c < '0' || c > '9') {
                 break;
             }
-            value = value * 10 + (c - '0');
+            value = Math.min(value * 10 + (c - '0'), 0xFFFF); // saturates, as the emulator's parser
             seen = true;
             i++;
         }
         return seen ? value : 0;
+    }
+
+    /** True when {@code body} is digits and ';' only: the CSI the emulator dispatches
+     * without a private marker, an intermediate or sub-parameters. */
+    private static boolean plainParameters(String body) {
+        for (int i = 0; i < body.length(); i++) {
+            char c = body.charAt(i);
+            if ((c < '0' || c > '9') && c != ';') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private QueryFilter() {

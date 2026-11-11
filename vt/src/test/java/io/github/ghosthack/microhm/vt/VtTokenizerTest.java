@@ -122,12 +122,100 @@ class VtTokenizerTest {
         forwarded += b.openStringFragment().length;
         // Nothing was held from clients: everything fed so far was forwarded as fragments.
         assertTrue(forwarded >= 100 * 1024);
-        // Over the 64 KiB cap the body is dropped from the emulator feed and the parser resets.
+        // Over the 64 KiB cap the body is given up, but the string is still open: what
+        // follows is skipped (and streamed), not tokenized as text.
+        assertArrayEquals(bytes("\u001bX"), tok.openStringBytes());
+        VtTokenizer.Batch still = tok.feed(bytes("hi"));
+        assertTrue(still.tokens().isEmpty());
+        assertEquals("hi", new String(still.openStringFragment(), StandardCharsets.UTF_8));
+        // The terminator ends it: its unstreamed bytes come as a DISCARDED token, in order.
+        VtTokenizer.Batch after = tok.feed(bytes("x\u0007hi"));
+        assertEquals(List.of(VtToken.Kind.DISCARDED, VtToken.Kind.TEXT),
+                after.tokens().stream().map(VtToken::kind).toList());
+        assertEquals("x\u0007", after.tokens().get(0).asString());
+        assertEquals("hi", after.tokens().get(1).asString());
         assertEquals(0, tok.openStringBytes().length);
-        // Fresh text now tokenizes normally.
-        VtTokenizer.Batch after = tok.feed(bytes("hi"));
-        assertEquals(1, after.tokens().size());
-        assertEquals(VtToken.Kind.TEXT, after.tokens().get(0).kind());
+    }
+
+    /** The tokens and forwarded bytes of {@code data} fed in pieces of {@code chunk} bytes. */
+    private static String fedInChunks(byte[] data, int chunk, ByteArrayOutputStream forwarded) {
+        VtTokenizer tok = new VtTokenizer();
+        StringBuilder kinds = new StringBuilder();
+        for (int off = 0; off < data.length; off += chunk) {
+            VtTokenizer.Batch b = tok.feed(data, off, Math.min(chunk, data.length - off));
+            for (VtToken t : b.tokens()) {
+                // Text may be split differently; what matters is which sequences are seen.
+                if (t.kind() != VtToken.Kind.TEXT && t.kind() != VtToken.Kind.DISCARDED) {
+                    kinds.append(t.kind()).append(t.bytes().length).append(' ');
+                } else if (t.kind() == VtToken.Kind.TEXT) {
+                    kinds.append(t.asString());
+                }
+                forwarded.writeBytes(t.bytesToForward());
+            }
+            forwarded.writeBytes(b.openStringFragment());
+        }
+        return kinds.toString();
+    }
+
+    @Test
+    void anOverlongStringIsSkippedTheSameHoweverItIsChunked() {
+        for (String terminator : List.of("\u0007", "\u001b\\")) {
+            ByteArrayOutputStream in = new ByteArrayOutputStream();
+            in.writeBytes(bytes("a\u001bPq"));
+            byte[] body = new byte[70_000];
+            java.util.Arrays.fill(body, (byte) '~');
+            body[69_000] = 0x1B; // an ESC in the body that is not a terminator
+            in.writeBytes(body);
+            in.writeBytes(bytes(terminator + "b\u001b[1mc"));
+            byte[] data = in.toByteArray();
+            String expected = "ab" + VtToken.Kind.CSI + "4 c";
+            for (int chunk : new int[]{data.length, 1, 7, 4096, VtTokenizer.MAX_STRING_LENGTH}) {
+                ByteArrayOutputStream forwarded = new ByteArrayOutputStream();
+                assertEquals(expected, fedInChunks(data, chunk, forwarded), "chunk " + chunk);
+                // Clients get every byte, in order: their tokenizers skip the same string.
+                assertArrayEquals(data, forwarded.toByteArray(), "chunk " + chunk);
+            }
+        }
+    }
+
+    @Test
+    void aStringAtTheCapIsStillAToken() {
+        byte[] data = new byte[VtTokenizer.MAX_STRING_LENGTH + 1];
+        java.util.Arrays.fill(data, (byte) 'x');
+        data[0] = 0x1B;
+        data[1] = ']';
+        data[data.length - 1] = 0x07; // the terminator is the byte past the cap
+        for (int chunk : new int[]{data.length, 1000}) {
+            assertEquals(VtToken.Kind.OSC + "" + data.length + " ", fedInChunks(data, chunk, new ByteArrayOutputStream()));
+        }
+    }
+
+    @Test
+    void attachingDuringASkippedStringGetsAnIntroducerThatSkipsTheRest() {
+        VtTokenizer tok = new VtTokenizer();
+        byte[] big = new byte[70_000];
+        java.util.Arrays.fill(big, (byte) 'A');
+        tok.feed(bytes("\u001b]52;c;"));
+        tok.feed(big);
+        tok.feed(bytes("\u001b")); // half of the ESC \ terminator
+        VtTokenizer client = new VtTokenizer();
+        assertTrue(client.feed(tok.openStringBytes()).tokens().isEmpty());
+        List<VtToken> rest = client.feed(bytes("\\ok")).tokens();
+        assertEquals("ok", rest.getLast().asString());
+        assertEquals(VtToken.Kind.TEXT, rest.getLast().kind());
+        assertEquals(2, rest.size());
+    }
+
+    @Test
+    void endOfStreamInASkippedStringFlushesWhatWasNotStreamed() {
+        VtTokenizer tok = new VtTokenizer();
+        byte[] big = new byte[70_000];
+        java.util.Arrays.fill(big, (byte) 'A');
+        big[0] = 0x1B;
+        big[1] = 'P';
+        assertEquals(70_000, tok.feed(big).openStringFragment().length);
+        assertTrue(tok.flush().tokens().isEmpty());
+        assertEquals("z", tok.feed(bytes("z")).tokens().getFirst().asString());
     }
 
     @Test

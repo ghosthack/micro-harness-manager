@@ -38,8 +38,8 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * <h2>Replies</h2>
  * Queries are answered through the {@link ReplySink} given to {@link #setReplies}. In the
- * {@link ReplyScope#BASIC basic} scope only DA1 ({@code CSI c}, any parameters without a
- * {@code >} prefix), DA2 ({@code CSI > c} / {@code CSI > 0 c}) and DSR 5/6 are answered — the
+ * {@link ReplyScope#BASIC basic} scope only DA1 ({@code CSI c} / {@code CSI 0 c}, no private
+ * marker), DA2 ({@code CSI > c} / {@code CSI > 0 c}) and DSR 5/6 are answered — the
  * set {@link QueryFilter} strips from the stream clients see, so the two stay in lock-step —
  * plus XTGETTCAP ({@code DCS + q}), answered "invalid" as jediterm did.
  * {@link ReplyScope#FULL} adds DECXCPR ({@code CSI ? 6 n}), DECRQM, XTVERSION and the kitty
@@ -1392,11 +1392,6 @@ public final class TerminalEmulator {
         if (hasSubParams()) {
             return;
         }
-        if (fin == 'c' && prefix != '>') {
-            // DA1. QueryFilter strips every CSI … c without a '>' prefix, so answer them all.
-            reply(DA1_REPLY);
-            return;
-        }
         switch (prefix) {
             case 0 -> {
                 if (intermediate == 0) {
@@ -1474,6 +1469,14 @@ public final class TerminalEmulator {
             }
             case 'Z' -> tabBackward(count(0));
             case 'b' -> repeatLast(count(0));
+            case 'c' -> {
+                // DA1, CSI c / CSI 0 c only: with a private marker it is not this query
+                // (CSI ? Ps c sets the Linux console's cursor), and a reply would be typed
+                // at a program that asked nothing.
+                if (arg(0, 0) == 0) {
+                    reply(DA1_REPLY);
+                }
+            }
             case 'd' -> setRow(count(0) - 1);
             case 'g' -> {
                 int mode = arg(0, 0);
@@ -1805,7 +1808,7 @@ public final class TerminalEmulator {
         }
         if (space == 2) {
             int first = subCount >= 5 ? k + 2 : k + 1; // with or without the colour-space id
-            if (first + 2 < k + subCount + 1) {
+            if (first + 2 < k + subCount) { // the group ends at k + subCount - 1
                 return rgbOrInvalid(params[first], params[first + 1], params[first + 2]);
             }
         }

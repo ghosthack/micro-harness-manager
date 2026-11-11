@@ -559,6 +559,34 @@ final class StateDetectorTest {
         assertEquals(SessionState.WAITING_FOR_INPUT, d.classify(s).state());
     }
 
+    /** Build output on the screen is content: "fatal error" and "panic:" from a command
+     * claude ran must not read as claude having crashed while it works or asks. */
+    @Test
+    void claudeCodeErrorTextFromACommandIsNotACrash() {
+        StateDetector d = new StateDetector(new ClaudeCodePlugin(), clock, SHORT, LONG);
+        Screen working = screen("main.c:3: fatal error: x.h: No such file\npanic: boom\n(esc to interrupt)");
+        d.classify(working);
+        clock.advance(Duration.ofSeconds(6));
+        assertEquals(SessionState.WORKING, d.classify(working).state());
+
+        StateDetector asking = new StateDetector(new ClaudeCodePlugin(), clock, SHORT, LONG);
+        Screen dialog = screen("Traceback (most recent call last):\nDo you want to make this edit?\n❯ 1. Yes");
+        asking.classify(dialog);
+        clock.advance(Duration.ofSeconds(6));
+        assertEquals(SessionState.WAITING_FOR_INPUT, asking.classify(dialog).state());
+    }
+
+    @Test
+    void claudeCodeMissingBinaryFoldsIntoIdle() {
+        StateDetector d = new StateDetector(new ClaudeCodePlugin(), clock, SHORT, LONG);
+        Screen s = screen("zsh: command not found: claude");
+        d.classify(s);
+        clock.advance(Duration.ofSeconds(6));
+        Classification c = d.classify(s);
+        assertEquals(SessionState.IDLE, c.state());
+        assertEquals(Classification.Origin.PLUGIN, c.origin());
+    }
+
     // ------------------------------------------------------------------
     // grok. Grounded directly against a live grok 1.0.5 (5115b46bc909) [stable] pane
     // (macOS, tmux 3.6a, 120x40) via tmux capture-pane, except the approval wording, which

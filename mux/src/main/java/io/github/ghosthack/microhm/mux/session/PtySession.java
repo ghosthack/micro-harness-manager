@@ -33,6 +33,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The PTY-backed {@link Session}: a {@link PtyProcess} (microhm-pty), the {@link HeadlessTerminal} shadowing
@@ -73,6 +74,10 @@ public final class PtySession implements Session {
     /** The wire value of {@code Info.backend}: microhm-pty is Unix-only. */
     /** The PTY kind sessions report: a POSIX pty, or a Windows ConPTY pseudoconsole. */
     static final String BACKEND = System.getProperty("os.name", "").startsWith("Windows") ? "conpty" : "unix";
+    /** How much input may wait for a program that is not reading its terminal. Past it the
+     * sender is refused: the queue would otherwise grow with every keystroke, paste and
+     * automation retry until the daemon ran out of heap, taking every session with it. */
+    static final int MAX_PENDING_INPUT_BYTES = 4 * 1024 * 1024;
     private static final byte[] CR = {'\r'};
     /** String terminator, prefixed to a BEHIND re-sync snapshot (see {@link #handSnapshot}). */
     private static final byte[] ST = {0x1B, '\\'};
@@ -114,6 +119,9 @@ public final class PtySession implements Session {
     private final Map<Watcher, WatchState> watchers = new LinkedHashMap<>(); // guarded by lock
 
     private final BlockingQueue<byte[]> ptyInput = new LinkedBlockingQueue<>();
+    /** Bytes in {@link #ptyInput} plus the chunk the writer is in the middle of. */
+    private final AtomicLong pendingInputBytes = new AtomicLong();
+    private boolean applyFailureLogged;                         // pump thread only
     private final Thread pump;
     private final Thread writer;
 
@@ -130,7 +138,9 @@ public final class PtySession implements Session {
         this.rows = rows;
         // Emulator replies (DA, DSR, CPR) are enqueued for the writer thread, never written
         // from under the lock the pump holds while the emulator produces them.
-        this.terminal = new HeadlessTerminal(columns, rows, historyLines, this::write);
+        // A reply that does not fit is dropped, never thrown back into the pump: a program
+        // that is not reading its input is not waiting for the answer either.
+        this.terminal = new HeadlessTerminal(columns, rows, historyLines, this::enqueueInput);
         this.pump = Thread.ofPlatform().daemon().name("microhm-mux-pump-" + name).unstarted(this::pump);
         this.writer = Thread.ofPlatform().daemon().name("microhm-mux-pty-writer-" + name).unstarted(this::drainPtyInput);
     }
@@ -189,10 +199,28 @@ public final class PtySession implements Session {
 
     @Override
     public void write(byte[] bytes) {
-        if (bytes.length == 0) {
-            return;
+        if (!enqueueInput(bytes)) {
+            throw new InputRejectedException("session " + name + " is not reading its input ("
+                    + pendingInputBytes.get() + " bytes pending); nothing was written");
         }
+    }
+
+    /** False, with nothing enqueued, when {@code bytes} would not fit behind what is already
+     * pending. A chunk is always accepted into an empty queue whatever its size, so one
+     * large paste is never refused outright; the queue keeps the order of acceptance. */
+    private boolean enqueueInput(byte[] bytes) {
+        if (bytes.length == 0) {
+            return true;
+        }
+        long pending;
+        do {
+            pending = pendingInputBytes.get();
+            if (pending > 0 && pending + bytes.length > MAX_PENDING_INPUT_BYTES) {
+                return false;
+            }
+        } while (!pendingInputBytes.compareAndSet(pending, pending + bytes.length));
         ptyInput.offer(bytes);
+        return true;
     }
 
     @Override
@@ -613,8 +641,21 @@ public final class PtySession implements Session {
                 synchronized (lock) {
                     outputBytes += n;
                     lastOutputNanos = System.nanoTime();
-                    markActive();
-                    applyAndBroadcast(tokenizer.feed(buffer, 0, n));
+                    try {
+                        markActive();
+                        applyAndBroadcast(tokenizer.feed(buffer, 0, n));
+                    } catch (RuntimeException e) {
+                        // An emulator bug on one chunk must not end the pump: nobody would
+                        // read the PTY again and the program would block on its next write.
+                        // The chunk is lost to the screen; the session lives.
+                        if (!applyFailureLogged) {
+                            applyFailureLogged = true;
+                            log.warn("session {}: applying output failed; continuing (further failures"
+                                    + " are logged at debug)", name, e);
+                        } else {
+                            log.debug("session {}: applying output failed: {}", name, e.toString());
+                        }
+                    }
                     process.outputConsumed();
                     // awaitQuiet re-checks the counter and the stamp; input, the pending output
                     lock.notifyAll();
@@ -839,6 +880,8 @@ public final class PtySession implements Session {
                 }
                 out.write(bytes);
                 out.flush();
+                // Only now: a chunk stuck in the write is still held for the program.
+                pendingInputBytes.addAndGet(-bytes.length);
             }
         } catch (IOException e) {
             // The PTY closed underneath us: the pump is about to report the exit.

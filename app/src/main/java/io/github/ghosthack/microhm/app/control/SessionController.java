@@ -312,7 +312,7 @@ public final class SessionController implements McpToolset {
     // ------------------------------------------------------------------ screen logs
 
     /** Whose log, of which session (and harness), in which folder. */
-    private record Mirror(String caller, String session, HarnessType harness, Path dir) {
+    private record Mirror(Set<String> callers, String session, HarnessType harness, Path dir) {
     }
 
     /** The project folder of the calling session, where its logs go; empty when the caller
@@ -336,8 +336,13 @@ public final class SessionController implements McpToolset {
             return Optional.empty();
         }
         Path file = SessionLogs.file(callerDir.get(), target.name());
-        Mirror mirror = new Mirror(caller, target.name(), target.harness(), callerDir.get());
-        mirrors.put(file, mirror);
+        // agents sharing a project share the file: it is kept while any of them is running
+        Mirror mirror = mirrors.compute(file, (f, kept) -> {
+            Mirror m = kept != null ? kept : new Mirror(ConcurrentHashMap.newKeySet(), target.name(),
+                    target.harness(), callerDir.get());
+            m.callers().add(caller);
+            return m;
+        });
         try {
             syncLog(file, mirror);
             return Optional.of(file);
@@ -346,7 +351,7 @@ public final class SessionController implements McpToolset {
             if (e instanceof Unreachable) {
                 return Optional.of(file);
             }
-            mirrors.remove(file);
+            // kept all the same: the next sample tries again (the folder may come back)
             return Optional.empty();
         }
     }
@@ -398,7 +403,8 @@ public final class SessionController implements McpToolset {
         Set<String> live = infos.stream().map(Session.Info::name).collect(Collectors.toSet());
         for (Map.Entry<Path, Mirror> e : mirrors.entrySet()) {
             Mirror mirror = e.getValue();
-            if (!live.contains(mirror.caller())) {
+            mirror.callers().retainAll(live);
+            if (mirror.callers().isEmpty()) {
                 stopLog(e.getKey());
                 continue;
             }
@@ -573,6 +579,12 @@ public final class SessionController implements McpToolset {
         }
         Path project = expandProject(requiredText(args, "project"));
         Optional<String> display = optionalText(args, "name").map(String::strip);
+        // the name becomes part of each line of list's reply: one with a line break (or
+        // list's own separator) in it would let an agent forge rows other agents read
+        if (display.isPresent() && (display.get().length() > 64
+                || display.get().chars().anyMatch(c -> Character.isISOControl(c) || c == '·'))) {
+            throw new ToolError("name must be at most 64 characters, on one line, without \"·\"");
+        }
         Optional<String> prompt = optionalText(args, "prompt");
         Map<String, String> labels = caller != null && !caller.isBlank()
                 ? Map.of(LABEL_SPAWNED_BY, caller) : Map.of();

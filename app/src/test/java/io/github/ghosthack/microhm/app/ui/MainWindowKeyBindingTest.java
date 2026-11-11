@@ -23,6 +23,20 @@ final class MainWindowKeyBindingTest {
         assertEquals(-1, MainWindow.terminalFontDelta(KeyEvent.VK_SUBTRACT, control, control));
     }
 
+    /** Off macOS the session shortcuts need Shift as well: plain Ctrl+D, Ctrl+W and
+     * Ctrl+T are the shell's (end of file, delete word, transpose). */
+    @Test
+    void sessionShortcutsLeavePlainControlKeysToTheTerminal() {
+        int command = InputEvent.META_DOWN_MASK;
+        int control = InputEvent.CTRL_DOWN_MASK;
+        int shift = InputEvent.SHIFT_DOWN_MASK;
+        assertEquals(false, MainWindow.isSessionChord(control, control));
+        assertEquals(true, MainWindow.isSessionChord(control | shift, control));
+        assertEquals(true, MainWindow.isSessionChord(command, command));
+        assertEquals(false, MainWindow.isSessionChord(control, command));
+        assertEquals(false, MainWindow.isSessionChord(0, control));
+    }
+
     @Test
     void terminalZoomRequiresThePlatformShortcutModifier() {
         int command = InputEvent.META_DOWN_MASK;

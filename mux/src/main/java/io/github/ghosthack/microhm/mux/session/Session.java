@@ -143,7 +143,18 @@ public interface Session {
 
     boolean isAlive();
 
-    /** Enqueues raw bytes for the PTY (client keystrokes, or the emulator's query replies). */
+    /** Input the session did not take: the program has stopped reading its terminal and the
+     * bound on what is held for it is reached. The message is meant for the sender. */
+    final class InputRejectedException extends RuntimeException {
+        public InputRejectedException(String message) {
+            super(message);
+        }
+    }
+
+    /** Enqueues raw bytes for the PTY (client keystrokes). Throws
+     * {@link InputRejectedException}, having enqueued nothing, when the program is not
+     * reading and too much is already pending; {@link #sendKeys}, {@link #input},
+     * {@link #paste} and {@link #pasteIfBracketed} do the same. */
     void write(byte[] bytes);
 
     /** {@code text}, then when {@code enter} a {@code Protocol.SEND_KEYS_ENTER_DELAY_MS}

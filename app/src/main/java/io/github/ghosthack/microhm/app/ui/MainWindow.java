@@ -185,6 +185,10 @@ public final class MainWindow extends JFrame {
 
     /** Set by {@link #shutdown}; late events from other threads are then ignored. */
     private volatile boolean disposed;
+    /** EDT only: the "Refresh failed" dialog is open. */
+    private boolean refreshFailureShowing;
+    /** EDT only: live rows a poll found gone, already being refreshed away. */
+    private final Set<String> goneSessions = new HashSet<>();
     /** Creates and resumes sessions off the EDT; shared with the MCP controller. */
     private final SessionLauncher launcher;
     /** The MCP server's lifecycle — Settings starts/stops it, shutdown stops it. */
@@ -201,7 +205,7 @@ public final class MainWindow extends JFrame {
             });
     private final SessionEvents.SessionKilledListener sessionKilledListener = this::sessionKilledExternally;
 
-    /** The context menu's "Close" and Cmd/Ctrl+W's polite session close. Quit timeout
+    /** The context menu's "Close" and Cmd / Ctrl+Shift+W's polite session close. Quit timeout
      * is generous — a harness flushing
      * its transcript on exit can take a few seconds; exit timeout is a bare shell
      * dying, which is quick or wedged. */
@@ -440,11 +444,11 @@ public final class MainWindow extends JFrame {
         openHereButton.addActionListener(e -> openSessionAtSelection());
         addControlButton(toolBar, openHereButton);
         shellHereButton.setIcon(HarnessIcons.forType(HarnessType.SHELL));
-        shellHereButton.setToolTipText("New shell at the selected session's path (Cmd/Ctrl+T)");
+        shellHereButton.setToolTipText("New shell at the selected session's path (Cmd / Ctrl+Shift+T)");
         shellHereButton.addActionListener(e -> openShellAtSelection());
         addControlButton(toolBar, shellHereButton);
         duplicateButton.setIcon(LucidIcon.duplicate(16));
-        duplicateButton.setToolTipText("Duplicate the selected session (Cmd/Ctrl+D)");
+        duplicateButton.setToolTipText("Duplicate the selected session (Cmd / Ctrl+Shift+D)");
         duplicateButton.addActionListener(e -> duplicateSelected());
         addControlButton(toolBar, duplicateButton);
 
@@ -474,7 +478,7 @@ public final class MainWindow extends JFrame {
         detachButton.addActionListener(e -> detachSelected());
         addControlButton(stopLadderGroup, detachButton);
         closeButton.setIcon(LucidIcon.x(16));
-        closeButton.setToolTipText("Close the selected session gracefully (Cmd/Ctrl+W)");
+        closeButton.setToolTipText("Close the selected session gracefully (Cmd / Ctrl+Shift+W)");
         closeButton.addActionListener(e -> closeSelectedGracefully());
         addControlButton(stopLadderGroup, closeButton);
         killButton.setIcon(LucidIcon.zap(16));
@@ -573,7 +577,7 @@ public final class MainWindow extends JFrame {
         applyActiveTabPollTimerState();
         harnessBudgetPanel.setRefreshAction(this::refreshHarnessBudgets);
 
-        // Step 5: Ctrl+Tab / Ctrl+1..9 cycling, Cmd/Ctrl+T shell-here, Cmd/Ctrl+W
+        // Step 5: Ctrl+Tab / Ctrl+1..9 cycling, Cmd / Ctrl+Shift+T shell-here, Cmd / Ctrl+Shift+W
         // graceful close. Registered on the KeyboardFocusManager, not
         // as a component-level binding, because a focused terminal consumes key
         // events before they'd ever reach a JComponent InputMap.
@@ -940,6 +944,12 @@ public final class MainWindow extends JFrame {
      * cancel its selection.
      */
     private void refreshSidebar(String reselect) {
+        refreshSidebar(reselect, false);
+    }
+
+    /** {@code quiet}: a refresh nobody asked for (a session ended by itself) fails
+     * without a dialog; the next asked-for one reports the daemon. */
+    private void refreshSidebar(String reselect, boolean quiet) {
         long seq = refreshTickets.issue(reselect);
         backgroundExecutor.execute(() -> {
             ReconciliationResult result;
@@ -948,9 +958,22 @@ public final class MainWindow extends JFrame {
             } catch (SessionHostException e) {
                 // its reselect target must not be applied by some later, unrelated refresh
                 refreshTickets.failed(seq);
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this,
-                        "The session daemon is unreachable: " + e.getMessage(), "Refresh failed",
-                        JOptionPane.ERROR_MESSAGE));
+                if (!quiet) {
+                    SwingUtilities.invokeLater(() -> {
+                        // one dialog, however many refreshes fail while it is open
+                        if (refreshFailureShowing || disposed) {
+                            return;
+                        }
+                        refreshFailureShowing = true;
+                        try {
+                            JOptionPane.showMessageDialog(this,
+                                    "The session daemon is unreachable: " + e.getMessage(), "Refresh failed",
+                                    JOptionPane.ERROR_MESSAGE);
+                        } finally {
+                            refreshFailureShowing = false;
+                        }
+                    });
+                }
                 return;
             }
             SwingUtilities.invokeLater(() -> {
@@ -963,6 +986,7 @@ public final class MainWindow extends JFrame {
 
     /** EDT half of {@link #refreshSidebar}. */
     private void applySidebar(ReconciliationResult result, String reselect) {
+        goneSessions.clear();
         String toReselect = reselect != null ? reselect
                 : sidebarList.getSelectedValue() != null ? sidebarList.getSelectedValue().sessionName() : null;
 
@@ -1035,7 +1059,7 @@ public final class MainWindow extends JFrame {
             int selectedIndex = reselect == null ? -1 : indexOfSessionName(reselect);
             boolean reselectHiddenByFilter = reselect != null && selectedIndex < 0;
             if (selectedIndex < 0 && previouslySelected != null) {
-                // The reselect target (e.g. a session just created by Cmd/Ctrl+T) may not
+                // The reselect target (e.g. a session just created by Cmd / Ctrl+Shift+T) may not
                 // be visible under the current filters yet, or ever — don't drop the
                 // user's still-live prior selection just because we can't find it.
                 selectedIndex = indexOfSessionName(previouslySelected.sessionName());
@@ -1254,7 +1278,7 @@ public final class MainWindow extends JFrame {
     private void landAttach(String name, int generation, SessionConnection connection,
                             boolean disableMouseWheel) {
         settleInFlight(name, generation);
-        if (!isCurrentAttach(name, generation)) {
+        if (disposed || !isCurrentAttach(name, generation)) {
             connection.close();
             return;
         }
@@ -1262,6 +1286,12 @@ public final class MainWindow extends JFrame {
         SessionTerminal terminal = SessionTerminal.open(connection, disableMouseWheel,
                 terminalFontFamily, terminalFontSize);
         applyTerminalBackground(terminal);
+        // a session that ends by itself (exit typed in a shell) must stop showing as live
+        terminal.onEnded(() -> {
+            if (!disposed) {
+                refreshSidebar(null, true);
+            }
+        });
         attached.put(name, terminal);
         if (!attachOrder.contains(name)) {
             attachOrder.add(name);
@@ -1423,6 +1453,9 @@ public final class MainWindow extends JFrame {
     /** Always invoked on the EDT (see the {@code SwingUtilities::invokeLater} dispatcher
      * wired in the constructor) — safe to touch the list model and repaint directly. */
     private void onStatusResult(String sessionName, SessionStatusPoller.PollResult result) {
+        if (result.sessionGone() && goneSessions.add(sessionName)) {
+            refreshSidebar(null, true); // the daemon no longer has it: the row goes dead
+        }
         for (SidebarEntry entry : allSidebarEntries) {
             if (entry.status() == SidebarEntry.Status.LIVE && entry.sessionName().equals(sessionName)) {
                 SidebarView.FilterStatus oldStatus = SidebarView.filterStatus(entry);
@@ -1519,8 +1552,8 @@ public final class MainWindow extends JFrame {
     // ------------------------------------------------------------------
 
     /**
-     * Ctrl+Tab / Ctrl+Shift+Tab / Ctrl+1..9, plus Cmd/Ctrl+T (new shell at the selected
-     * session's path), Cmd/Ctrl+W (graceful close), Cmd/Ctrl+D (duplicate the selected
+     * Ctrl+Tab / Ctrl+Shift+Tab / Ctrl+1..9, plus Cmd / Ctrl+Shift+T (new shell at the selected
+     * session's path), Cmd / Ctrl+Shift+W (graceful close), Cmd / Ctrl+Shift+D (duplicate the selected
      * session), Cmd/Ctrl +/- (global terminal zoom), and the
      * optional bare Page Up/Down and Home/End mapping to the terminal's scrollback,
      * dispatched globally because a focused terminal consumes key events before
@@ -1529,18 +1562,17 @@ public final class MainWindow extends JFrame {
      * app, leaves these keys alone), and always consumes the keys it handles so they
      * never reach the terminal.
      *
-     * <p>The T and W bindings use the platform menu-shortcut modifier — Cmd on macOS,
-     * Ctrl elsewhere — deliberately: binding the Ctrl chords on macOS too would steal
-     * readline's transpose-chars (Ctrl+T) and unix-word-rubout (Ctrl+W) from every
-     * shell pane, while the Cmd chords are the platform's own tab gestures and reach no
-     * terminal anyway. D carries no such readline binding, so it uses the same platform
-     * mask for consistency with the other session-management shortcuts.
+     * <p>The T, W, D and Delete bindings use {@link #isSessionChord}: Cmd on macOS,
+     * Ctrl+Shift elsewhere, so no control key a shell or agent reads is taken from it.
+     * The page keys are left to a full-screen program (the alternate screen has no
+     * scrollback to page, and vim, less and the like read those keys themselves).
      */
     private boolean handleGlobalKeyEvent(KeyEvent e) {
         if (e.getID() != KeyEvent.KEY_PRESSED || !isFocused()) {
             return false;
         }
-        if (pageKeys && e.getModifiersEx() == 0 && canScrollSelectedTerminal()) {
+        if (pageKeys && e.getModifiersEx() == 0 && canScrollSelectedTerminal()
+                && !selectedTerminalIsFullScreen()) {
             boolean handled = switch (e.getKeyCode()) {
                 case KeyEvent.VK_PAGE_UP -> {
                     scrollPage(true);
@@ -1573,31 +1605,35 @@ public final class MainWindow extends JFrame {
             e.consume();
             return true;
         }
-        if (e.getKeyCode() == KeyEvent.VK_T && (e.getModifiersEx() & menuMask) == menuMask) {
-            openShellAtSelection();
-            e.consume();
-            return true;
-        }
-        if (e.getKeyCode() == KeyEvent.VK_W && (e.getModifiersEx() & menuMask) == menuMask) {
-            closeSelectedGracefully();
-            e.consume();
-            return true;
-        }
-        if (e.getKeyCode() == KeyEvent.VK_D && (e.getModifiersEx() & menuMask) == menuMask) {
-            duplicateSelected();
-            e.consume();
-            return true;
-        }
         if (e.getKeyCode() == KeyEvent.VK_COMMA && (e.getModifiersEx() & menuMask) == menuMask) {
             openSettingsDialog();
             e.consume();
             return true;
         }
-        if ((e.getKeyCode() == KeyEvent.VK_DELETE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE)
-                && (e.getModifiersEx() & menuMask) == menuMask) {
-            removeSelectedFromRegistry();
-            e.consume();
-            return true;
+        if (isSessionChord(e.getModifiersEx(), menuMask)) {
+            boolean handled = switch (e.getKeyCode()) {
+                case KeyEvent.VK_T -> {
+                    openShellAtSelection();
+                    yield true;
+                }
+                case KeyEvent.VK_W -> {
+                    closeSelectedGracefully();
+                    yield true;
+                }
+                case KeyEvent.VK_D -> {
+                    duplicateSelected();
+                    yield true;
+                }
+                case KeyEvent.VK_DELETE, KeyEvent.VK_BACK_SPACE -> {
+                    removeSelectedFromRegistry();
+                    yield true;
+                }
+                default -> false;
+            };
+            if (handled) {
+                e.consume();
+                return true;
+            }
         }
         if ((e.getModifiersEx() & KeyEvent.CTRL_DOWN_MASK) == 0) {
             return false;
@@ -1614,6 +1650,18 @@ public final class MainWindow extends JFrame {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Whether {@code modifiers} carry the session-management chord (T, W, D, Delete):
+     * Cmd on macOS, Ctrl+Shift elsewhere. Plain Ctrl is the terminal's own there: Ctrl+D
+     * is end-of-file, Ctrl+W deletes a word, Ctrl+T transposes, Ctrl+Backspace deletes
+     * a word in many shells, and all of them must reach the session.
+     */
+    static boolean isSessionChord(int modifiers, int menuMask) {
+        int chord = menuMask == KeyEvent.CTRL_DOWN_MASK
+                ? KeyEvent.CTRL_DOWN_MASK | KeyEvent.SHIFT_DOWN_MASK : menuMask;
+        return (modifiers & chord) == chord;
     }
 
     /** Returns the global zoom step for a platform shortcut, or zero for any other key. */
@@ -1741,6 +1789,12 @@ public final class MainWindow extends JFrame {
         SidebarEntry entry = sidebarList.getSelectedValue();
         return entry != null && entry.status() == SidebarEntry.Status.LIVE
                 && attached.containsKey(entry.sessionName());
+    }
+
+    /** Whether the selected session's program has taken the whole screen. */
+    private boolean selectedTerminalIsFullScreen() {
+        SessionTerminal terminal = selectedTerminal();
+        return terminal != null && terminal.alternateScreen();
     }
 
     /** The selected session's landed terminal, or null when there is none. */
@@ -1922,7 +1976,7 @@ public final class MainWindow extends JFrame {
         refreshSidebar(null);
     }
 
-    /** Cmd/Ctrl+Delete's twin of {@link #removeFromRegistry}, on the selection. */
+    /** Cmd / Ctrl+Shift+Delete's twin of {@link #removeFromRegistry}, on the selection. */
     private void removeSelectedFromRegistry() {
         SidebarEntry entry = sidebarList.getSelectedValue();
         if (entry != null && entry.status() == SidebarEntry.Status.DEAD) {
@@ -1998,7 +2052,7 @@ public final class MainWindow extends JFrame {
             }
         }
         menu.addSeparator();
-        // the popup already selected this row (see maybeShowPopup), so the Cmd/Ctrl+T
+        // the popup already selected this row (see maybeShowPopup), so the Cmd / Ctrl+Shift+T
         // handler's "at the selection" is exactly "at the clicked row"
         var newHere = menu.add("New here…");
         newHere.setIcon(LucidIcon.folderOpen(16));
@@ -2158,7 +2212,7 @@ public final class MainWindow extends JFrame {
     }
 
     /**
-     * Cmd/Ctrl+W: gracefully ends a selected live session via {@link #closeGracefully}.
+     * Cmd / Ctrl+Shift+W: gracefully ends a selected live session via {@link #closeGracefully}.
      * Dead rows are left alone; forgetting a stopped session is available
      * only through the explicitly named "Remove from registry" action.
      */
@@ -2171,7 +2225,7 @@ public final class MainWindow extends JFrame {
     }
 
     /**
-     * The context menu's "Close" (and Cmd/Ctrl+W's live-row half): gracefully ends the
+     * The context menu's "Close" (and Cmd / Ctrl+Shift+W's live-row half): gracefully ends the
      * session — the harness quits itself and the shell under it exits. The registry
      * entry remains as a stopped/resumable row. Refuses (with an explanation, via
      * {@link GracefulCloser}) while anything is in progress: a working agent, a pending
@@ -2773,7 +2827,7 @@ public final class MainWindow extends JFrame {
 
     /**
      * Creates and registers a new session running the given harness — shared by the
-     * "Open…" dialog, the Duplicate action, and the Cmd/Ctrl+T shell shortcut. Must be
+     * "Open…" dialog, the Duplicate action, and the Cmd / Ctrl+Shift+T shell shortcut. Must be
      * called on the EDT.
      */
     private void createSession(Path projectPath, HarnessType harnessType, Optional<String> harnessSessionId) {
@@ -2810,7 +2864,7 @@ public final class MainWindow extends JFrame {
     }
 
     /**
-     * Cmd/Ctrl+T: a new shell session in the selected session's project directory —
+     * Cmd / Ctrl+Shift+T: a new shell session in the selected session's project directory —
      * "give me a terminal next to what I'm working on". Rows (live or dead) hand over
      * their registered project path. No selection is a silent no-op: there is nowhere to
      * inherit a path from.

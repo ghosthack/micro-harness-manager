@@ -18,6 +18,7 @@ final class FakeSessionManager implements SessionManager {
 
     private final Map<String, FakeSession> sessions = new ConcurrentHashMap<>();
     volatile boolean killAllCalled;
+    volatile boolean closed;
     volatile Listener listener;
     final List<Consumer<Session>> createdListeners = new CopyOnWriteArrayList<>();
     /** The {@code env} each session was created with, by name. */
@@ -56,6 +57,9 @@ final class FakeSessionManager implements SessionManager {
     @Override
     public Session create(String name, Path workdir, int columns, int rows, List<String> command,
                           Map<String, String> labels, Map<String, String> environment) {
+        if (closed) {
+            throw new IllegalStateException(CLOSED);
+        }
         FakeSession session = new FakeSession(this, name, workdir, columns, rows, command, labels);
         if (sessions.putIfAbsent(name, session) != null) {
             throw new IllegalStateException("session " + name + " already exists");
@@ -89,6 +93,21 @@ final class FakeSessionManager implements SessionManager {
         for (String name : new ArrayList<>(sessions.keySet())) {
             kill(name);
         }
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+        killAll();
+    }
+
+    @Override
+    public boolean closeIfIdle() {
+        if (!sessions.isEmpty()) {
+            return false;
+        }
+        closed = true;
+        return true;
     }
 
     @Override

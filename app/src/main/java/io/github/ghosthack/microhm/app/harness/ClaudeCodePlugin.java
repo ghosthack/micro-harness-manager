@@ -44,9 +44,12 @@ public final class ClaudeCodePlugin implements HarnessPlugin {
                     + "|^[\\s\\u00A0]*│?[\\s\\u00A0]*>[\\s\\u00A0]*│?[\\s\\u00A0]*$"
                     + "|^[\\s\\u00A0]*❯[\\s\\u00A0]*$)");
 
+    // Narrow on purpose, as in CodexPlugin: a coding agent's screen is full of "panic:",
+    // "fatal error" and tracebacks from the commands it runs, and reading those as a crash
+    // marks a working (or asking) session idle, which Close then types /exit into. Only
+    // claude's own absence counts, in both shell spellings.
     private static final Pattern BROKEN = Pattern.compile(
-            "(?i)(claude: command not found|panic:|traceback \\(most recent call last\\)"
-                    + "|segmentation fault|fatal error)");
+            "(?i)(claude: command not found|command not found: claude(?![\\w-]))");
 
     private static final Pattern VERSIONED_BINARY = Pattern.compile("\\d+\\.\\d+\\.\\d+");
 

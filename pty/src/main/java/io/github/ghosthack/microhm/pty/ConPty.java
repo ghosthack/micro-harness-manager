@@ -85,10 +85,11 @@ final class ConPty {
         String commandLine = commandLine(program, command.subList(1, command.size()));
         String lower = program.toLowerCase(Locale.ROOT);
         if (lower.endsWith(".cmd") || lower.endsWith(".bat")) {
-            // A batch file runs through cmd.exe; /s makes it keep the inner quoting intact.
+            // A batch file runs through cmd.exe, which parses its command line by rules of
+            // its own: see batchCommandLine.
             String comspec = getIgnoreCase(environment, "ComSpec");
             applicationName = comspec == null ? "C:\\Windows\\System32\\cmd.exe" : comspec;
-            commandLine = quote(applicationName) + " /d /s /c \"" + commandLine + "\"";
+            commandLine = batchCommandLine(applicationName, program, command.subList(1, command.size()));
         }
 
         MemorySegment inRead = MemorySegment.NULL;
@@ -202,7 +203,11 @@ final class ConPty {
         private final Pipe input;
         private final Pipe output;
         private final CompletableFuture<Integer> exit;
-        private final AtomicBoolean consoleClosed = new AtomicBoolean();
+        /** Guards {@link #consoleClosed} and every call that uses the console handle but the
+         * close itself: ClosePseudoConsole frees the handle, so it must start only after the
+         * last resize has returned, and no resize may start once it is due. */
+        private final Object consoleLock = new Object();
+        private boolean consoleClosed; // guarded by consoleLock
         private final AtomicBoolean closed = new AtomicBoolean();
 
         Console(MemorySegment console, MemorySegment job, MemorySegment process, Pipe input, Pipe output,
@@ -217,18 +222,20 @@ final class ConPty {
 
         @Override
         public void setWinSize(int columns, int rows) throws IOException {
-            if (consoleClosed.get()) {
-                throw new IOException("the pseudoconsole is closed");
-            }
-            try (Arena arena = Arena.ofConfined()) {
-                int hr = (int) Win32.RESIZE_PSEUDO_CONSOLE.invokeExact(console, Win32.coord(arena, columns, rows));
-                if (hr != 0) {
-                    throw new IOException("ResizePseudoConsole failed: HRESULT 0x" + Integer.toHexString(hr));
+            synchronized (consoleLock) {
+                if (consoleClosed) {
+                    throw new IOException("the pseudoconsole is closed");
                 }
-            } catch (IOException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw new IOException("ResizePseudoConsole failed", t);
+                try (Arena arena = Arena.ofConfined()) {
+                    int hr = (int) Win32.RESIZE_PSEUDO_CONSOLE.invokeExact(console, Win32.coord(arena, columns, rows));
+                    if (hr != 0) {
+                        throw new IOException("ResizePseudoConsole failed: HRESULT 0x" + Integer.toHexString(hr));
+                    }
+                } catch (IOException e) {
+                    throw e;
+                } catch (Throwable t) {
+                    throw new IOException("ResizePseudoConsole failed", t);
+                }
             }
         }
 
@@ -258,9 +265,14 @@ final class ConPty {
         }
 
         private void closeConsole() {
-            if (consoleClosed.compareAndSet(false, true)) {
-                closeConsoleAsync(console);
+            synchronized (consoleLock) {
+                if (consoleClosed) {
+                    return;
+                }
+                consoleClosed = true;
             }
+            // Outside the lock: the close can wait on output, and a resize need not wait on it.
+            closeConsoleAsync(console);
         }
 
         private void terminateJob() {
@@ -500,6 +512,80 @@ final class ConPty {
             backslashes = 0;
         }
         sb.append("\\".repeat(backslashes * 2)).append('"');
+        return sb.toString();
+    }
+
+    /** ASCII symbols cmd.exe gives no meaning to; any other one gets the argument quoted. */
+    private static final String BATCH_UNQUOTED = "#$*+-./:?@\\_";
+
+    /**
+     * The command line that runs batch file {@code script} with {@code arguments} through
+     * {@code cmdExe}. cmd.exe does not parse like the C runtime: {@code & | < > ^ ( )} act
+     * outside quotes, {@code \"} does not escape a quote, and {@code %NAME%} expands even
+     * inside quotes, so C-runtime quoting lets an argument run commands (the "BatBadBut"
+     * hole). This follows the Rust standard library's fix: {@code /e:ON /v:OFF /d /c "…"}
+     * around everything, and each argument through {@link #quoteForBatch}.
+     *
+     * @throws IOException for what cannot be passed safely: a script path holding a quote
+     *                     or ending in a backslash, an argument holding CR, LF or NUL
+     */
+    static String batchCommandLine(String cmdExe, String script, List<String> arguments) throws IOException {
+        if (script.indexOf('"') >= 0 || script.endsWith("\\")) {
+            throw new IOException("cannot run " + script + ": not a usable batch file path");
+        }
+        StringBuilder sb = new StringBuilder(quote(cmdExe)).append(" /e:ON /v:OFF /d /c \"\"").append(script)
+                .append('"');
+        for (String argument : arguments) {
+            sb.append(' ').append(quoteForBatch(argument));
+        }
+        return sb.append('"').toString();
+    }
+
+    /**
+     * One argument of a batch file: in double quotes unless it is made only of letters,
+     * digits, non-ASCII characters and {@link #BATCH_UNQUOTED} (so every cmd.exe
+     * metacharacter ends up quoted), a quote doubled (cmd's own escape, which the C runtime
+     * of the program the script starts also reads as one quote), backslashes doubled only
+     * before a quote, and each {@code %} preceded by {@code %%cd:~,} — an empty substring of
+     * the always-defined {@code %cd%}, which expands to nothing and leaves the {@code %}
+     * that follows unable to open a variable reference.
+     */
+    static String quoteForBatch(String argument) throws IOException {
+        // An empty argument would vanish; a trailing backslash would escape a quote the
+        // script puts after it ("%~1").
+        boolean quote = argument.isEmpty() || argument.endsWith("\\");
+        for (int i = 0; i < argument.length(); i++) {
+            char c = argument.charAt(i);
+            if (c == '\r' || c == '\n' || c == 0) {
+                // cmd.exe ends the command at a line break, whatever the quoting.
+                throw new IOException("a batch file argument cannot hold a line break or a NUL");
+            }
+            boolean plain = c >= 0x80 ? !Character.isISOControl(c)
+                    : Character.isLetterOrDigit(c) || BATCH_UNQUOTED.indexOf(c) >= 0;
+            quote |= !plain;
+        }
+        StringBuilder sb = new StringBuilder();
+        if (quote) {
+            sb.append('"');
+        }
+        int backslashes = 0;
+        for (int i = 0; i < argument.length(); i++) {
+            char c = argument.charAt(i);
+            if (c == '\\') {
+                backslashes++;
+            } else {
+                if (c == '"') {
+                    sb.append("\\".repeat(backslashes)).append('"');
+                } else if (c == '%') {
+                    sb.append("%%cd:~,");
+                }
+                backslashes = 0;
+            }
+            sb.append(c);
+        }
+        if (quote) {
+            sb.append("\\".repeat(backslashes)).append('"');
+        }
         return sb.toString();
     }
 

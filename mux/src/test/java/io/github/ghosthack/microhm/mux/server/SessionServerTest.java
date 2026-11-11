@@ -13,9 +13,12 @@ import io.github.ghosthack.microhm.mux.protocol.Protocol;
 import io.github.ghosthack.microhm.mux.session.CaptureFormat;
 import io.github.ghosthack.microhm.mux.session.Session;
 import io.github.ghosthack.microhm.mux.session.SessionEvent;
+import io.github.ghosthack.microhm.mux.session.SessionManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -32,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The transport end to end: a real {@link SessionServer} bound in-process on a temporary
@@ -234,7 +239,9 @@ class SessionServerTest {
             SessionServerException e = assertThrows(SessionServerException.class,
                     () -> spawning.newSession("x", other, 80, 24, null));
             assertEquals("the session daemon 9.9.9 (pid 777) speaks protocol 7; this app needs "
-                    + Protocol.VERSION + ". Finish its sessions or run `microhm-mux shutdown`, then retry",
+                    + Protocol.VERSION + ". Finish its sessions or run `microhm-mux shutdown`, then retry"
+                    + " (a daemon too old to take that shutdown answers with this same message: stop it"
+                    + " with `kill 777`)",
                     e.getMessage());
             assertFalse(e.isNoServer());
             assertThrows(SessionServerException.class, spawning::list);
@@ -569,6 +576,105 @@ class SessionServerTest {
         keptManager.fireIdle();
         assertFalse(keepAlive.awaitExitWithin(Duration.ofMillis(300)));
         assertTrue(keepAlive.isRunning());
+    }
+
+    @Test
+    void shutdownIsHonouredAcrossAProtocolMismatch() throws Exception {
+        try (SocketChannel channel = connect(home)) {
+            FrameCodec codec = codec(channel);
+            codec.write(Frame.json(FrameType.REQUEST, "{\"op\":\"shutdown\",\"protocol\":99}"));
+            JsonNode body = Json.parse(codec.read().payload());
+            assertTrue(body.get(Protocol.F_OK).asBoolean(), "a client of another protocol can still stop it");
+            assertNull(codec.read());
+        }
+        assertTrue(server.awaitExitWithin(WAIT));
+        assertFalse(Files.exists(ServerHome.socket(home)));
+    }
+
+    @Test
+    void newIsRefusedOnceTheExitHasBegun() throws Exception {
+        // The idle exit's commit point, taken while the listener is still open.
+        assertTrue(manager.closeIfIdle());
+        JsonNode refused = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"late\",\"workdir\":\""
+                + jsonPath(home) + "\"}");
+        assertFalse(refused.get(Protocol.F_OK).asBoolean());
+        assertEquals(SessionManager.CLOSED, refused.get(Protocol.F_ERROR).asText());
+        assertTrue(manager.sessions().isEmpty());
+    }
+
+    @Test
+    void idleTimerThatLostToACreateDoesNotExitTheServer() throws Exception {
+        client.newSession("s", home, 80, 24, null);
+        manager.fireIdle(); // fired just before the create; the server must notice the session
+        assertFalse(server.awaitExitWithin(Duration.ofMillis(300)));
+        assertFalse(manager.session("s").killed);
+        assertTrue(client.has("s"));
+    }
+
+    @Test
+    void shutdownClosesTheManagerBeforeKilling() {
+        client.newSession("s", home, 80, 24, null);
+        client.shutdown();
+        assertTrue(manager.closed);
+        assertTrue(manager.killAllCalled);
+    }
+
+    @Test
+    void newRejectsACommandThatIsNotAnArrayOfStrings() throws Exception {
+        for (String command : List.of("\"rm -rf x\"", "[\"sh\", 1]", "{\"0\":\"sh\"}")) {
+            JsonNode refused = raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"c\",\"workdir\":\""
+                    + jsonPath(home) + "\",\"command\":" + command + "}");
+            assertFalse(refused.get(Protocol.F_OK).asBoolean(), command);
+            assertEquals("command must be an array of strings", refused.get(Protocol.F_ERROR).asText());
+        }
+        assertTrue(manager.sessions().isEmpty(), "no login shell in place of the bad command");
+        assertTrue(raw("{\"op\":\"new\",\"protocol\":1,\"name\":\"c\",\"workdir\":\"" + jsonPath(home)
+                + "\",\"command\":null}").get(Protocol.F_OK).asBoolean(), "null is absent");
+    }
+
+    @Test
+    @EnabledOnOs({OS.MAC, OS.LINUX})
+    void homeSocketAndLogArePrivateToTheOwner() throws Exception {
+        assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(home)));
+        assertEquals("rw-------",
+                PosixFilePermissions.toString(Files.getPosixFilePermissions(ServerHome.socket(home))));
+
+        // A home an earlier build left open, with its log: both are tightened at the next start.
+        Path loose = newHome();
+        Files.setPosixFilePermissions(loose, PosixFilePermissions.fromString("rwxr-xr-x"));
+        Files.createFile(ServerHome.log(loose),
+                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-r--r--")));
+        Files.setPosixFilePermissions(ServerHome.log(loose), PosixFilePermissions.fromString("rw-r--r--"));
+        ServerHome.secure(loose);
+        ServerHome.createLog(ServerHome.log(loose));
+        start(ServeOptions.defaults(loose), new FakeSessionManager());
+        assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(loose)));
+        assertEquals("rw-------",
+                PosixFilePermissions.toString(Files.getPosixFilePermissions(ServerHome.log(loose))));
+    }
+
+    @Test
+    @EnabledOnOs({OS.MAC, OS.LINUX})
+    void aHomeOwnedBySomeoneElseIsRefusedByServerAndClient() throws Exception {
+        Path foreign = newHome();
+        int mine = ((Number) Files.getAttribute(foreign, "unix:uid")).intValue();
+        IOException e = assertThrows(IOException.class, () -> ServerHome.requireOwnedBy(foreign, mine + 1));
+        assertTrue(e.getMessage().contains("belongs to another user"), e.getMessage());
+        ServerHome.requireOwnedBy(foreign, mine);
+
+        // End to end where the test can give a directory away (root only).
+        assumeTrue(mine == 0, "needs root to chown");
+        Files.setAttribute(foreign, "unix:uid", 12345);
+        SessionServer refused = new SessionServer(ServeOptions.defaults(foreign), new FakeSessionManager());
+        assertTrue(assertThrows(IOException.class, refused::start).getMessage().contains("belongs to another user"));
+        assertFalse(Files.exists(ServerHome.socket(foreign)));
+        assertFalse(Files.exists(ServerHome.lock(foreign)));
+        SessionServerClient spawning = new SessionServerClient(foreign, true);
+        assertTrue(assertThrows(SessionServerException.class, spawning::list)
+                .getMessage().contains("belongs to another user"));
+        assertTrue(assertThrows(SessionServerException.class, () -> spawning.newSession("x", foreign, 80, 24, null))
+                .getMessage().contains("belongs to another user"));
+        assertFalse(Files.exists(ServerHome.log(foreign)), "no spawn happened");
     }
 
     // ---- labels, input, capture formats, wait, watch

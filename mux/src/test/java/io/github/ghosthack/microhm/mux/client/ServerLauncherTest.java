@@ -1,11 +1,14 @@
 package io.github.ghosthack.microhm.mux.client;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -83,5 +86,26 @@ class ServerLauncherTest {
         assertTrue(command.contains(ServerLauncher.MAIN_CLASS) || command.size() == 3, String.valueOf(command));
         assertEquals(List.of("serve", "--daemon"), command.subList(command.size() - 2, command.size()));
         assertEquals(ServerLauncher.javaBinary(), Path.of(System.getProperty("java.home"), "bin", JAVA));
+    }
+
+    @Test
+    @EnabledOnOs({OS.MAC, OS.LINUX})
+    void spawnCreatesTheHomeAndTheLogPrivateToTheOwner(@TempDir Path dir) throws Exception {
+        Path home = dir.resolve("mux");
+        String before = System.getProperty(ServerLauncher.LAUNCHER_PROPERTY);
+        // Any executable stands in for the daemon: the redirect is what creates the log.
+        System.setProperty(ServerLauncher.LAUNCHER_PROPERTY, "/bin/sh");
+        try {
+            ServerLauncher.spawn(home).waitFor();
+        } finally {
+            if (before == null) {
+                System.clearProperty(ServerLauncher.LAUNCHER_PROPERTY);
+            } else {
+                System.setProperty(ServerLauncher.LAUNCHER_PROPERTY, before);
+            }
+        }
+        assertEquals("rwx------", PosixFilePermissions.toString(Files.getPosixFilePermissions(home)));
+        assertEquals("rw-------",
+                PosixFilePermissions.toString(Files.getPosixFilePermissions(home.resolve("server.log"))));
     }
 }

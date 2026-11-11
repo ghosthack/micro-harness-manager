@@ -102,6 +102,75 @@ final class SessionLogsTest {
         assertEquals(expected + "--- microhm · 2026-11-09T06:00:09Z · screen ---\n4. four\n", Files.readString(log.file()));
     }
 
+    private static void deleteTree(Path root) throws Exception {
+        try (java.util.stream.Stream<Path> walk = Files.walk(root)) {
+            for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.delete(p);
+            }
+        }
+    }
+
+    /** {@code git clean -fdx} in the project takes the folder with it: the log starts
+     * again there, without losing the lines it could not write meanwhile. */
+    @Test
+    void aDeletedFolderIsMadeAgainAndTheLogGoesOn() throws Exception {
+        SessionLogs.Log log = new SessionLogs().open(project, "mhm-x");
+        Path folder = project.resolve(SessionLogs.FOLDER);
+        log.record(scrolled(numbered(1, 3), 3), s -> s, NOW);
+        deleteTree(folder);
+        log.record(scrolled(numbered(4, 5), 5), s -> s, NOW);
+        assertEquals(numbered(4, 5), Files.readString(log.file()));
+        assertEquals("*\n", Files.readString(folder.resolve(".gitignore")));
+        assertEquals(5, new SessionLogs().open(project, "mhm-x").since());
+    }
+
+    @Test
+    void aFailedWriteLeavesTheLinesToBeWrittenNextTime() throws Exception {
+        SessionLogs.Log log = new SessionLogs().open(project, "mhm-x");
+        Path folder = project.resolve(SessionLogs.FOLDER);
+        log.record(scrolled(numbered(1, 3), 3), s -> s, NOW);
+        deleteTree(folder);
+        Files.writeString(folder, "in the way"); // a file where the folder was: nothing can be written
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> log.record(scrolled(numbered(4, 5), 5), s -> s, NOW));
+        assertEquals(3, log.since(), "not counted as written");
+        Files.delete(folder);
+        log.record(scrolled(numbered(4, 5), 5), s -> s, NOW);
+        assertEquals(numbered(4, 5), Files.readString(log.file()));
+    }
+
+    /** A project is not trusted: a planted link must not send sessions' output elsewhere. */
+    @Test
+    void linksPlantedInTheProjectAreNotWrittenThrough(@TempDir Path elsewhere) throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+                System.getProperty("os.name").toLowerCase().contains("win"), "needs symbolic links");
+        Path folder = project.resolve(SessionLogs.FOLDER);
+        Files.createSymbolicLink(folder, elsewhere);
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> new SessionLogs().open(project, "mhm-x"));
+        assertEquals(0, Files.list(elsewhere).count());
+
+        Files.delete(folder);
+        Files.createDirectories(folder);
+        Path victim = elsewhere.resolve("victim");
+        Files.writeString(victim, "mine\n");
+        Files.createSymbolicLink(folder.resolve("mhm-x.log"), victim);
+        SessionLogs.Log log = new SessionLogs().open(project, "mhm-x");
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> log.record(scrolled(numbered(1, 2), 2), s -> s, NOW));
+        assertEquals("mine\n", Files.readString(victim));
+    }
+
+    @Test
+    void anIdleSessionDoesNotRewriteItsState() throws Exception {
+        SessionLogs.Log log = new SessionLogs().open(project, "mhm-x");
+        log.record(scrolled(numbered(1, 3), 3), s -> s, NOW);
+        Path state = project.resolve(SessionLogs.FOLDER).resolve(".mhm-x.state");
+        Files.setLastModifiedTime(state, java.nio.file.attribute.FileTime.fromMillis(1000));
+        log.record(scrolled("", 3), s -> s, NOW.plusSeconds(1));
+        assertEquals(1000, Files.getLastModifiedTime(state).toMillis());
+    }
+
     @Test
     void namesAreKeptToSafeCharacters() {
         assertEquals(project.resolve(SessionLogs.FOLDER).resolve("a_b_c.log"), SessionLogs.file(project, "a/b c"));

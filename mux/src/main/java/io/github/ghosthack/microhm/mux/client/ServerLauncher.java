@@ -103,14 +103,17 @@ public final class ServerLauncher {
         command.add("--home");
         command.add(home.toAbsolutePath().normalize().toString());
         try {
-            Files.createDirectories(home);
+            // The append redirect below would create the log with the umask's permissions.
+            ServerHome.secure(home);
+            ServerHome.createLog(ServerHome.log(home));
             return new ProcessBuilder(command)
                     .directory(new File(System.getProperty("user.home")))
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.appendTo(ServerHome.log(home).toFile()))
                     .start();
         } catch (IOException e) {
-            throw new SessionServerException("cannot start the session daemon: " + String.join(" ", command), e);
+            throw new SessionServerException("cannot start the session daemon (" + e.getMessage() + "): "
+                    + String.join(" ", command), e);
         }
     }
 

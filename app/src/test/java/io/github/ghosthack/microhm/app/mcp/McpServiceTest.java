@@ -59,8 +59,8 @@ final class McpServiceTest {
         service.start(0, "tok");
         McpService.McpLink link = service.linkFor("mhm-a b");
         assertEquals("http://127.0.0.1:" + service.port() + "/mcp/mhm-a%20b", link.url());
-        assertEquals("tok", link.token());
-        assertFalse(link.toString().contains("tok"), link.toString());
+        assertFalse(link.token().contains("tok"), "the session gets its own token, not the server's");
+        assertFalse(link.toString().contains(link.token()), link.toString());
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(link.url()))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json, text/event-stream")

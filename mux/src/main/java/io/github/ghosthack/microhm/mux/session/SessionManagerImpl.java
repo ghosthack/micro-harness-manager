@@ -45,6 +45,7 @@ public final class SessionManagerImpl implements SessionManager {
     private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(
             runnable -> Thread.ofPlatform().daemon().name("microhm-mux-idle-timer").unstarted(runnable));
     private ScheduledFuture<?> idle;          // guarded by this
+    private boolean closed;                   // guarded by this
     private volatile Listener listener;
     private final List<Consumer<Session>> createdListeners = new CopyOnWriteArrayList<>();
 
@@ -90,6 +91,10 @@ public final class SessionManagerImpl implements SessionManager {
     private synchronized Session createLocked(String name, Path workdir, int columns, int rows,
                                               List<String> command, Map<String, String> labels,
                                               Map<String, String> environment) {
+        if (closed) {
+            // Refused rather than created and then lost to the exit already under way.
+            throw new IllegalStateException(CLOSED);
+        }
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("session name is required");
         }
@@ -154,6 +159,30 @@ public final class SessionManagerImpl implements SessionManager {
     }
 
     @Override
+    public void close() {
+        List<Session> remaining;
+        synchronized (this) {
+            // Under the lock create takes: every session that will ever exist is either in
+            // this list or refused.
+            closed = true;
+            cancelIdleTimer();
+            remaining = sessions();
+        }
+        for (Session session : remaining) {
+            kill(session.name());
+        }
+    }
+
+    @Override
+    public synchronized boolean closeIfIdle() {
+        if (!sessions.isEmpty()) {
+            return false;
+        }
+        closed = true;
+        return true;
+    }
+
+    @Override
     public void setListener(Listener listener) {
         this.listener = listener;
         synchronized (this) {
@@ -185,6 +214,9 @@ public final class SessionManagerImpl implements SessionManager {
 
     private synchronized void armIdleTimer() {
         cancelIdleTimer();
+        if (closed) {
+            return; // the exit is already under way
+        }
         idle = timer.schedule(this::fireIdle, idleDelay.toMillis(), TimeUnit.MILLISECONDS);
     }
 

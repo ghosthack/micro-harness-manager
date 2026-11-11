@@ -63,6 +63,24 @@ public interface SessionManager {
      * of what the OS does on exit. */
     void killAll();
 
+    /** What every refused {@link #create} says once the manager is closed. */
+    String CLOSED = "the session server is shutting down";
+
+    /** Server shutdown: from here on {@link #create} throws {@link IllegalStateException}
+     * ({@link #CLOSED}), and every session is killed. The real manager makes the two one
+     * step with respect to {@code create}, so no session is ever created, acknowledged and
+     * then killed by the exit; this default (fakes) only kills. */
+    default void close() {
+        killAll();
+    }
+
+    /** The idle exit's commit point: closes the manager as {@link #close} does if it has
+     * no session, and says whether it did. False means a {@code create} got in after the
+     * idle timer fired, and the server stays up. */
+    default boolean closeIfIdle() {
+        return sessions().isEmpty();
+    }
+
     void setListener(Listener listener);
 
     /** Tells {@code listener} about every session created from now on, after it is listed

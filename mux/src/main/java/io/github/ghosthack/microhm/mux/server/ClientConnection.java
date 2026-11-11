@@ -140,12 +140,15 @@ final class ClientConnection implements Runnable {
             codec.write(response(Json.error("request must be a JSON object")));
             return false;
         }
+        String op = JsonEncoding.textField(request, Protocol.F_OP);
         JsonNode protocol = request.get(Protocol.F_PROTOCOL);
-        if (protocol == null || !protocol.canConvertToInt() || protocol.asInt() != Protocol.VERSION) {
+        // Shutdown is exempt: it is the one request a client of another protocol version
+        // must be able to make, or its only way to replace this server is to kill the pid.
+        if (!Protocol.OP_SHUTDOWN.equals(op)
+                && (protocol == null || !protocol.canConvertToInt() || protocol.asInt() != Protocol.VERSION)) {
             codec.write(response(server.identity(Json.error(Protocol.ERROR_PROTOCOL_MISMATCH))));
             return false;
         }
-        String op = JsonEncoding.textField(request, Protocol.F_OP);
         if (op == null) {
             codec.write(response(Json.error("request has no op")));
             return true;
@@ -303,7 +306,13 @@ final class ClientConnection implements Runnable {
     private boolean handleAttached(Frame frame) {
         switch (frame.type()) {
             case DATA_IN:
-                session.write(frame.payload());
+                try {
+                    session.write(frame.payload());
+                } catch (Session.InputRejectedException e) {
+                    // Attach mode has no reply to carry this; the keystrokes are dropped and
+                    // the attachment stays, as for a terminal whose program is hung.
+                    log.debug("dropping input: {}", e.getMessage());
+                }
                 return true;
             case RESIZE:
                 try {

@@ -86,7 +86,8 @@ public final class SessionStatusPoller {
      * saved chat name, otherwise the pane's OSC title). The first ordinary screen is
      * not confirmed: without a previous capture, "different from nothing" is not proof
      * that a harness is working. */
-    public record PollResult(Classification classification, boolean stateConfirmed, String paneTitle) {
+    public record PollResult(Classification classification, boolean stateConfirmed, String paneTitle,
+                             boolean sessionGone) {
     }
 
     /**
@@ -108,6 +109,7 @@ public final class SessionStatusPoller {
                     boolean stateConfirmed;
                     Screen screen;
                     String sessionTitle;
+                    boolean sessionGone;
                     try {
                         screen = host.capture(name);
                         if (generationOf(name) != generation) {
@@ -117,6 +119,7 @@ public final class SessionStatusPoller {
                                 HarnessPlugins.of(entry.harnessType()), clock, shortQuiescence, longQuiescence));
                         boolean hadBaseline = detector.hasScreenBaseline();
                         classification = detector.classify(screen);
+                        sessionGone = screen.paneDead();
                         stateConfirmed = classification.confidence() != Confidence.MEDIUM
                                 && (hadBaseline || classification.state() != SessionState.WORKING);
                         sessionTitle = entry.harnessType() == HarnessType.CODEX
@@ -142,7 +145,7 @@ public final class SessionStatusPoller {
                     resultDispatcher.execute(() -> {
                         if (generationOf(name) == generation) {
                             onResult.accept(name, new PollResult(
-                                    classification, stateConfirmed, sessionTitle));
+                                    classification, stateConfirmed, sessionTitle, sessionGone));
                         }
                     });
                 } finally {
