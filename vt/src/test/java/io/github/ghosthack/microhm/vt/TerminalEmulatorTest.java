@@ -557,6 +557,18 @@ class TerminalEmulatorTest {
         }
 
         @Test
+        void aShortColonColourGroupDoesNotReadPastItself() {
+            // 38:2:r:g has no blue: ignored, not completed from the next parameter.
+            Term t = term(20, 2).feed(C + "38:2:1:2;3mA");
+            assertEquals(Style.COLOR_DEFAULT, Style.foreground(t.style(0, 0)));
+            assertTrue(Style.italic(t.style(0, 0)));
+            // The same group as the last of the 32 parameters kept used to index past them.
+            t.feed(C + ";".repeat(28) + "38:2:1:2mB");
+            assertEquals(Style.DEFAULT, t.style(0, 1));
+            assertEquals("AB", t.row(0));
+        }
+
+        @Test
         void underlineColourIsParsedAndIgnored() {
             Term t = term(20, 2).feed(C + "58;2;1;2;3;1mA" + C + "0;58:5:9;3mB");
             assertEquals(Style.with(Style.DEFAULT, Style.BOLD, true), t.style(0, 0));
@@ -672,13 +684,61 @@ class TerminalEmulatorTest {
     }
 
     @Nested
+    class OverlongStrings {
+        private static String stream(String terminator) {
+            return "A" + E + "Pq" + "~".repeat(70_000) + terminator + "B" + E + "]0;" + "t".repeat(70_000) + "\u0007C";
+        }
+
+        @Test
+        void aStringOverTheCapPrintsNothing() {
+            Term t = term(80, 24).feed(stream(E + "\\"));
+            assertEquals("ABC", t.row(0));
+            assertEquals("", t.row(1));
+            assertEquals(0, t.e.historySize());
+            assertEquals("", t.e.title());
+        }
+
+        @Test
+        void theScreenDoesNotDependOnChunking() {
+            byte[] data = stream("\u0007").getBytes(StandardCharsets.UTF_8);
+            for (int chunk : new int[]{1, 4096, 65_536}) {
+                Term t = term(80, 24);
+                for (int off = 0; off < data.length; off += chunk) {
+                    t.e.feed(data, off, Math.min(chunk, data.length - off));
+                }
+                assertEquals("ABC", t.row(0), "chunk " + chunk);
+                assertEquals(0, t.e.historySize(), "chunk " + chunk);
+            }
+        }
+
+        @Test
+        void tokensFromTheDaemonGiveTheSameScreen() {
+            byte[] data = stream(E + "\\").getBytes(StandardCharsets.UTF_8);
+            VtTokenizer tokenizer = new VtTokenizer();
+            Term daemon = term(80, 24);
+            Term client = term(80, 24);
+            for (int off = 0; off < data.length; off += 5000) {
+                VtTokenizer.Batch batch = tokenizer.feed(data, off, Math.min(5000, data.length - off));
+                daemon.e.apply(batch.tokens());
+                for (VtToken token : batch.tokens()) {
+                    client.e.feed(token.bytesToForward());
+                }
+                client.e.feed(batch.openStringFragment());
+            }
+            assertEquals("ABC", daemon.row(0));
+            assertEquals("ABC", client.row(0));
+        }
+    }
+
+    @Nested
     class Replies {
         @Test
         void basicScopeAnswersWhatQueryFilterStrips() {
             List<String> replies = new ArrayList<>();
             TerminalEmulator e = new TerminalEmulator(10, 3, 0);
             e.setReplies(b -> replies.add(new String(b, StandardCharsets.UTF_8)), TerminalEmulator.ReplyScope.BASIC);
-            String[] queries = {C + "c", C + "0c", C + "=c", C + ">c", C + ">0c", C + "5n", C + "6n",
+            String[] queries = {C + "c", C + "0c", C + "0;1c", C + "=c", C + "?6c", C + "?c", C + "1c", C + "0 c",
+                    C + "4294967296c", C + ">c", C + ">0c", C + "5n", C + "6n",
                     C + ">1c", C + "?6n", C + "?996n", C + "?1$p", C + "4$p", C + ">q", C + "?u", E + "]11;?\u0007",
                     E + "P+q544e" + E + "\\"};
             for (String q : queries) {
@@ -695,6 +755,13 @@ class TerminalEmulatorTest {
         void deviceAttributesAndStatus() {
             Term t = term(10, 3).feed(C + "c" + C + ">c" + C + "5n" + C + "2;4H" + C + "6n" + C + "?6n");
             assertEquals(List.of(C + "?62;22c", C + ">0;10;0c", C + "0n", C + "2;4R", C + "?2;4;1R"), t.replies);
+        }
+
+        @Test
+        void onlyPlainDa1IsAnswered() {
+            // CSI ? Ps c is the Linux console's cursor shape: a reply would be typed at the program.
+            assertTrue(term(10, 3).feed(C + "?6c" + C + "?c" + C + "=c" + C + "1c" + C + "0 c").replies.isEmpty());
+            assertEquals(List.of(C + "?62;22c", C + "?62;22c"), term(10, 3).feed(C + "c" + C + "0c").replies);
         }
 
         @Test

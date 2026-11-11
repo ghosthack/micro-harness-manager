@@ -22,7 +22,18 @@ class QueryFilterTest {
     void da1IsStripped() {
         assertTrue(stripped("[c"));
         assertTrue(stripped("[0c"));
-        assertTrue(stripped("[=c")); // CSI = c: the emulator answers it as DA1 too
+        assertTrue(stripped("[0;1c"));
+    }
+
+    @Test
+    void onlyPlainDa1IsStripped() {
+        assertFalse(stripped("[?6c")); // the Linux console's cursor shape, not a query
+        assertFalse(stripped("[?c"));
+        assertFalse(stripped("[=c"));  // DA3: nobody answers it
+        assertFalse(stripped("[1c"));
+        assertFalse(stripped("[0 c"));
+        assertFalse(stripped("[0:1c"));
+        assertFalse(stripped("[4294967296c")); // must not wrap round to 0
     }
 
     @Test

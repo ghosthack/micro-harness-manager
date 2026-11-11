@@ -28,9 +28,11 @@ import java.util.List;
  *       OSC/STRING that arrived in this chunk are returned as {@link Batch#openStringFragment}
  *       to be broadcast now; when the terminator arrives the whole token is returned with
  *       {@link VtToken#alreadyForwarded()} set to the number of bytes already streamed.
- *       A body longer than 64 KiB without a terminator is dropped from the emulator feed
- *       (never returned as a token — clients already have the bytes) and the parser
- *       resets.</li>
+ *       A string that outgrows 64 KiB is never returned as an OSC/STRING token: from that
+ *       byte on (the same byte however the input is chunked) the body is skipped up to its
+ *       terminator, still streamed to clients as fragments, the last piece as a
+ *       {@link VtToken.Kind#DISCARDED} token. The parser does not go back to text
+ *       mid-body, which would print the rest of a large image or clipboard payload.</li>
  *   <li>Concatenating, for each batch, every token's {@code bytesToForward()} followed by
  *       {@code openStringFragment}, reproduces the input byte-for-byte, minus tokens the
  *       caller chooses to drop and minus any still-held partial CSI/ESC/UTF-8 tail.</li>
@@ -55,6 +57,9 @@ public final class VtTokenizer {
         IN_ESC_INTER,
         /** In an OSC/DCS/APC/PM/SOS body; {@link #stringBuf} accumulates (already forwarded). */
         IN_STRING,
+        /** In a string that outgrew {@link #MAX_STRING_LENGTH}, skipping to its terminator;
+         * {@link #stringBuf} holds only the bytes not yet forwarded. */
+        DISCARD_STRING,
     }
 
     /** What one {@link #feed} produced: the tokens completed by the chunk, in order, and
@@ -233,6 +238,24 @@ public final class VtTokenizer {
                     } else if (b == ESC) {
                         stringSawEsc = true;
                     }
+                    if (state == State.IN_STRING && stringBuf.size() > MAX_STRING_LENGTH) {
+                        // Checked per byte, so where the body is given up does not depend on
+                        // how the input was chunked: daemon and clients agree.
+                        stringBuf.keepTail(stringBuf.size() - stringForwarded);
+                        stringForwarded = 0;
+                        state = State.DISCARD_STRING;
+                    }
+                }
+                case DISCARD_STRING -> {
+                    // The same terminators as IN_STRING: a client that attached mid-string
+                    // is still in that state, and must leave the string on the same byte.
+                    stringBuf.write(b);
+                    boolean terminated = b == BEL || (stringSawEsc && b == '\\');
+                    stringSawEsc = b == ESC;
+                    if (terminated) {
+                        emitDiscarded(out);
+                        state = State.GROUND;
+                    }
                 }
             }
         }
@@ -247,19 +270,16 @@ public final class VtTokenizer {
      * {@code wantFragment}), and the reset of an overlong one. */
     private byte[] endOfFeed(boolean wantFragment) {
         byte[] fragment = EMPTY;
-        if (state == State.IN_STRING) {
+        if (state == State.IN_STRING || state == State.DISCARD_STRING) {
             int size = stringBuf.size();
             if (wantFragment && size > stringForwarded) {
                 fragment = stringBuf.copy(stringForwarded, size);
             }
             stringForwarded = size;
-            if (size > MAX_STRING_LENGTH) {
-                // Overlong unterminated string: drop from the emulator feed (clients already
-                // have the bytes) and reset the parser. See "Tokenizer contract".
+            if (state == State.DISCARD_STRING) {
+                // Nothing will ask for these bytes again: keep the buffer at one chunk.
                 stringBuf.reset();
                 stringForwarded = 0;
-                stringSawEsc = false;
-                state = State.GROUND;
             }
         }
         return fragment;
@@ -273,6 +293,11 @@ public final class VtTokenizer {
      * attach sends this to a new client after the snapshot so it gets the sequence the
      * other clients are mid-way through. */
     public byte[] openStringBytes() {
+        if (state == State.DISCARD_STRING) {
+            // The body is gone; an SOS introducer makes the new client skip the rest of it
+            // as a string too (plus the ESC that may be half of the terminator).
+            return stringSawEsc ? new byte[]{ESC, 'X', ESC} : new byte[]{ESC, 'X'};
+        }
         return state == State.IN_STRING ? stringBuf.toByteArray() : EMPTY;
     }
 
@@ -282,7 +307,7 @@ public final class VtTokenizer {
         return switch (state) {
             case AFTER_ESC, IN_CSI, IN_ESC_INTER -> seq.toByteArray();
             case GROUND -> incompleteUtf8Tail();
-            case IN_STRING -> EMPTY;
+            case IN_STRING, DISCARD_STRING -> EMPTY;
         };
     }
 
@@ -295,6 +320,7 @@ public final class VtTokenizer {
             case AFTER_ESC, IN_ESC_INTER -> out.token(VtToken.Kind.ESCAPE, seq.array(), 0, seq.size());
             case IN_CSI -> out.token(VtToken.Kind.TEXT, seq.array(), 0, seq.size());
             case IN_STRING -> emitString(out);
+            case DISCARD_STRING -> emitDiscarded(out);
         }
         state = State.GROUND;
         text.reset();
@@ -328,6 +354,18 @@ public final class VtTokenizer {
     private void emitString(Sink out) {
         VtToken.Kind kind = stringIsOsc ? VtToken.Kind.OSC : VtToken.Kind.STRING;
         out.token(kind, stringBuf.array(), 0, stringBuf.size()); // the Collector reads stringForwarded
+        stringBuf.reset();
+        stringForwarded = 0;
+        stringSawEsc = false;
+    }
+
+    /** The end of a skipped string: its bytes not yet streamed go out as a DISCARDED token,
+     * in order before whatever follows. A {@link #feed(byte[], int, int, Sink) sink} has no
+     * one to forward to and gets nothing. */
+    private void emitDiscarded(Sink out) {
+        if (out instanceof Collector && stringBuf.size() > stringForwarded) {
+            out.token(VtToken.Kind.DISCARDED, stringBuf.array(), stringForwarded, stringBuf.size() - stringForwarded);
+        }
         stringBuf.reset();
         stringForwarded = 0;
         stringSawEsc = false;

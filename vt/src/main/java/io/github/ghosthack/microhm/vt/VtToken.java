@@ -33,6 +33,10 @@ public record VtToken(Kind kind, byte[] bytes, int alreadyForwarded) {
         /** Any other {@code ESC x} sequence: two-byte escapes (ESC c, ESC 7, ESC =, ...) and
          * the intermediate forms ({@code ESC ( B}, {@code ESC # 8}). */
         ESCAPE,
+        /** The rest of an OSC/STRING that outgrew {@link VtTokenizer#MAX_STRING_LENGTH}, through
+         * its terminator: bytes clients must still get (their own tokenizers are skipping the
+         * same string) and that nothing interprets. */
+        DISCARDED,
     }
 
     public String asString() {
