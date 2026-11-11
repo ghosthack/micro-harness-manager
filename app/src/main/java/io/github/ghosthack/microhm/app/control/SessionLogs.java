@@ -11,6 +11,7 @@ import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -96,6 +97,8 @@ final class SessionLogs {
          * is among them. */
         private final ArrayDeque<String> recent = new ArrayDeque<>();
         private final Map<String, Integer> recentCounts = new HashMap<>();
+        /** The progress last written to the state file; null before any. */
+        private String saved;
 
         private Log(Path folder, String base) {
             this.folder = folder;
@@ -107,16 +110,28 @@ final class SessionLogs {
         static Log open(Path folder, String base) {
             Log log = new Log(folder, base);
             try {
-                Files.createDirectories(folder);
-                Path ignore = folder.resolve(".gitignore");
-                if (!Files.exists(ignore)) {
-                    Files.writeString(ignore, "*\n");
-                }
+                log.ensureFolder();
                 log.load();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
             return log;
+        }
+
+        /** Makes the folder and its {@code .gitignore} when they are missing, which is
+         * also after something in the project deleted them ({@code git clean -x}). The
+         * project is not trusted: a folder or file planted there as a symbolic link would
+         * send sessions' output wherever it points, so links are refused, never followed. */
+        private void ensureFolder() throws IOException {
+            if (Files.isSymbolicLink(folder)) {
+                throw new IOException(folder + " is a symbolic link; not writing session logs through it");
+            }
+            Files.createDirectories(folder);
+            Path ignore = folder.resolve(".gitignore");
+            if (!Files.exists(ignore, LinkOption.NOFOLLOW_LINKS)) {
+                Files.writeString(ignore, "*\n", StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE,
+                        LinkOption.NOFOLLOW_LINKS);
+            }
         }
 
         Path file() {
@@ -137,6 +152,7 @@ final class SessionLogs {
          * afresh: read it {@link #since() since} 0). */
         void restarted(long newPid, Instant now) {
             write(marker(now, "a new session (pid " + newPid + ")"));
+            // only once the marker is written: a failed write is retried at the next sample
             pid = newPid;
             added = 0;
             onAlternateScreen = false;
@@ -149,6 +165,31 @@ final class SessionLogs {
          * reduced by {@code chrome} (the harness's {@code maskChrome}) that are not among
          * those written lately. */
         void record(Session.Capture capture, UnaryOperator<String> chrome, Instant now) {
+            // A write that fails (folder gone, disk full) must leave the log where it was,
+            // so the same lines are read and written again at the next sample.
+            long addedBefore = added;
+            long pidBefore = pid;
+            boolean alternateBefore = onAlternateScreen;
+            String lastRowBefore = lastRow;
+            List<String> recentBefore = List.copyOf(recent);
+            try {
+                append(capture, chrome, now);
+            } catch (RuntimeException e) {
+                added = addedBefore;
+                pid = pidBefore;
+                onAlternateScreen = alternateBefore;
+                lastRow = lastRowBefore;
+                recent.clear();
+                recentCounts.clear();
+                for (String line : recentBefore) {
+                    recent.addLast(line);
+                    recentCounts.merge(line, 1, Integer::sum);
+                }
+                throw e;
+            }
+        }
+
+        private void append(Session.Capture capture, UnaryOperator<String> chrome, Instant now) {
             StringBuilder out = new StringBuilder();
             HeadlessTerminal.History history = java.util.Objects.requireNonNull(capture.history(), "history");
             long fresh = history.added() - Math.min(added, history.added());
@@ -214,11 +255,15 @@ final class SessionLogs {
             }
             int n = count(text);
             try {
+                ensureFolder();
+                if (!Files.exists(live, LinkOption.NOFOLLOW_LINKS)) {
+                    lines = 0; // deleted under us: start it afresh
+                }
                 if (lines > 0 && lines + n > MAX_LIVE_LINES) {
                     roll();
                 }
                 Files.writeString(live, text, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
-                        StandardOpenOption.APPEND);
+                        StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -233,45 +278,65 @@ final class SessionLogs {
                 part = folder.resolve(base + "." + String.format("%04d", parts) + ".log.gz");
             } while (Files.exists(part));
             Path partial = folder.resolve("." + part.getFileName() + ".tmp");
-            try (InputStream in = Files.newInputStream(live);
-                 OutputStream gz = new GZIPOutputStream(Files.newOutputStream(partial))) {
+            try (InputStream in = Files.newInputStream(live, LinkOption.NOFOLLOW_LINKS);
+                 OutputStream gz = new GZIPOutputStream(Files.newOutputStream(partial, StandardOpenOption.CREATE,
+                         StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE,
+                         LinkOption.NOFOLLOW_LINKS))) {
                 in.transferTo(gz);
             }
             Files.move(partial, part, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            Files.writeString(live, "", StandardCharsets.UTF_8);
+            Files.writeString(live, "", StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
             lines = 0;
         }
 
         private void load() throws IOException {
-            if (Files.exists(state)) {
+            if (Files.isRegularFile(state, LinkOption.NOFOLLOW_LINKS)) {
                 Properties p = new Properties();
                 try (Reader in = Files.newBufferedReader(state, StandardCharsets.UTF_8)) {
                     p.load(in);
+                } catch (IllegalArgumentException e) {
+                    p.clear(); // a damaged state file: start from nothing rather than fail
                 }
                 pid = number(p, "pid");
                 added = number(p, "added");
                 parts = (int) number(p, "parts");
+                saved = signature();
             }
-            if (Files.exists(live)) {
+            if (Files.isRegularFile(live, LinkOption.NOFOLLOW_LINKS)) {
                 List<String> all = Files.readAllLines(live, StandardCharsets.UTF_8);
                 lines = all.size();
                 remember(String.join("\n", all.subList(Math.max(0, all.size() - RECENT_LINES), all.size())));
             }
         }
 
+        private String signature() {
+            return pid + ":" + added + ":" + parts;
+        }
+
         private void save() {
+            // sampled every second: an idle session must not rewrite its state each time
+            String now = signature();
+            if (now.equals(saved) && Files.exists(state, LinkOption.NOFOLLOW_LINKS)) {
+                return;
+            }
             Properties p = new Properties();
             p.setProperty("pid", Long.toString(pid));
             p.setProperty("added", Long.toString(added));
             p.setProperty("parts", Integer.toString(parts));
             Path partial = folder.resolve("." + base + ".state.tmp");
             try {
-                try (Writer out = Files.newBufferedWriter(partial, StandardCharsets.UTF_8)) {
+                ensureFolder();
+                try (Writer out = Files.newBufferedWriter(partial, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+                        StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                     p.store(out, "microhm session log progress");
                 }
                 Files.move(partial, state, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                saved = now;
             } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                // the lines are in the log already: failing here would have them written
+                // again, so the progress is simply saved at the next sample instead
+                saved = null;
             }
         }
 

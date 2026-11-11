@@ -111,12 +111,12 @@ public final class McpService {
     }
 
     /**
-     * The token-free URL for {@code session} and the token to send as a bearer header,
-     * read together so a concurrent restart can never pair one server's URL with another's
+     * The token-free URL for {@code session} and that session's own token (valid for its
+     * path only) to send as a bearer header, read together so a concurrent restart can never pair one server's URL with another's
      * token — or null while stopped, which callers read as "launch without MCP".
      */
     public synchronized McpLink linkFor(String session) {
-        return server != null ? new McpLink(server.callerUrl(session), token) : null;
+        return server != null ? new McpLink(server.callerUrl(session), server.sessionToken(session)) : null;
     }
 
     /** A running server's per-session URL (no token in it) and its bearer token. */

@@ -148,15 +148,20 @@ public final class OpenFileLocator implements LongFunction<Optional<Path>> {
 
     private static Optional<Path> openTranscript(long processId, Function<Path, Optional<Path>> transcriptOf) {
         Process process = null;
+        Path listing = null;
         try {
+            // Into a file, not a pipe: nothing reads a pipe while this waits, so a process
+            // with more open files than the pipe holds would block lsof until the timeout.
+            listing = Files.createTempFile("microhm-lsof-", ".txt");
             process = new ProcessBuilder("lsof", "-a", "-p", Long.toString(processId), "-Fn")
-                    .redirectErrorStream(true).start();
+                    .redirectErrorStream(true).redirectOutput(listing.toFile()).start();
             if (!process.waitFor(2, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 return Optional.empty();
             }
             Path newest = null;
-            try (BufferedReader output = process.inputReader()) {
+            try (BufferedReader output = new BufferedReader(new java.io.InputStreamReader(
+                    Files.newInputStream(listing), java.nio.charset.Charset.defaultCharset()))) {
                 for (String line; (line = output.readLine()) != null; ) {
                     if (!line.startsWith("n/")) {
                         continue;
@@ -182,6 +187,13 @@ public final class OpenFileLocator implements LongFunction<Optional<Path>> {
         } finally {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
+            }
+            if (listing != null) {
+                try {
+                    Files.deleteIfExists(listing);
+                } catch (IOException ignored) {
+                    // a leftover temp file is harmless
+                }
             }
         }
     }

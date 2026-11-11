@@ -211,6 +211,23 @@ class McpServerTest {
         assertEquals("b:", MAPPER.readTree(r.body()).at("/result/content/0/text").asText());
     }
 
+    /** A launched session's token names it: it opens that session's path and no other,
+     * so an agent cannot call as another session (or anonymously). */
+    @Test
+    void aSessionTokenOpensOnlyItsOwnPath() throws Exception {
+        String base = "http://127.0.0.1:" + server.port() + "/mcp";
+        String mine = server.sessionToken("mhm-a");
+        assertFalse(mine.equals(TOKEN));
+        assertFalse(mine.equals(server.sessionToken("mhm-b")));
+        assertEquals(200, post(base + "/mhm-a", call(1, "echo", "{}"), "Authorization", "Bearer " + mine)
+                .statusCode());
+        assertEquals(200, post(base + "/mhm-a?token=" + mine, call(1, "echo", "{}")).statusCode());
+        assertEquals(401, post(base + "/mhm-b", call(1, "echo", "{}"), "Authorization", "Bearer " + mine)
+                .statusCode());
+        assertEquals(401, post(base, call(1, "echo", "{}"), "Authorization", "Bearer " + mine).statusCode());
+        assertEquals(List.of("mhm-a", "mhm-a"), tools.callers);
+    }
+
     @Test
     void badOrMissingTokenIs401() throws Exception {
         String base = "http://127.0.0.1:" + server.port() + "/mcp/a";

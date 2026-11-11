@@ -683,18 +683,30 @@ public final class AppSettings {
         if (existing != null && !existing.isBlank()) {
             return existing.trim();
         }
-        String[] token = new String[1];
-        save(p -> {
-            String current = p.getProperty("mcp.token");
-            if (current != null && !current.isBlank()) {
-                token[0] = current.trim();
-            } else {
-                token[0] = newMcpToken();
-                p.setProperty("mcp.token", token[0]);
+        synchronized (LOCK) {
+            String[] token = new String[1];
+            boolean saved = save(p -> {
+                String current = p.getProperty("mcp.token");
+                if (current != null && !current.isBlank()) {
+                    token[0] = current.trim();
+                } else {
+                    token[0] = unsavedMcpToken != null ? unsavedMcpToken : newMcpToken();
+                    p.setProperty("mcp.token", token[0]);
+                }
+            });
+            if (token[0] == null) {
+                token[0] = unsavedMcpToken != null ? unsavedMcpToken : newMcpToken();
             }
-        });
-        return token[0] != null ? token[0] : newMcpToken();
+            // While the file cannot be written every caller must still get one and the
+            // same token: a fresh one per call would give the server and the sessions
+            // different tokens.
+            unsavedMcpToken = saved ? null : token[0];
+            return token[0];
+        }
     }
+
+    /** The token in use while the settings file could not take it; null otherwise. */
+    private static String unsavedMcpToken;
 
     /**
      * Replaces {@code mcp.token} with a fresh random one and returns it — returned even
@@ -703,7 +715,9 @@ public final class AppSettings {
      */
     public static String regenerateMcpToken() {
         String token = newMcpToken();
-        save(p -> p.setProperty("mcp.token", token));
+        synchronized (LOCK) {
+            unsavedMcpToken = save(p -> p.setProperty("mcp.token", token)) ? null : token;
+        }
         return token;
     }
 
@@ -722,7 +736,7 @@ public final class AppSettings {
      * file behind; and a file that exists but can't be read is left alone rather than
      * rewritten from defaults, which would wipe every other setting in it.
      */
-    private static void save(java.util.function.Consumer<Properties> mutation) {
+    private static boolean save(java.util.function.Consumer<Properties> mutation) {
         synchronized (LOCK) {
             Path file = settingsFile();
             Path tmp = null;
@@ -738,6 +752,7 @@ public final class AppSettings {
                     properties.store(out, "micro-harness-manager settings");
                 }
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                return true;
             } catch (IOException e) {
                 // see method doc — logged, never thrown
                 LOG.warn("failed to save settings to {}", file, e);
@@ -748,6 +763,7 @@ public final class AppSettings {
                         LOG.warn("failed to clean up temp file {}", tmp, cleanup);
                     }
                 }
+                return false;
             }
         }
     }
@@ -795,8 +811,22 @@ public final class AppSettings {
     private static Properties readFile(Path file) throws IOException {
         Properties properties = new Properties();
         if (Files.isRegularFile(file)) {
-            try (InputStream in = Files.newInputStream(file)) {
-                properties.load(in);
+            byte[] bytes = Files.readAllBytes(file);
+            try {
+                properties.load(new java.io.ByteArrayInputStream(bytes));
+            } catch (IllegalArgumentException e) {
+                // A hand-edited Windows path can hold a backslash-u without four hex
+                // digits, which Properties rejects outright. Read such a backslash as a
+                // literal one rather than lose every setting (or the app's start) to it.
+                properties.clear();
+                String text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+                        .replaceAll("\\\\u(?![0-9a-fA-F]{4})", "\\\\\\\\u");
+                try {
+                    properties.load(new java.io.StringReader(text));
+                } catch (IllegalArgumentException stillMalformed) {
+                    throw new IOException("malformed settings file " + file, stillMalformed);
+                }
+                LOG.warn("settings file {} has a malformed \\u escape; read it as a literal backslash", file);
             }
         }
         return properties;

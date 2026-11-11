@@ -437,6 +437,15 @@ public final class TerminalView extends JComponent implements TerminalListener {
         setScrollOffset(scrollOffset - emulator.rows());
     }
 
+    public boolean alternateScreen() {
+        emulator.lock().lock();
+        try {
+            return emulator.alternateScreen();
+        } finally {
+            emulator.lock().unlock();
+        }
+    }
+
     public void scrollToTop() {
         setScrollOffset(Integer.MAX_VALUE);
     }
