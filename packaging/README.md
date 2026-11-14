@@ -36,7 +36,7 @@ the JVM cannot start with would keep the app from opening at all, so one that fa
 check is discarded: the app then tries a cache without AOT-linked classes (JDK 26.0.2
 cannot start with linked ones), and when that fails too, marks the version and stops
 trying. Older versions' caches are deleted. Nothing is shipped in the download. Settings →
-Performance… shows whether this launch used it.
+Performance shows whether this launch used it.
 
 `scripts/smoke-package.sh` checks a built image: the launchers, license files and
 runtime modules, the app's `--package-smoke` (look and feel, resources, JSON and the

@@ -90,6 +90,9 @@ final class SettingsDialog {
         return mcpChanged || (enabled && !running);
     }
 
+    /** The section that shows figures instead of settings (see {@link PerformancePage}). */
+    private static final String PERFORMANCE = "Performance";
+
     /** Combo items pair a label with the value the choice stands for. */
     private record Choice<T>(String label, T value) {
         @Override
@@ -336,23 +339,17 @@ final class SettingsDialog {
         });
         cancel.addActionListener(e -> dialog.dispose());
 
+        // Performance is figures, not settings: the last section, set apart from the rest
         JPanel sections = sections(
-                new String[]{"Sidebar", "Toolbar", "Terminal", "Input", "Sessions", "Agent control"},
-                sidebar, toolbar, terminal, input, sessions, agents);
+                new String[]{"Sidebar", "Toolbar", "Terminal", "Input", "Sessions", "Agent control",
+                        PERFORMANCE},
+                sidebar, toolbar, terminal, input, sessions, agents, PerformancePage.form());
         JPanel footer = new JPanel(new BorderLayout());
+        // one line, level with the buttons it speaks of
         JLabel saveHint = note("Save applies changes from every section.");
-        saveHint.setBorder(BorderFactory.createEmptyBorder(0, 16, 12, 12));
+        saveHint.setBorder(BorderFactory.createEmptyBorder(0, 20, 12, 12));
         saveHint.setToolTipText(AppSettings.settingsFile().toString());
-        JButton performance = new JButton("Performance…");
-        performance.setToolTipText("Startup time, startup cache, memory and other figures for this run");
-        performance.addActionListener(e -> PerformanceDialog.show(dialog));
-        JPanel footerLeft = new JPanel(new BorderLayout());
-        JPanel performanceRow = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0));
-        performanceRow.setBorder(BorderFactory.createEmptyBorder(0, 12, 6, 12));
-        performanceRow.add(performance);
-        footerLeft.add(performanceRow, BorderLayout.NORTH);
-        footerLeft.add(saveHint, BorderLayout.SOUTH);
-        footer.add(footerLeft, BorderLayout.WEST);
+        footer.add(saveHint, BorderLayout.WEST);
         footer.add(DialogChrome.buttons(save, cancel), BorderLayout.EAST);
         DialogChrome.layout(dialog, sections, footer);
         DialogChrome.show(dialog, parent, save, cancel);
@@ -390,7 +387,11 @@ final class SettingsDialog {
                     int index, boolean selected, boolean focused) {
                 JComponent row = (JComponent) super.getListCellRendererComponent(
                         list, value, index, selected, focused);
-                row.setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 12));
+                row.setBorder(PERFORMANCE.equals(value)
+                        ? BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager.getColor("Separator.foreground")),
+                                BorderFactory.createEmptyBorder(0, 12, 0, 12))
+                        : BorderFactory.createEmptyBorder(0, 12, 0, 12));
                 return row;
             }
         });
@@ -487,7 +488,7 @@ final class SettingsDialog {
         return combo;
     }
 
-    private static JLabel note(String text) {
+    static JLabel note(String text) {
         JLabel label = new JLabel(text);
         label.setFont(label.getFont().deriveFont(label.getFont().getSize2D() - 2f));
         label.setForeground(UIManager.getColor("Label.disabledForeground"));
