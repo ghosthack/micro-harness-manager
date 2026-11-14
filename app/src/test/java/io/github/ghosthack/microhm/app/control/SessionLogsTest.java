@@ -8,13 +8,16 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.zip.GZIPInputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** The log files themselves: rolling into compressed parts, and progress kept across a restart. */
 final class SessionLogsTest {
@@ -169,6 +172,37 @@ final class SessionLogsTest {
         Files.setLastModifiedTime(state, java.nio.file.attribute.FileTime.fromMillis(1000));
         log.record(scrolled("", 3), s -> s, NOW.plusSeconds(1));
         assertEquals(1000, Files.getLastModifiedTime(state).toMillis());
+    }
+
+    private static String permissions(Path file) throws Exception {
+        return PosixFilePermissions.toString(Files.getPosixFilePermissions(file, LinkOption.NOFOLLOW_LINKS));
+    }
+
+    @Test
+    void theFolderAndTheFilesMadeInItAreTheOwnersAlone() throws Exception {
+        assumeTrue(project.getFileSystem().supportedFileAttributeViews().contains("posix"));
+        Path folder = project.resolve(SessionLogs.FOLDER);
+        Files.createDirectory(folder); // left by an earlier version, open to others
+        Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString("rwxr-xr-x"));
+
+        SessionLogs.Log log = new SessionLogs().open(project, "mhm-p");
+        assertEquals("rwx------", permissions(folder), "an existing folder is closed too");
+        log.record(scrolled(numbered(1, 5000), 5000), s -> s, NOW);
+        log.record(scrolled(numbered(5001, 10_000), 10_000), s -> s, NOW);
+        for (String name : new String[] {"mhm-p.log", ".mhm-p.state", ".gitignore", "mhm-p.0001.log.gz"}) {
+            assertEquals("rw-------", permissions(folder.resolve(name)), name);
+        }
+
+        // made again after something deleted it: closed again
+        try (var files = Files.list(folder)) {
+            for (Path file : files.toList()) {
+                Files.delete(file);
+            }
+        }
+        Files.delete(folder);
+        log.record(scrolled(numbered(10_001, 10_002), 10_002), s -> s, NOW);
+        assertEquals("rwx------", permissions(folder));
+        assertEquals("rw-------", permissions(log.file()));
     }
 
     @Test

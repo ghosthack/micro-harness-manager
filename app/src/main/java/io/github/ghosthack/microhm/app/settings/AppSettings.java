@@ -610,6 +610,22 @@ public final class AppSettings {
     }
 
     /**
+     * Whether an agent that reads another session gets a plain-text log of that session's
+     * output kept in its own project folder ({@code .microhm-sessions/}):
+     * {@code mcp.session-logs=on|off}. Off (unset, or anything but {@code on} — the
+     * default): it copies one session's output into another's project, which only an agent
+     * that cannot read outside its project needs. Read on each use, so it applies live.
+     */
+    public static boolean mcpSessionLogs() {
+        String value = load().getProperty("mcp.session-logs");
+        return value != null && value.trim().equalsIgnoreCase("on");
+    }
+
+    public static void saveMcpSessionLogs(boolean on) {
+        save(p -> p.setProperty("mcp.session-logs", on ? "on" : "off"));
+    }
+
+    /**
      * Whether a menu-bar (macOS) or system-tray (Windows, Linux) icon shows while sessions
      * run with the app closed: {@code tray.icon=on|off}. On unless set to {@code off}.
      */

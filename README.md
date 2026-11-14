@@ -30,13 +30,8 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
 - **Agents (MCP).** An optional MCP server whose tools (`list`, `read`, `send`, `keys`,
   `notify`, `spawn`, `kill`) let an agent in one session see and drive the others. For
   output that has scrolled off the screen, `list` and whole-screen `read` replies give
-  two paths for the agent to grep or tail: the harness's own transcript file (Claude
-  Code, Codex, Muse and Grok), and a plain-text log of the session's output (any harness)
-  that the app keeps in the asking agent's own project, in `.microhm-sessions/`, so a
-  sandboxed agent can read it too. The log holds the lines that scrolled off (for a
-  full-screen program, each new line of its screen once, without its status bars); past 8,000 lines it
-  rolls into numbered `.log.gz` parts, and nothing is deleted. The folder ignores itself
-  for git. It is off by default: turn it on in Settings → Agents, and
+  the agent the harness's own transcript file to grep or tail (Claude Code, Codex, Muse
+  and Grok). The server is off by default: turn it on in Settings → Agent control, and
   sessions created or resumed from then on get it registered. It keeps working after you
   quit the app: a small background
   host serves the same tools on the same port until the last session ends, and hands
@@ -45,9 +40,18 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   other sessions, and `spawn` a new one (a shell included) in any folder: an agent that
   is sandboxed to its project, or one that is following instructions it read somewhere,
   gets the reach of your own terminal through these tools. Leave it off for agents you
-  would not give that. Each session gets its own token, good for calling as itself only;
-  the logs in `.microhm-sessions/` hold other sessions' output as plain text, so they
-  travel with anything that copies the project folder (they are ignored by git only).
+  would not give that. Each session gets its own token, good for calling as itself only.
+  **Session logs.** An agent that cannot read outside its project cannot open another
+  session's transcript, and a shell has none. For those, Settings → Agent control →
+  Session logs (off by default) keeps a plain-text log of each session an agent reads in
+  that agent's own project, in `.microhm-sessions/`, and `list` and `read` give its path.
+  A log starts when the agent first reads the session, so nothing is copied from
+  sessions it never looked at. It holds the lines that scrolled off (for a full-screen
+  program, each new line of its screen once, without its status bars); past 8,000 lines
+  it rolls into numbered `.log.gz` parts, and nothing is deleted. The folder and the
+  files made in it are readable by you alone, and the folder ignores itself for git, but
+  the logs hold other sessions' output as plain text and travel with anything that
+  copies the project folder.
 - **Background icon.** While sessions run with the app closed, a menu-bar icon (macOS) or
   system-tray icon (Windows; Linux desktops with a tray) shows how many are running and
   whether MCP is serving, and opens the app (end sessions from the app). On by default;
@@ -166,7 +170,7 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,275 tests: vt 519, pty 32, mux 163, app 561. Each platform skips the
+`mvn test` runs 1,316 tests: vt 529, pty 39, mux 174, app 574. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
 

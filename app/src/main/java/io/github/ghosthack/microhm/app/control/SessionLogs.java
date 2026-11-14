@@ -15,6 +15,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
@@ -111,6 +112,7 @@ final class SessionLogs {
             Log log = new Log(folder, base);
             try {
                 log.ensureFolder();
+                ownerOnly(folder, "rwx------"); // also one an earlier version left open to others
                 log.load();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -121,16 +123,30 @@ final class SessionLogs {
         /** Makes the folder and its {@code .gitignore} when they are missing, which is
          * also after something in the project deleted them ({@code git clean -x}). The
          * project is not trusted: a folder or file planted there as a symbolic link would
-         * send sessions' output wherever it points, so links are refused, never followed. */
+         * send sessions' output wherever it points, so links are refused, never followed.
+         * The folder holds other sessions' output, so it and the files made in it are the
+         * owner's alone (where the file system has such permissions). */
         private void ensureFolder() throws IOException {
             if (Files.isSymbolicLink(folder)) {
                 throw new IOException(folder + " is a symbolic link; not writing session logs through it");
             }
-            Files.createDirectories(folder);
+            if (!Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)) {
+                Files.createDirectories(folder);
+                ownerOnly(folder, "rwx------");
+            }
             Path ignore = folder.resolve(".gitignore");
             if (!Files.exists(ignore, LinkOption.NOFOLLOW_LINKS)) {
                 Files.writeString(ignore, "*\n", StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE,
                         LinkOption.NOFOLLOW_LINKS);
+                ownerOnly(ignore, "rw-------");
+            }
+        }
+
+        /** Keeps {@code path} (never a link: the callers made it or checked it) to its
+         * owner; nothing where the file system has no such permissions. */
+        private static void ownerOnly(Path path, String permissions) throws IOException {
+            if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+                Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(permissions));
             }
         }
 
@@ -256,11 +272,17 @@ final class SessionLogs {
             int n = count(text);
             try {
                 ensureFolder();
-                if (!Files.exists(live, LinkOption.NOFOLLOW_LINKS)) {
+                boolean fresh = !Files.exists(live, LinkOption.NOFOLLOW_LINKS);
+                if (fresh) {
                     lines = 0; // deleted under us: start it afresh
                 }
                 if (lines > 0 && lines + n > MAX_LIVE_LINES) {
                     roll();
+                }
+                if (fresh) {
+                    Files.writeString(live, "", StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW,
+                            StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+                    ownerOnly(live, "rw-------"); // before it holds a line
                 }
                 Files.writeString(live, text, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
                         StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS);
@@ -284,6 +306,7 @@ final class SessionLogs {
                          LinkOption.NOFOLLOW_LINKS))) {
                 in.transferTo(gz);
             }
+            ownerOnly(partial, "rw-------");
             Files.move(partial, part, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             Files.writeString(live, "", StandardCharsets.UTF_8, StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
@@ -331,6 +354,7 @@ final class SessionLogs {
                         StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                     p.store(out, "microhm session log progress");
                 }
+                ownerOnly(partial, "rw-------");
                 Files.move(partial, state, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 saved = now;
             } catch (IOException e) {
