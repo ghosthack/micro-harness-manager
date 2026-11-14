@@ -12,13 +12,13 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Inexpensive figures about this run of the app, for the Performance dialog: all read from
+ * Inexpensive figures about this run of the app, for Settings' Performance section: all read from
  * the JVM's management beans (and, on Linux, {@code /proc/self/status}) when asked, so
  * nothing is measured in the background.
  */
 public final class PerfStats {
 
-    /** One line of the dialog. */
+    /** One line of the section. */
     public record Row(String label, String value) {
     }
 
