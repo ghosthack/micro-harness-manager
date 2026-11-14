@@ -68,8 +68,11 @@ final class SessionControllerTest {
                     case MUSE -> Optional.of(Path.of("/muse/sessions/2026/11/08/m1/session.jsonl"));
                     default -> Optional.empty();
                 },
-                sleeps::add, deliveries, timings);
+                sleeps::add, deliveries, timings, () -> sessionLogs);
     }
+
+    /** The user's session-logs setting; on, as the log tests need, unless a test turns it off. */
+    private boolean sessionLogs = true;
 
     // ------------------------------------------------------------------ helpers
 
@@ -307,6 +310,12 @@ final class SessionControllerTest {
         s.history = List.of("line 1", "line 2");
 
         Path log = project.resolve(".microhm-sessions").resolve("mhm-m.log");
+        String before = ok("mhm-me", "list", "{}");
+        assertTrue(before.lines().allMatch(l -> l.contains(" · log: -")), "no log before a read: " + before);
+        controller.tick();
+        assertFalse(java.nio.file.Files.exists(project.resolve(".microhm-sessions")),
+                "listing copies nothing into the project");
+        ok("mhm-me", "read", "{\"session\":\"mhm-m\"}");
         String list = ok("mhm-me", "list", "{}");
         assertTrue(list.contains("mhm-m · - · muse · ") && list.contains(" · log: " + log), list);
         assertTrue(list.contains(project + " · transcript: - · log: - (you)"),
@@ -372,6 +381,8 @@ final class SessionControllerTest {
         daemon.noHistory = true;
         shell("mhm-sh").show("$ make\nok\n");
         assertTrue(ok("mhm-me", "list", "{}").contains("mhm-sh · - · shell · "), "list still works");
+        assertFalse(ok("mhm-me", "read", "{\"session\":\"mhm-sh\",\"full\":true}").contains("screen log"),
+                "read still works, and names no log");
         assertTrue(ok("mhm-me", "list", "{}").lines().filter(l -> l.startsWith("mhm-sh")).findFirst().orElseThrow()
                 .endsWith(" · log: -"));
         controller.tick();
@@ -379,11 +390,34 @@ final class SessionControllerTest {
     }
 
     @Test
+    void noLogIsKeptWhileSessionLogsAreOffAndThoseBeingKeptStopWhenTheyAreTurnedOff() throws Exception {
+        Path project = callerIn("mhm-me");
+        FakeDaemon.FakeSession s = shell("mhm-sh").show("$ ");
+        s.history = List.of("one");
+        sessionLogs = false;
+        assertFalse(ok("mhm-me", "read", "{\"session\":\"mhm-sh\",\"full\":true}").contains("screen log"));
+        controller.tick();
+        assertFalse(java.nio.file.Files.exists(project.resolve(".microhm-sessions")), "off: nothing is copied");
+        assertTrue(ok("mhm-me", "list", "{}").lines().allMatch(l -> l.contains(" · log: -")));
+
+        sessionLogs = true;
+        ok("mhm-me", "read", "{\"session\":\"mhm-sh\"}");
+        Path log = project.resolve(".microhm-sessions").resolve("mhm-sh.log");
+        assertEquals("one\n", read(log));
+
+        sessionLogs = false;
+        s.history = List.of("one", "two");
+        controller.tick();
+        assertEquals("one\n", read(log), "turned off: no longer kept, and what was written stays");
+        assertTrue(ok("mhm-me", "list", "{}").lines().allMatch(l -> l.contains(" · log: -")));
+    }
+
+    @Test
     void logsOfACallerThatEndedStop() throws Exception {
         Path project = callerIn("mhm-me");
         FakeDaemon.FakeSession s = shell("mhm-sh").show("$ ");
         s.history = List.of("one");
-        ok("mhm-me", "list", "{}");
+        ok("mhm-me", "read", "{\"session\":\"mhm-sh\"}");
         Path log = project.resolve(".microhm-sessions").resolve("mhm-sh.log");
         assertEquals("one\n", read(log));
         daemon.sessions.remove("mhm-me");

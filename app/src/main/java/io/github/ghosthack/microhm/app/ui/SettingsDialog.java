@@ -65,7 +65,8 @@ final class SettingsDialog {
                   boolean mcpChanged,
                   boolean trayIcon,
                   String sessionShell,
-                  boolean directLaunch) {
+                  boolean directLaunch,
+                  boolean mcpSessionLogs) {
     }
 
     /**
@@ -208,7 +209,14 @@ final class SettingsDialog {
         // a port is an identifier, not a quantity: no "7,392"
         mcpPortSpinner.setEditor(new JSpinner.NumberEditor(mcpPortSpinner, "#"));
         mcpPortSpinner.setEnabled(mcpServerBox.isSelected());
-        mcpServerBox.addItemListener(e -> mcpPortSpinner.setEnabled(mcpServerBox.isSelected()));
+        JCheckBox mcpSessionLogsBox = new JCheckBox(
+                "Keep a log of each session an agent reads, in that agent's project",
+                AppSettings.mcpSessionLogs());
+        mcpSessionLogsBox.setEnabled(mcpServerBox.isSelected());
+        mcpServerBox.addItemListener(e -> {
+            mcpPortSpinner.setEnabled(mcpServerBox.isSelected());
+            mcpSessionLogsBox.setEnabled(mcpServerBox.isSelected());
+        });
         // regenerated on Save, not on click, so Cancel really cancels
         AtomicBoolean regenerateMcpToken = new AtomicBoolean();
         JButton regenerateMcpTokenButton = new JButton("Regenerate token");
@@ -284,6 +292,9 @@ final class SettingsDialog {
         agents.addRow("", note("Earlier sessions reconnect after Resume."));
         agents.addRow("", note("Off by default. Loopback only, token-protected; applies live."));
         agents.addRow("", note("New Claude Code and Codex sessions connect automatically."));
+        agents.addRow("Session logs:", mcpSessionLogsBox);
+        agents.addRow("", note("Off by default. Copies the sessions an agent reads into .microhm-sessions/"));
+        agents.addRow("", note("in its project, as plain text: for agents that cannot read outside it."));
 
         AtomicReference<Optional<Result>> resultHolder = new AtomicReference<>(Optional.empty());
         JButton save = new JButton("Save");
@@ -319,7 +330,8 @@ final class SettingsDialog {
                             (Integer) mcpPortSpinner.getValue(), regenerateMcpToken.get()),
                     trayIconBox.isSelected(),
                     selected(shellCombo),
-                    directLaunchBox.isSelected())));
+                    directLaunchBox.isSelected(),
+                    mcpSessionLogsBox.isSelected())));
             dialog.dispose();
         });
         cancel.addActionListener(e -> dialog.dispose());

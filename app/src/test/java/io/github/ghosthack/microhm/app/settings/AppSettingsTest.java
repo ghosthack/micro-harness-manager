@@ -341,6 +341,15 @@ final class AppSettingsTest {
     }
 
     @Test
+    void sessionLogsDefaultToOffAndAreSavedBothWays() {
+        assertFalse(AppSettings.mcpSessionLogs()); // no file at all
+        AppSettings.saveMcpSessionLogs(true);
+        assertTrue(AppSettings.mcpSessionLogs());
+        AppSettings.saveMcpSessionLogs(false);
+        assertFalse(AppSettings.mcpSessionLogs());
+    }
+
+    @Test
     void mcpServerDefaultsToOffAndOnlyOnEnablesIt() throws IOException {
         assertFalse(AppSettings.mcpServerEnabled()); // no file at all
         settings("");

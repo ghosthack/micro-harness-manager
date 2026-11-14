@@ -12,6 +12,7 @@ import io.github.ghosthack.microhm.app.mcp.ToolResult;
 import io.github.ghosthack.microhm.app.registry.SessionEntry;
 import io.github.ghosthack.microhm.app.registry.SessionRegistry;
 import io.github.ghosthack.microhm.app.session.SessionLauncher;
+import io.github.ghosthack.microhm.app.settings.AppSettings;
 import io.github.ghosthack.microhm.app.state.Classification;
 import io.github.ghosthack.microhm.app.state.SessionState;
 import io.github.ghosthack.microhm.mux.client.SessionServerException;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -44,6 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 /**
@@ -156,6 +159,8 @@ public final class SessionController implements McpToolset {
     private final Set<String> spawningDisplays = new HashSet<>();
 
     private final SessionLogs logs = new SessionLogs();
+    /** Whether logs are kept at all (the user's setting, asked on each use). */
+    private final BooleanSupplier sessionLogs;
     /** The logs being kept, by file: whose, of which session, in which folder. */
     private final ConcurrentHashMap<Path, Mirror> mirrors = new ConcurrentHashMap<>();
 
@@ -167,11 +172,14 @@ public final class SessionController implements McpToolset {
      * on their own virtual threads. */
     public SessionController(DaemonControl daemon, SessionRegistry registry, SessionSpawner spawner, Clock clock) {
         this(daemon, registry, spawner, clock, HarnessTranscripts.standard(), Thread::sleep,
-                task -> Thread.ofVirtual().name("mhm-control-deliver").start(task), Timings.DEFAULT);
+                task -> Thread.ofVirtual().name("mhm-control-deliver").start(task), Timings.DEFAULT,
+                AppSettings::mcpSessionLogs);
     }
 
     SessionController(DaemonControl daemon, SessionRegistry registry, SessionSpawner spawner, Clock clock,
-                      TranscriptLocator transcripts, Sleeper sleeper, Executor deliveries, Timings timings) {
+                      TranscriptLocator transcripts, Sleeper sleeper, Executor deliveries, Timings timings,
+                      BooleanSupplier sessionLogs) {
+        this.sessionLogs = Objects.requireNonNull(sessionLogs, "sessionLogs");
         this.daemon = Objects.requireNonNull(daemon, "daemon");
         this.registry = Objects.requireNonNull(registry, "registry");
         this.spawner = Objects.requireNonNull(spawner, "spawner");
@@ -275,7 +283,7 @@ public final class SessionController implements McpToolset {
                     .append(" · ").append(state)
                     .append(" · ").append(target.project())
                     .append(" · transcript: ").append(transcript)
-                    .append(" · log: ").append(logOf(caller, callerDir, target).map(Path::toString).orElse("-"));
+                    .append(" · log: ").append(keptLog(caller, callerDir, target).map(Path::toString).orElse("-"));
             if (target.name().equals(caller)) {
                 sb.append(" (you)");
             }
@@ -328,11 +336,24 @@ public final class SessionController implements McpToolset {
                 .filter(Files::isDirectory);
     }
 
-    /** {@code target}'s log for {@code caller}, brought up to date and kept so from now on;
-     * empty for the caller's own session, without a caller folder, or when it can't be
-     * written. */
+    /** {@code target}'s log for {@code caller} when one is being kept for it and is there
+     * (not one that could not be written), without starting one: what list shows. */
+    private Optional<Path> keptLog(String caller, Optional<Path> callerDir, Target target) {
+        if (callerDir.isEmpty() || target.name().equals(caller) || !sessionLogs.getAsBoolean()) {
+            return Optional.empty();
+        }
+        Path file = SessionLogs.file(callerDir.get(), target.name());
+        Mirror mirror = mirrors.get(file);
+        return mirror != null && mirror.callers().contains(caller)
+                && Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) ? Optional.of(file) : Optional.empty();
+    }
+
+    /** {@code target}'s log for {@code caller}, brought up to date and kept so from now on:
+     * what a read starts, so a session's output is copied into the caller's project only
+     * once the caller has looked at that session. Empty for the caller's own session,
+     * without a caller folder, or when it can't be written. */
     private Optional<Path> logOf(String caller, Optional<Path> callerDir, Target target) {
-        if (callerDir.isEmpty() || target.name().equals(caller)) {
+        if (callerDir.isEmpty() || target.name().equals(caller) || !sessionLogs.getAsBoolean()) {
             return Optional.empty();
         }
         Path file = SessionLogs.file(callerDir.get(), target.name());
@@ -390,10 +411,14 @@ public final class SessionController implements McpToolset {
         return daemon.captureSince(name, CaptureFormat.TEXT, since);
     }
 
-    /** One pass over the logs being kept: drops those whose caller has gone, and brings
-     * the rest up to date. */
+    /** One pass over the logs being kept: drops those whose caller has gone (all of them
+     * once the setting is off), and brings the rest up to date. */
     private void syncLogs() {
         if (mirrors.isEmpty()) {
+            return;
+        }
+        if (!sessionLogs.getAsBoolean()) { // turned off: the logs kept so far stay as they are
+            List.copyOf(mirrors.keySet()).forEach(this::stopLog);
             return;
         }
         List<Session.Info> infos = daemon.list();
@@ -1578,15 +1603,18 @@ public final class SessionController implements McpToolset {
             "type":"response_item" rows whose payload is an assistant message; muse \
             "assistant_message_committed" events (session.jsonl); grok rows with "type":"assistant" \
             (chat_history.jsonl).
-            log is a plain-text copy of the session's output kept inside your own project, in \
+            log is a plain-text copy of the session's output kept inside your own project \
+            when the user has turned session logs on (Settings → Agent control), in \
             .microhm-sessions/ (git-ignored), for any harness — use it when the transcript is \
             outside what you may read, or for a shell. It holds the lines that scrolled off the \
             screen (the screen itself is what read shows); for a full-screen program, its \
             screen's lines as they appear, each new line once and without the harness's status \
             bars, under `--- microhm · <time> · screen ---`. It is \
-            kept up to date from your first list or read on, starting with the scrollback the \
-            session still holds; older parts are beside it as <name>.0001.log.gz, .0002… \
-            (zgrep them). "-" when your session has no project folder.""";
+            kept up to date from your first read of that session on, starting with the \
+            scrollback the session still holds; older parts are beside it as \
+            <name>.0001.log.gz, .0002… (zgrep them). "-" until you read the session (nothing \
+            of a session is copied into your project before you do), when session logs are \
+            off (the default), and when your session has no project folder.""";
 
     static final String READ_DESCRIPTION = """
             Show a session's terminal screen. The first line is \

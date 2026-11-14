@@ -83,9 +83,9 @@ public final class McpServer implements AutoCloseable {
             line typed into your session when the event happens.
             - The screen is only the visible terminal; a session's history lives in its transcript \
             file (claude-code, codex, muse and grok have one) and in a plain-text screen log kept \
-            in your own project's .microhm-sessions/ folder (any harness): `list` and whole-screen \
-            reads give both paths — tail or grep them with your file tools rather than loading \
-            them whole.""";
+            in your own project's .microhm-sessions/ folder (any harness, from your first `read` \
+            of the session on, when the user has turned session logs on): `list` and whole-screen reads give both paths — tail or grep \
+            them with your file tools rather than loading them whole.""";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
