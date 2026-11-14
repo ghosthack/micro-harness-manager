@@ -136,11 +136,16 @@ final class PtyProcessTest {
         assertEquals(128 + 9, sleeper.exitValue());
     }
 
-    /** The output is read throughout, as the daemon does: a process exiting with unread
-     * output on its controlling terminal waits in close for it to drain. */
+    /** The hangup is sent once the shell is at its prompt, not after a fixed wait: one
+     * that lands while the shell is still starting can be lost (about 1 in 150 on a loaded
+     * machine, with a 200 ms wait), and the shell then never exits. The output is read
+     * throughout, as the daemon does: a process exiting with unread output on its
+     * controlling terminal waits in close for it to drain. */
     @Test
     void hangupEndsAnInteractiveShell(@TempDir Path dir) throws Exception {
         PtyProcess shell = PtyProcess.start(List.of("/bin/sh", "-i"), env(), dir, 80, 24);
+        String prompt = readUntil(shell, "$ ");
+        assertTrue(prompt.contains("$ "), "the shell reached its prompt: " + prompt);
         Thread reader = Thread.ofVirtual().start(() -> {
             try {
                 drain(shell);
@@ -148,9 +153,8 @@ final class PtyProcessTest {
                 // the test only needs the output consumed
             }
         });
-        Thread.sleep(200);
         shell.hangup();
-        assertTrue(shell.waitFor(5, TimeUnit.SECONDS));
+        assertTrue(shell.waitFor(5, TimeUnit.SECONDS), "the shell exits on a hangup at its prompt");
         reader.join(5000);
     }
 
