@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Microhm">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="app.css">
+<title>Microhm</title>
+</head>
+<body>
+
+<!-- Session list -->
+<section id="list-view" class="view" hidden>
+  <header class="nav">
+    <button id="view-button" class="btn" type="button" aria-label="Sort and filter" title="Sort and filter" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4.5 6h15l-5.8 7v4.6l-3.4 1.9V13z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+    <h1>Sessions</h1>
+    <button id="new-button" class="btn" type="button" aria-label="New session" title="New session"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+  </header>
+  <div class="controls" id="controls" hidden>
+    <div class="segmented" id="sort" role="group" aria-label="Sort by">
+      <button type="button" data-sort="status">Status</button>
+      <button type="button" data-sort="session">Session</button>
+      <button type="button" data-sort="folder">Folder</button>
+    </div>
+    <button id="direction" class="icon-button" type="button" aria-label="Reverse the order">↓</button>
+  </div>
+  <div class="filters" id="filters" aria-label="Show" hidden></div>
+  <p id="list-problem" class="problem" hidden></p>
+  <div id="sessions" class="list"></div>
+</section>
+
+<!-- One session -->
+<section id="session-view" class="view" hidden>
+  <header class="nav">
+    <button id="back-button" class="btn" type="button" aria-label="Sessions" title="Sessions"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <div class="nav-title">
+      <h1 id="session-title"></h1>
+      <span id="session-state" class="status"></span>
+    </div>
+    <button id="close-button" class="btn close" type="button" aria-label="Close session" title="Close session"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+  </header>
+  <p id="session-problem" class="problem" hidden></p>
+  <div id="progress" class="progress" hidden>
+    <div class="progress-track"><i id="progress-fill"></i></div>
+    <span id="progress-text"></span>
+  </div>
+  <div id="scroller" class="scroller">
+    <div id="connecting" class="connecting" hidden><span class="spinner" aria-hidden="true"></span><span>Connecting…</span></div>
+    <pre id="history" class="history"></pre>
+    <pre id="screen" class="screen"></pre>
+  </div>
+  <div class="keys" id="keys" hidden>
+    <button type="button" data-keys="Esc">esc</button>
+    <button type="button" data-keys="Enter">return</button>
+    <button type="button" data-keys="Up" aria-label="Up">↑</button>
+    <button type="button" data-keys="Down" aria-label="Down">↓</button>
+    <button type="button" data-keys="1">1</button>
+    <button type="button" data-keys="2">2</button>
+    <button type="button" data-keys="3">3</button>
+    <button type="button" data-keys="y">y</button>
+    <button type="button" data-keys="n">n</button>
+    <button type="button" data-keys="Tab">tab</button>
+    <button type="button" data-keys="BTab">⇧tab</button>
+    <button type="button" data-keys="Left" aria-label="Left">←</button>
+    <button type="button" data-keys="Right" aria-label="Right">→</button>
+    <button type="button" data-keys="PageUp">pg up</button>
+    <button type="button" data-keys="PageDown">pg dn</button>
+    <button type="button" data-keys="C-c" class="stop" aria-label="Control C">⌃C</button>
+  </div>
+  <form id="compose" class="compose">
+    <button id="keys-button" class="btn" type="button" aria-label="Keys" title="Keys" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 10h.01M10.5 10h.01M14 10h.01M17.5 10h.01M8 14h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <textarea id="message" rows="1" placeholder="Message" autocomplete="off" autocapitalize="sentences"></textarea>
+    <button id="send-button" class="btn default" type="submit" aria-label="Send" title="Send"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 18.5v-13M6.5 11L12 5.5l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </form>
+</section>
+
+<!-- New session -->
+<section id="new-view" class="view" hidden>
+  <header class="nav">
+    <button id="cancel-new" class="btn" type="button" aria-label="Sessions" title="Sessions"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <h1>New Session</h1>
+    <span></span>
+  </header>
+  <form id="new-form" class="form">
+    <div class="group">
+      <label class="field">
+        <span>Agent</span>
+        <select id="new-harness"></select>
+      </label>
+      <label class="field">
+        <span>Folder</span>
+        <input id="new-project" list="projects" required placeholder="~/Projects/…" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <datalist id="projects"></datalist>
+      </label>
+      <label class="field">
+        <span>Name</span>
+        <input id="new-name" placeholder="Optional" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="64">
+      </label>
+    </div>
+    <div class="group">
+      <label class="field stacked">
+        <span>First message</span>
+        <textarea id="new-prompt" rows="4" placeholder="Optional"></textarea>
+      </label>
+    </div>
+    <p id="new-problem" class="problem" hidden></p>
+    <button id="start-button" class="primary" type="submit">Start</button>
+  </form>
+</section>
+
+<!-- Not signed in -->
+<section id="locked-view" class="view" hidden>
+  <div class="locked">
+    <h1>Open the phone link</h1>
+    <p>On your Mac, open Microhm → Settings → Phone and click <b>Show QR code</b>. Point this phone's camera at it and tap the link. Safari remembers it after that.</p>
+  </div>
+</section>
+
+<!-- Confirmations and refusals, from the bottom -->
+<div id="sheet" class="sheet-backdrop" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <h2 id="sheet-title"></h2>
+    <span id="sheet-spinner" class="spinner sheet-spinner" aria-hidden="true" hidden></span>
+    <p id="sheet-text"></p>
+    <button id="sheet-confirm" class="primary danger" type="button"></button>
+    <button id="sheet-cancel" class="secondary" type="button">Cancel</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

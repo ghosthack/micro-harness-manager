@@ -78,6 +78,7 @@ public record ShellCommand(List<String> command, Map<String, String> environment
                 : windows ? windowsShell(inherited, executableOnPath) : unixShell(inherited);
 
         Map<String, String> env = new HashMap<>(inherited);
+        AGENT_PROCESS_MARKERS.forEach(env::remove);
         env.put("TERM", TERM);
         env.put("COLORTERM", "truecolor");
         env.putIfAbsent("LANG", DEFAULT_LANG);
@@ -93,6 +94,21 @@ public record ShellCommand(List<String> command, Map<String, String> environment
         }
         return new ShellCommand(command, env);
     }
+
+    /**
+     * Variables a coding agent sets for its own process and its children, which a session
+     * must not inherit when the daemon (or the app before it) was started from inside one:
+     * a terminal running Claude Code, say, or a Claude Code session in Microhm itself. With
+     * them, a {@code claude} started in the session takes itself for that agent's child and,
+     * among other things, does not save its transcript, so the conversation cannot be
+     * resumed. Settings users put in their environment ({@code CLAUDE_CODE_USE_BEDROCK} and
+     * the like) are not markers and pass through.
+     */
+    static final java.util.Set<String> AGENT_PROCESS_MARKERS = java.util.Set.of(
+            "CLAUDECODE", "CLAUDE_PID", "CLAUDE_EFFORT", "AI_AGENT",
+            "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_BRIDGE_SESSION_ID", "CLAUDE_CODE_EXECPATH",
+            "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN");
 
     static boolean isWindows(String osName) {
         return osName != null && osName.toLowerCase(Locale.ROOT).startsWith("windows");

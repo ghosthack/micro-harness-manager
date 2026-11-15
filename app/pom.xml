@@ -28,6 +28,12 @@
       <artifactId>flatlaf</artifactId>
       <version>3.6</version>
     </dependency>
+    <!-- QR code for the phone link in Settings → Phone -->
+    <dependency>
+      <groupId>io.nayuki</groupId>
+      <artifactId>qrcodegen</artifactId>
+      <version>1.8.0</version>
+    </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-simple</artifactId>

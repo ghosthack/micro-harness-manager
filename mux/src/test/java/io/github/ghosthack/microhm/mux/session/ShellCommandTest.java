@@ -30,6 +30,21 @@ class ShellCommandTest {
     }
 
     @Test
+    void aLaunchingAgentsProcessMarkersAreNotInherited() {
+        Map<String, String> inherited = Map.of("SHELL", "/bin/zsh", "PATH", "/usr/bin",
+                "CLAUDECODE", "1", "CLAUDE_CODE_CHILD_SESSION", "1", "CLAUDE_CODE_SESSION_ID", "abc",
+                "CLAUDE_CODE_MESSAGING_TOKEN", "secret", "CLAUDE_PID", "42",
+                "CLAUDE_CODE_USE_BEDROCK", "1");
+        Map<String, String> env = ShellCommand.build("mhm-foo", null, inherited, "Mac OS X", exe -> false).environment();
+        assertEquals("/usr/bin", env.get("PATH"));
+        assertEquals("1", env.get("CLAUDE_CODE_USE_BEDROCK"), "a user's setting passes through");
+        for (String marker : List.of("CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID",
+                "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_PID")) {
+            assertFalse(env.containsKey(marker), marker);
+        }
+    }
+
+    @Test
     void environmentInheritsAndAddsTheSessionVariables() {
         ShellCommand cmd = ShellCommand.build("mhm-foo", null, UNIX_ENV, "Mac OS X", exe -> false);
         Map<String, String> env = cmd.environment();

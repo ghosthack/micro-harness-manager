@@ -11,9 +11,10 @@ import io.github.ghosthack.microhm.app.settings.AppSettings;
  * xterm-style palette the app's earlier JediTerm-based widget shipped (its blues are
  * lightened from xterm's for legibility on black), kept value for value.
  */
-final class AnsiPalettes {
+public final class AnsiPalettes {
 
-    static int[] forSetting(AppSettings.TerminalPalette palette) {
+    /** The 16 colours of {@code palette} as {@code 0xRRGGBB}, a fresh copy. */
+    public static int[] forSetting(AppSettings.TerminalPalette palette) {
         int[] colors = switch (palette) {
             case MACOS_TERMINAL -> MACOS_TERMINAL;
             case ITERM2 -> ITERM2;

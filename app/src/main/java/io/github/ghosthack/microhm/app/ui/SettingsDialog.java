@@ -66,7 +66,9 @@ final class SettingsDialog {
                   boolean trayIcon,
                   String sessionShell,
                   boolean directLaunch,
-                  boolean mcpSessionLogs) {
+                  boolean mcpSessionLogs,
+                  boolean phoneServerEnabled,
+                  int phonePort) {
     }
 
     /**
@@ -109,6 +111,7 @@ final class SettingsDialog {
         DialogChrome.Form input = DialogChrome.form();
         DialogChrome.Form sessions = DialogChrome.form();
         DialogChrome.Form agents = DialogChrome.form();
+        DialogChrome.Form phone = DialogChrome.form();
 
         JComboBox<Choice<Optional<AppSettings.TerminalBackground>>> backgroundCombo =
                 combo(AppSettings.terminalBackgroundOverride(),
@@ -229,6 +232,28 @@ final class SettingsDialog {
             regenerateMcpTokenButton.setEnabled(false);
         });
 
+        JCheckBox phoneServerBox = new JCheckBox(
+                "Serve a page that phones on your network can use to watch, answer and start sessions",
+                AppSettings.phoneServerEnabled());
+        JSpinner phonePortSpinner = new JSpinner(new SpinnerNumberModel(
+                AppSettings.phonePort(), AppSettings.MIN_MCP_PORT, AppSettings.MAX_MCP_PORT, 1));
+        phonePortSpinner.setEditor(new JSpinner.NumberEditor(phonePortSpinner, "#"));
+        JButton copyPhoneLinkButton = new JButton("Copy phone link");
+        copyPhoneLinkButton.addActionListener(e -> {
+            String link = io.github.ghosthack.microhm.app.phone.PhoneService.link(
+                    (Integer) phonePortSpinner.getValue(), AppSettings.phoneToken());
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(link), null);
+            copyPhoneLinkButton.setText("Copied");
+        });
+        JButton showPhoneQrButton = new JButton("Show QR code");
+        showPhoneQrButton.addActionListener(e -> showPhoneQr(dialog, io.github.ghosthack.microhm.app.phone.PhoneService
+                .link((Integer) phonePortSpinner.getValue(), AppSettings.phoneToken())));
+        JPanel phoneLinkButtons = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEADING, 0, 0));
+        phoneLinkButtons.add(copyPhoneLinkButton);
+        phoneLinkButtons.add(javax.swing.Box.createHorizontalStrut(8));
+        phoneLinkButtons.add(showPhoneQrButton);
+
         Runnable updatePollControlsEnabled = () -> {
             boolean pollingOn = statusPollEnabledBox.isSelected();
             boolean scheduledActiveTab = selected(activeTabPollModeCombo)
@@ -299,6 +324,14 @@ final class SettingsDialog {
         agents.addRow("", note("Off by default. Copies the sessions an agent reads into .microhm-sessions/"));
         agents.addRow("", note("in its project, as plain text: for agents that cannot read outside it."));
 
+        phone.addRow("Phone page:", phoneServerBox);
+        phone.addRow("Port:", phonePortSpinner);
+        phone.addRow("Link:", phoneLinkButtons);
+        phone.addRow("", note("Scan the QR code with the phone's camera, or paste the link into Safari."));
+        phone.addRow("", note("Once per phone; Safari remembers it."));
+        phone.addRow("", note("Anyone with the link can type into your sessions, shells included."));
+        phone.addRow("", note("Off by default. Applies on Save and keeps running after you quit."));
+
         AtomicReference<Optional<Result>> resultHolder = new AtomicReference<>(Optional.empty());
         JButton save = new JButton("Save");
         JButton cancel = new JButton("Cancel");
@@ -334,7 +367,9 @@ final class SettingsDialog {
                     trayIconBox.isSelected(),
                     selected(shellCombo),
                     directLaunchBox.isSelected(),
-                    mcpSessionLogsBox.isSelected())));
+                    mcpSessionLogsBox.isSelected(),
+                    phoneServerBox.isSelected(),
+                    (Integer) phonePortSpinner.getValue())));
             dialog.dispose();
         });
         cancel.addActionListener(e -> dialog.dispose());
@@ -342,8 +377,8 @@ final class SettingsDialog {
         // Performance is figures, not settings: the last section, set apart from the rest
         JPanel sections = sections(
                 new String[]{"Sidebar", "Toolbar", "Terminal", "Input", "Sessions", "Agent control",
-                        PERFORMANCE},
-                sidebar, toolbar, terminal, input, sessions, agents, PerformancePage.form());
+                        "Phone", PERFORMANCE},
+                sidebar, toolbar, terminal, input, sessions, agents, phone, PerformancePage.form());
         JPanel footer = new JPanel(new BorderLayout());
         // one line, level with the buttons it speaks of
         JLabel saveHint = note("Save applies changes from every section.");
@@ -354,6 +389,20 @@ final class SettingsDialog {
         DialogChrome.layout(dialog, sections, footer);
         DialogChrome.show(dialog, parent, save, cancel);
         return resultHolder.get();
+    }
+
+    /** The phone link as a QR code to scan with a phone's camera, with the link beneath it. */
+    private static void showPhoneQr(JDialog owner, String link) {
+        JLabel code = new JLabel(new javax.swing.ImageIcon(QrImages.of(link, 6)));
+        code.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel hint = new JLabel("Point the phone's camera at the code, then tap the link it shows.");
+        hint.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JPanel panel = new JPanel();
+        panel.setLayout(new javax.swing.BoxLayout(panel, javax.swing.BoxLayout.Y_AXIS));
+        panel.add(code);
+        panel.add(javax.swing.Box.createVerticalStrut(10));
+        panel.add(hint);
+        javax.swing.JOptionPane.showMessageDialog(owner, panel, "Phone link", javax.swing.JOptionPane.PLAIN_MESSAGE);
     }
 
     /** Left-side section navigation; cards keep unsaved fields intact between selections. */

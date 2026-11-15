@@ -49,6 +49,7 @@ public final class AppSettings {
     public static final int MIN_MCP_PORT = 1024;
     public static final int MAX_MCP_PORT = 65_535;
     public static final int DEFAULT_MCP_PORT = 7392;
+    public static final int DEFAULT_PHONE_PORT = 7393;
 
     /** Random bytes behind a generated {@link #mcpToken}: 32, i.e. 43 url-safe base64 chars. */
     private static final int MCP_TOKEN_BYTES = 32;
@@ -735,6 +736,59 @@ public final class AppSettings {
             unsavedMcpToken = save(p -> p.setProperty("mcp.token", token)) ? null : token;
         }
         return token;
+    }
+
+    /**
+     * Whether the app serves the phone page, a web page for phones on the local network
+     * (or reaching it over a VPN) to list, watch, type into and start sessions:
+     * {@code phone.server=on|off}. Off unless set to {@code on}.
+     */
+    public static boolean phoneServerEnabled() {
+        String value = load().getProperty("phone.server");
+        return value != null && value.trim().equalsIgnoreCase("on");
+    }
+
+    public static void savePhoneServerEnabled(boolean on) {
+        save(p -> p.setProperty("phone.server", on ? "on" : "off"));
+    }
+
+    /** The port the phone page listens on, on every interface: {@code phone.port}, default
+     * {@link #DEFAULT_PHONE_PORT}, clamped like the MCP port. */
+    public static int phonePort() {
+        String value = load().getProperty("phone.port");
+        if (value == null) {
+            return DEFAULT_PHONE_PORT;
+        }
+        try {
+            return clampMcpPort(Integer.parseInt(value.trim()));
+        } catch (NumberFormatException e) {
+            return DEFAULT_PHONE_PORT;
+        }
+    }
+
+    public static void savePhonePort(int port) {
+        save(p -> p.setProperty("phone.port", Integer.toString(clampMcpPort(port))));
+    }
+
+    /** The secret in the phone link, shared by every phone: {@code phone.token}, generated
+     * and saved on first use. */
+    public static String phoneToken() {
+        String existing = load().getProperty("phone.token");
+        if (existing != null && !existing.isBlank()) {
+            return existing.trim();
+        }
+        synchronized (LOCK) {
+            String[] token = new String[1];
+            save(p -> {
+                String current = p.getProperty("phone.token");
+                token[0] = current != null && !current.isBlank() ? current.trim() : newMcpToken();
+                p.setProperty("phone.token", token[0]);
+            });
+            if (token[0] == null) {
+                token[0] = newMcpToken();
+            }
+            return token[0];
+        }
     }
 
     private static String newMcpToken() {

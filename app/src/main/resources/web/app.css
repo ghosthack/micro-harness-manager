@@ -1,0 +1,307 @@
+/* Microhm phone page. Flat, in the manner of iOS's own apps: the system font, grouped
+   lists on a grey ground, hairline separators, one accent. Status is always a dot and a
+   word in the same type. */
+:root {
+  --ground: #f2f2f7;
+  --surface: #ffffff;
+  --fill: rgba(120, 120, 128, 0.12);     /* flat tiles, fields, unselected chips */
+  --fill-strong: rgba(120, 120, 128, 0.22);
+  --text: #1c1c1e;
+  --muted: #8a8a8e;
+  --hairline: rgba(60, 60, 67, 0.18);
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.12);
+  --on-accent: #ffffff;
+  --waiting: #d97706;
+  --working: #16a34a;
+  --idle: #9ca3af;
+  --ended: #c7c7cc;
+  --danger: #ff3b30;
+  --send: #34c759;
+  /* macOS push-button bezel */
+  --bezel: #ffffff;
+  --bezel-pressed: #e8e8ed;
+  --bezel-edge: rgba(0, 0, 0, 0.14);
+  --bezel-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.18);
+  --term-bg: #16181d;
+  --term-text: #d9dee6;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #000000;
+    --surface: #1c1c1e;
+    --fill: rgba(118, 118, 128, 0.24);
+    --fill-strong: rgba(118, 118, 128, 0.36);
+    --text: #f2f2f7;
+    --muted: #98989f;
+    --hairline: rgba(84, 84, 88, 0.6);
+    --accent: #0a84ff;
+    --accent-soft: rgba(10, 132, 255, 0.2);
+    --on-accent: #ffffff;
+    --waiting: #fbbf24;
+    --working: #4ade80;
+    --idle: #8e8e93;
+    --ended: #48484a;
+    --danger: #ff453a;
+    --send: #30d158;
+    --bezel: #3a3a3c;
+    --bezel-pressed: #4a4a4e;
+    --bezel-edge: rgba(255, 255, 255, 0.1);
+    --bezel-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.5);
+    --term-bg: #0d0e11;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+/* The page never scrolls as a whole: only the list, the screen and the form do. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+/* Taps are taps: no double-tap zoom, no grey flash, no text selection on controls. */
+html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+body {
+  margin: 0; background: var(--ground); color: var(--text);
+  font: 17px/1.3 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+[hidden] { display: none !important; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button {
+  touch-action: manipulation; -webkit-user-select: none; user-select: none;
+  border: 0; background: none; padding: 0; cursor: pointer;
+}
+button:disabled { opacity: 0.4; }
+h1, h2 { margin: 0; }
+
+.view {
+  display: flex; flex-direction: column;
+  height: 100%; height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ---------------------------------------------------------------- navigation bar */
+
+/* Equal side columns keep the title centered whatever the buttons say. */
+.nav {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  min-height: 52px; padding: 4px 16px;
+  background: var(--ground);
+  border-bottom: 0.5px solid var(--hairline);
+}
+.nav h1 { font-size: 17px; font-weight: 600; text-align: center; }
+.nav > :first-child { justify-self: start; }
+.nav > :last-child { justify-self: end; }
+.nav-title { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 60vw; }
+.nav-title h1 { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* One button for every icon action, as on iPhone: a 36-point circle, the height of the
+   message field. Neutral ones are a grey disc; the ones with a meaning are solid colour
+   with a white mark: close red, send green. Play and stop on the list are neutral. */
+.btn {
+  width: 36px; height: 36px; flex: none; display: grid; place-items: center;
+  border-radius: 50%; background: var(--fill); color: var(--text);
+}
+.btn:active { background: var(--fill-strong); }
+.btn.close { background: var(--danger); color: #fff; }
+.btn.default { background: var(--send); color: #fff; }
+.btn.close:active, .btn.default:active { filter: brightness(0.88); }
+/* not on offer right now (Close while the session is busy): faded */
+.btn.unavailable { opacity: 0.35; }
+/* a toggle that is open (the funnel, the keys), or filters that hide sessions */
+.btn.on { background: var(--fill-strong); }
+.btn.filtered { color: var(--accent); }
+
+/* ---------------------------------------------------------------- status: dot + word */
+
+.status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap;
+}
+.status::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none;
+}
+.status:empty::before { display: none; }
+.status.WAITING_FOR_INPUT { color: var(--waiting); }
+.status.WAITING_FOR_INPUT::before { background: var(--waiting); }
+.status.WORKING { color: var(--working); }
+.status.WORKING::before { background: var(--working); animation: pulse 1.6s ease-in-out infinite; }
+.status.ENDED::before { background: var(--ended); }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .status.WORKING::before { animation: none; } }
+
+/* ---------------------------------------------------------------- list controls */
+
+.controls { display: flex; gap: 8px; align-items: center; padding: 10px 16px 6px; }
+.segmented {
+  flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  background: var(--fill); border-radius: 9px; padding: 2px;
+}
+.segmented button { font-size: 13px; font-weight: 500; padding: 6px 0; border-radius: 7px; }
+.segmented button[aria-pressed="true"] { background: var(--surface); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.icon-button { width: 34px; height: 30px; border-radius: 9px; background: var(--fill); font-size: 15px; }
+
+.filters {
+  display: flex; gap: 6px; overflow-x: auto; padding: 4px 16px 10px; scrollbar-width: none;
+}
+.filters::-webkit-scrollbar { display: none; }
+/* Filter toggles: on is a filled chip with a check, off an outlined one with a plus.
+   No colour change: the mark says which. */
+.chip {
+  flex: none; font-size: 13px; font-weight: 500; padding: 5px 12px 5px 9px; border-radius: 999px;
+  border: 1px solid var(--hairline); color: var(--muted); background: none;
+}
+.chip::before { content: "+"; display: inline-block; width: 14px; font-weight: 600; }
+.chip[aria-pressed="true"] { background: var(--fill-strong); border-color: transparent; color: var(--text); }
+.chip[aria-pressed="true"]::before { content: "✓"; }
+.chip-gap { flex: none; width: 1px; background: var(--hairline); margin: 4px 4px; }
+
+/* ---------------------------------------------------------------- the list */
+
+.list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px calc(24px + env(safe-area-inset-bottom)); }
+.group-head {
+  margin: 18px 4px 6px; font-size: 13px; color: var(--muted);
+  display: flex; gap: 8px; align-items: baseline; min-width: 0;
+}
+.group-head b { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; flex: none; }
+.group-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.group { background: var(--surface); border-radius: 12px; overflow: hidden; }
+.list > .group:first-child { margin-top: 6px; }
+.row {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
+  padding: 0 12px 0 0; position: relative; min-height: 60px;
+}
+.row-main {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 10px 0 10px 16px; color: inherit; text-decoration: none;
+}
+.row-side { display: flex; align-items: center; gap: 12px; }
+.row + .row::before {
+  content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 0.5px solid var(--hairline);
+}
+a.row-main:active { background: var(--fill); }
+.row .name { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .where { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.ended .name { color: var(--muted); }
+
+.empty { text-align: center; color: var(--muted); font-size: 15px; padding: 48px 24px; }
+
+/* ---------------------------------------------------------------- one session */
+
+.scroller {
+  flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain;
+  background: var(--term-bg); color: var(--term-text); padding: 10px 10px 12px;
+}
+.screen, .history { margin: 0; font: 12px/15px var(--mono); }
+/* Box and block characters are drawn as shapes filling their cell (see "cell glyphs" in
+   app.js): exactly one character wide and one line tall, in the text colour. The line
+   height is whole pixels so rows meet on pixel edges, with no seams. */
+.g {
+  display: inline-block; height: 15px; vertical-align: top; /* width: the run's cells, set inline */
+  background-color: currentColor;
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+
+/* Until the first screen arrives: a quiet spinner in the middle of the dark area. */
+.connecting {
+  min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  color: rgba(217, 222, 230, 0.6); font-size: 13px;
+}
+.spinner {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid rgba(217, 222, 230, 0.18); border-top-color: rgba(217, 222, 230, 0.75);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: pulse 1.6s ease-in-out infinite; } }
+
+/* While the earlier output loads: a thin bar and how much of it has arrived. */
+.progress {
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+  background: var(--term-bg); color: rgba(217, 222, 230, 0.6); font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.progress-track { flex: 1; height: 3px; border-radius: 2px; background: rgba(217, 222, 230, 0.15); overflow: hidden; }
+.progress-track i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width 0.2s ease-out; }
+.progress span { flex: none; }
+/* The session runs at the size that fits here (phoneSize in app.js): lines never wrap. */
+.screen { white-space: pre; }
+/* Earlier lines were drawn at whatever width the session had then: wrap them. */
+.history { white-space: pre-wrap; overflow-wrap: anywhere; opacity: 0.7; }
+.history:not(:empty) { padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px dashed rgba(255, 255, 255, 0.16); }
+
+/* The keys, behind the button left of the message field: a keypad, four to a row, like
+   the keyboard's own keys. */
+.keys {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; padding: 10px 10px 4px;
+  background: var(--ground); border-top: 0.5px solid var(--hairline);
+  -webkit-user-select: none; user-select: none;
+}
+.keys button {
+  height: 42px; border-radius: 9px; background: var(--surface);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12); font-size: 16px; font-weight: 500;
+}
+.keys button:active { background: var(--fill-strong); }
+.keys .stop { color: var(--danger); }
+
+.compose {
+  display: flex; gap: 8px; align-items: flex-end;
+  padding: 6px 10px calc(8px + env(safe-area-inset-bottom)); background: var(--ground);
+}
+.compose textarea {
+  flex: 1; resize: none; max-height: 40vh; border: 0; border-radius: 18px; outline: none;
+  padding: 7px 14px; background: var(--fill); font-size: 16px; line-height: 22px; /* 16px: no zoom on focus */
+}
+
+
+/* ---------------------------------------------------------------- forms */
+
+.form { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)); }
+.form .group { display: flex; flex-direction: column; }
+.field { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 12px; padding: 0 16px; min-height: 48px; position: relative; }
+.field + .field::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 0.5px solid var(--hairline); }
+.field > span { font-size: 17px; }
+.field.stacked { grid-template-columns: 1fr; padding: 12px 16px; gap: 6px; }
+.field.stacked > span { font-size: 13px; color: var(--muted); }
+.field input, .field select, .field textarea {
+  border: 0; outline: none; background: none; font-size: 17px; width: 100%; min-width: 0; padding: 12px 0;
+}
+.field select { color: var(--accent); text-align: right; direction: rtl; -webkit-appearance: none; appearance: none; }
+.field textarea { padding: 0; resize: none; }
+
+.primary {
+  width: 100%; padding: 14px; border-radius: 12px; font-size: 17px; font-weight: 600;
+  background: var(--accent); color: var(--on-accent);
+}
+.primary.danger { background: var(--danger); color: #fff; }
+.secondary { width: 100%; padding: 14px; border-radius: 12px; font-size: 17px; font-weight: 600; background: var(--fill); color: var(--accent); }
+
+/* A calm line, not an alarm: what went wrong and what to do, in plain words. */
+.problem {
+  margin: 6px 16px 0; padding: 8px 12px; border-radius: 10px; font-size: 14px;
+  background: var(--fill); color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- sheet */
+
+.sheet-backdrop {
+  position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: flex-end;
+}
+.sheet {
+  width: 100%; background: var(--surface); border-radius: 14px 14px 0 0;
+  padding: 22px 16px calc(16px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.sheet h2 { font-size: 20px; font-weight: 600; }
+.sheet p { margin: 0 0 8px; color: var(--muted); font-size: 15px; line-height: 1.4; }
+.sheet-spinner { border-color: var(--fill-strong); border-top-color: var(--muted); margin: 4px 0 8px; }
+.sheet .primary, .sheet .secondary { border-radius: 999px; }
+
+.locked { margin: auto; padding: 24px; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+.locked h1 { font-size: 22px; }
+.locked p { margin: 0; color: var(--muted); line-height: 1.45; }

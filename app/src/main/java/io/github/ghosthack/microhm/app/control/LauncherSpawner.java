@@ -34,6 +34,14 @@ public final class LauncherSpawner implements SessionSpawner {
     }
 
     @Override
+    public void resume(io.github.ghosthack.microhm.app.registry.SessionEntry entry) {
+        // the window lets go of the ended run's terminal first, as its own Resume does
+        events.fireSessionRunEnded(entry.sessionName());
+        launcher.resume(entry, () -> { });
+        events.fireSessionsChanged(entry.sessionName());
+    }
+
+    @Override
     public void kill(String session) {
         host.killSession(session);
         launcher.discardMcpConfig(session);

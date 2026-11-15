@@ -33,7 +33,7 @@ public final class HostLauncher {
      * MCP server or the tray icon is on. True when a host process was started.
      */
     public static boolean launchIfNeeded(SessionRegistry registry, SessionServerHost host) {
-        if (!AppSettings.mcpServerEnabled() && !AppSettings.trayIconEnabled()) {
+        if (!AppSettings.mcpServerEnabled() && !AppSettings.trayIconEnabled() && !AppSettings.phoneServerEnabled()) {
             return false;
         }
         if (McpHost.liveRegistered(registry, host) == 0) {

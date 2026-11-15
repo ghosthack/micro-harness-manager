@@ -222,6 +222,147 @@ public final class SessionController implements McpToolset {
         }
     }
 
+    // ------------------------------------------------------------------ phone page
+
+    /** A running session as the phone page lists it; {@code state} is a {@code SessionState}
+     * name, or {@code EXITED}. */
+    public record SessionSummary(String name, String display, String harness, String state, String project) {
+    }
+
+    /** One session's screen as plain text (no markers), with what the page shows above it. */
+    public record ScreenView(String name, String display, String harness, String state, String reason,
+                             String title, String text, int columns, int rows, long outputBytes,
+                             boolean alive) {
+    }
+
+    /** The running sessions, classified, in the daemon's order. No daemon is no sessions:
+     * it exits with its last session and starts again with the next. */
+    public List<SessionSummary> summaries() {
+        compat.revalidate();
+        List<Session.Info> infos = daemon.list();
+        List<SessionSummary> out = new ArrayList<>();
+        for (Session.Info info : infos) {
+            if (!info.alive()) {
+                continue; // its program ended; the daemon drops it shortly, the phone lists it as ended
+            }
+            Target target = target(info);
+            String state = observe(target).map(o -> o.classification().state().name()).orElse("EXITED");
+            out.add(new SessionSummary(target.name(), target.display(), target.harness().id(), state,
+                    target.project()));
+        }
+        return out;
+    }
+
+    /** {@code session}'s screen (by name or display name); empty once it has exited.
+     * Throws a message for the user when no session matches or the daemon does not answer. */
+    public Optional<ScreenView> screen(String session) {
+        compat.revalidate();
+        Target target;
+        try {
+            target = resolve(session);
+        } catch (Unreachable e) {
+            if (!reachable()) {
+                // no daemon: it exits with its last session, so this one has ended
+                return Optional.empty();
+            }
+            throw e;
+        }
+        return observe(target).map(obs -> {
+            Classification c = obs.classification();
+            Session.Capture capture = obs.capture();
+            return new ScreenView(target.name(), target.display(), target.harness().id(), c.state().name(),
+                    c.reason(), capture.title(), obs.plain(), capture.columns(), capture.rows(),
+                    capture.outputBytes(), capture.alive());
+        });
+    }
+
+    /** A registered session that is not running: what the phone page offers to resume.
+     * {@code conversation} is whether its harness conversation can be picked up again
+     * (an id was recorded); without one, resuming starts the harness fresh in its folder. */
+    public record EndedSession(String name, String display, String harness, String project,
+                               boolean conversation, java.time.Instant created) {
+    }
+
+    /** Registered sessions the daemon is not running, newest first. No daemon: all of them. */
+    public List<EndedSession> ended() {
+        Set<String> live = daemon.list().stream().filter(Session.Info::alive).map(Session.Info::name)
+                .collect(Collectors.toSet());
+        return registry.sessions().stream()
+                .filter(e -> !live.contains(e.sessionName()))
+                .sorted(java.util.Comparator.comparing(SessionEntry::createdAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+                .map(e -> new EndedSession(e.sessionName(), e.displayName(), e.harnessType().id(),
+                        e.projectPath(), e.harnessSessionIdOpt().isPresent(), e.createdAt()))
+                .toList();
+    }
+
+    /** Starts the ended registered session {@code session} (its name or sidebar name) again,
+     * as the window's Resume does; returns its name. */
+    public String resume(String session) {
+        compat.revalidate();
+        Set<String> live = daemon.list().stream().filter(Session.Info::alive).map(Session.Info::name)
+                .collect(Collectors.toSet());
+        SessionEntry entry = registry.sessions().stream()
+                .filter(e -> e.sessionName().equals(session) || session.equalsIgnoreCase(e.displayName()))
+                .findFirst()
+                .orElseThrow(() -> new ToolError("no saved session named " + session));
+        if (live.contains(entry.sessionName())) {
+            throw new ToolError(entry.sessionName() + " is already running");
+        }
+        forget(entry.sessionName());
+        spawner.resume(entry);
+        return entry.sessionName();
+    }
+
+    /** Scrollback lines as plain text, oldest first, and the count to pass back as
+     * {@code since} next time; {@code alternateScreen} while a full-screen program runs. */
+    public record HistoryView(String text, long added, boolean alternateScreen) {
+    }
+
+    /** The scrollback lines {@code session} added after the first {@code since} (0: all it
+     * still holds); empty once it has exited, or from a daemon without history. */
+    public Optional<HistoryView> history(String session, long since) {
+        compat.revalidate();
+        Target target = resolve(session);
+        try {
+            return daemon.captureSince(target.name(), CaptureFormat.TEXT, since)
+                    .map(Session.Capture::history)
+                    .map(h -> new HistoryView(h.text() == null ? "" : h.text(), h.added(), h.alternateScreen()));
+        } catch (RuntimeException e) {
+            if (DaemonCompat.isUnsupported(e)) {
+                return Optional.empty();
+            }
+            throw e;
+        }
+    }
+
+    /** A screen as the daemon's styled capture: the redraw stream that reproduces it, with
+     * the size to replay it at. */
+    public record AnsiView(String text, int columns, int rows) {
+    }
+
+    /** {@code session}'s screen with its styles; empty once it has exited, or from a daemon
+     * without the styled capture. */
+    public Optional<AnsiView> ansi(String session) {
+        compat.revalidate();
+        Target target = resolve(session);
+        try {
+            return daemon.capture(target.name(), CaptureFormat.ANSI)
+                    .map(c -> new AnsiView(c.text() == null ? "" : c.text(), c.columns(), c.rows()));
+        } catch (RuntimeException e) {
+            if (DaemonCompat.isUnsupported(e)) {
+                return Optional.empty();
+            }
+            throw e;
+        }
+    }
+
+    /** Resizes {@code session} (by name or display name) for every viewer. */
+    public void resize(String session, int columns, int rows) {
+        compat.revalidate();
+        daemon.resize(resolve(session).name(), columns, rows);
+    }
+
     /** Starts the background monitor (idempotent). */
     @Override
     public synchronized void serverStarted() {

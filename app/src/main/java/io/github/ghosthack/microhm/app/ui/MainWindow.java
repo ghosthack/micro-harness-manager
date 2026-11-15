@@ -14,6 +14,7 @@ import io.github.ghosthack.microhm.app.registry.ReconciliationResult;
 import io.github.ghosthack.microhm.app.registry.Reconciler;
 import io.github.ghosthack.microhm.app.registry.SessionEntry;
 import io.github.ghosthack.microhm.app.mcp.McpService;
+import io.github.ghosthack.microhm.app.phone.PhoneService;
 import io.github.ghosthack.microhm.app.session.SessionEvents;
 import io.github.ghosthack.microhm.app.session.SessionLauncher;
 import io.github.ghosthack.microhm.app.registry.SessionRegistry;
@@ -193,6 +194,8 @@ public final class MainWindow extends JFrame {
     private final SessionLauncher launcher;
     /** The MCP server's lifecycle — Settings starts/stops it, shutdown stops it. */
     private final McpService mcpService;
+    /** The phone page, or null for a window that hosts none (tests). */
+    private final PhoneService phoneService;
     /** Applies Settings' MCP changes to {@link #mcpService}, one at a time, in order. */
     private final McpApplier mcpApplier;
     /** Sessions created or killed outside this window (MCP), fired from any thread. */
@@ -204,6 +207,14 @@ public final class MainWindow extends JFrame {
                 }
             });
     private final SessionEvents.SessionKilledListener sessionKilledListener = this::sessionKilledExternally;
+    /** A session closed or resumed from the phone page: drop the terminal of its ended run,
+     * as the window's own Close and Resume do. */
+    private final SessionEvents.SessionRunEndedListener sessionRunEndedListener =
+            session -> SwingUtilities.invokeLater(() -> {
+                if (!disposed) {
+                    dropRuntimeArtifacts(session);
+                }
+            });
 
     /** The context menu's "Close" and Cmd / Ctrl+Shift+W's polite session close. Quit timeout
      * is generous — a harness flushing
@@ -347,7 +358,14 @@ public final class MainWindow extends JFrame {
      */
     public MainWindow(SessionRegistry registry, SessionHost host, SessionLauncher launcher,
                       McpService mcpService, SessionEvents sessionEvents) {
+        this(registry, host, launcher, mcpService, sessionEvents, null);
+    }
+
+    /** As above, with the phone page to start, stop and restart from Settings (null: none). */
+    public MainWindow(SessionRegistry registry, SessionHost host, SessionLauncher launcher,
+                      McpService mcpService, SessionEvents sessionEvents, PhoneService phoneService) {
         super(APP_NAME);
+        this.phoneService = phoneService;
         AppIcon.applyTo(this);
         this.registry = registry;
         this.host = host;
@@ -585,6 +603,7 @@ public final class MainWindow extends JFrame {
 
         sessionEvents.addSessionsChangedListener(sessionsChangedListener);
         sessionEvents.addSessionKilledListener(sessionKilledListener);
+        sessionEvents.addSessionRunEndedListener(sessionRunEndedListener);
 
         refreshSidebar(null);
     }
@@ -613,6 +632,29 @@ public final class MainWindow extends JFrame {
         mcpApplier.apply(enabled, AppSettings.clampMcpPort(port), regenerateToken);
     }
 
+    /** Starts, restarts or stops the phone page to match Settings; runs off the EDT. */
+    private void applyPhoneServer(boolean enabled, int port) {
+        if (phoneService == null) {
+            return;
+        }
+        if (!enabled) {
+            phoneService.stop();
+            return;
+        }
+        try {
+            phoneService.start(port, AppSettings.phoneToken());
+        } catch (java.io.IOException | RuntimeException e) {
+            SwingUtilities.invokeLater(() -> {
+                if (!disposed) {
+                    JOptionPane.showMessageDialog(this,
+                            "The phone page could not start on port " + port + ": " + e.getMessage()
+                                    + "\nPick another port in Settings.",
+                            "Phone page", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+        }
+    }
+
     /** Everything the window does on close short of exiting the JVM: stops the timers
      * and executors, detaches every terminal (kills nothing) and disposes. Separate
      * from the window listener so a test can tear a window down in-process. */
@@ -620,8 +662,12 @@ public final class MainWindow extends JFrame {
         disposed = true;
         sessionEvents.removeSessionsChangedListener(sessionsChangedListener);
         sessionEvents.removeSessionKilledListener(sessionKilledListener);
+        sessionEvents.removeSessionRunEndedListener(sessionRunEndedListener);
         mcpApplier.close(); // a queued start must not undo the stop
         mcpService.stop();
+        if (phoneService != null) {
+            phoneService.stop();
+        }
         statusPollTimer.stop();
         activeTabPollTimer.stop();
         pulseTimer.stop();
@@ -2529,6 +2575,9 @@ public final class MainWindow extends JFrame {
                 AppSettings.saveTrayIconEnabled(result.trayIcon());
                 AppSettings.saveSessionShell(result.sessionShell());
                 AppSettings.saveDirectLaunch(result.directLaunch());
+                AppSettings.savePhoneServerEnabled(result.phoneServerEnabled());
+                AppSettings.savePhonePort(result.phonePort());
+                applyPhoneServer(result.phoneServerEnabled(), AppSettings.clampMcpPort(result.phonePort()));
             });
             if (SettingsDialog.mcpNeedsApply(result.mcpChanged(), result.mcpServerEnabled(),
                     mcpService.isRunning())) {

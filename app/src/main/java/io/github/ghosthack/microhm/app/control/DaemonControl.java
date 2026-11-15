@@ -61,6 +61,12 @@ public interface DaemonControl {
      * and Enter. Only used when the daemon predates {@link #input}. */
     void sendKeys(String name, String text, boolean enter);
 
+    /** Resizes {@code name}'s terminal for every viewer: a moment's attach at that size,
+     * which the daemon applies and keeps after the detach. */
+    default void resize(String name, int columns, int rows) {
+        throw new UnsupportedOperationException("resize");
+    }
+
     /** The running daemon's process id (from ping); empty when none answers. */
     OptionalLong daemonPid();
 

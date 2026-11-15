@@ -1,5 +1,6 @@
 package io.github.ghosthack.microhm.app.control;
 
+import io.github.ghosthack.microhm.app.registry.SessionEntry;
 import io.github.ghosthack.microhm.app.harness.HarnessType;
 
 import java.nio.file.Path;
@@ -19,6 +20,12 @@ public interface SessionSpawner {
 
     /** Ends the session (no-op when already gone) and drops it from the sidebar. */
     void kill(String session);
+
+    /** Starts an ended registered session again under its name, resuming its conversation
+     * when it has one, as the window's Resume does. */
+    default void resume(SessionEntry entry) {
+        throw new UnsupportedOperationException("resume");
+    }
 
     /**
      * @param project     an existing directory

@@ -34,6 +34,8 @@ final class FakeDaemon implements DaemonControl {
         String foreground = "zsh";
         String title = "";
         long outputBytes;
+        int columns = 120;
+        int rows = 32;
         boolean alive = true;
         /** Whether its program enabled bracketed paste (DEC 2004), as agents do. */
         boolean bracketedPaste = true;
@@ -143,7 +145,7 @@ final class FakeDaemon implements DaemonControl {
             throw new SessionServerException("capture failed: java.io.IOException: Broken pipe");
         }
         String text = format == CaptureFormat.TEXT ? ScreenDiff.plain(s.text) : s.text;
-        return Optional.of(new Session.Capture(text, s.alive, s.foreground, s.processId, s.title, 120, 32,
+        return Optional.of(new Session.Capture(text, s.alive, s.foreground, s.processId, s.title, s.columns, s.rows,
                 old ? -1 : s.outputBytes, true));
     }
 
@@ -248,6 +250,15 @@ final class FakeDaemon implements DaemonControl {
     private SessionServerException unsupported(String what) {
         unsupportedCalls.incrementAndGet();
         return SessionServerException.unsupported(what);
+    }
+
+    @Override
+    public synchronized void resize(String name, int columns, int rows) {
+        FakeSession s = sessions.get(name);
+        if (s != null) {
+            s.columns = columns;
+            s.rows = rows;
+        }
     }
 
     @Override

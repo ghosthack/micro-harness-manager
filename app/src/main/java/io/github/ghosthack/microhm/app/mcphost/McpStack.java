@@ -5,6 +5,9 @@ import io.github.ghosthack.microhm.app.control.LauncherSpawner;
 import io.github.ghosthack.microhm.app.control.SessionController;
 import io.github.ghosthack.microhm.app.daemon.SessionServerHost;
 import io.github.ghosthack.microhm.app.mcp.McpService;
+import io.github.ghosthack.microhm.app.phone.PhoneBackend;
+import io.github.ghosthack.microhm.app.phone.PhoneCloser;
+import io.github.ghosthack.microhm.app.phone.PhoneService;
 import io.github.ghosthack.microhm.app.registry.RegistryPaths;
 import io.github.ghosthack.microhm.app.registry.SessionRegistry;
 import io.github.ghosthack.microhm.app.session.SessionEvents;
@@ -23,9 +26,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * line). The launcher asks the service for URLs and tokens and the service hosts the
  * controller that uses the launcher, hence the late-bound reference. {@link #events}
  * carries what agents create or kill to whoever listens (the window's sidebar).
+ * {@link #phone} serves the phone page over the same controller.
  */
 public record McpStack(SessionLauncher launcher, SessionController controller, McpService service,
-                       SessionEvents events) {
+                       SessionEvents events, PhoneService phone) {
 
     public static McpStack create(SessionRegistry registry, SessionServerHost host) {
         AtomicReference<McpService> serviceRef = new AtomicReference<>();
@@ -38,6 +42,7 @@ public record McpStack(SessionLauncher launcher, SessionController controller, M
                 registry, new LauncherSpawner(launcher, host, events), Clock.systemUTC());
         McpService service = new McpService(controller);
         serviceRef.set(service);
-        return new McpStack(launcher, controller, service, events);
+        PhoneService phone = new PhoneService(PhoneBackend.of(controller, new PhoneCloser(host, registry, events)));
+        return new McpStack(launcher, controller, service, events, phone);
     }
 }

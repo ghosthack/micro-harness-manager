@@ -62,8 +62,9 @@ public final class McpHost {
         applyStateOptions(args);
         boolean mcp = AppSettings.mcpServerEnabled();
         boolean wantIcon = AppSettings.trayIconEnabled();
-        if (!mcp && !wantIcon) {
-            LOG.info("neither the MCP server nor the tray icon is on; nothing to host");
+        boolean phone = AppSettings.phoneServerEnabled();
+        if (!mcp && !wantIcon && !phone) {
+            LOG.info("neither the MCP server, the phone page nor the tray icon is on; nothing to host");
             return;
         }
         // Before anything touches AWT: headless when there is no icon to show, else a
@@ -107,8 +108,18 @@ public final class McpHost {
                 LOG.warn("background host could not serve MCP on port {}: {}", AppSettings.mcpPort(), e.toString());
             }
         }
+        boolean phoneServing = false;
+        if (phone) {
+            try {
+                stack.phone().start(AppSettings.phonePort(), AppSettings.phoneToken());
+                phoneServing = true;
+            } catch (IOException | RuntimeException e) {
+                LOG.warn("background host could not serve the phone page on port {}: {}", AppSettings.phonePort(),
+                        e.toString());
+            }
+        }
         AtomicBoolean iconHidden = new AtomicBoolean(!wantIcon);
-        boolean serving = servingPort > 0;
+        boolean serving = servingPort > 0 || phoneServing;
         Optional<StatusIcon> icon = wantIcon ? StatusIcon.show(new StatusIcon.Actions() {
             @Override
             public void open() {
@@ -131,11 +142,13 @@ public final class McpHost {
         }
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> {
             stack.service().stop();
+            stack.phone().stop();
             icon.ifPresent(StatusIcon::remove);
             self.ifPresent(record -> HostOwner.clear(registryFile, record));
         }));
         LOG.info("background host running while the app is closed: {}, {} ({})",
-                serving ? "MCP on 127.0.0.1:" + servingPort : "no MCP",
+                (servingPort > 0 ? "MCP on 127.0.0.1:" + servingPort : "no MCP")
+                        + (phoneServing ? ", phone page on port " + AppSettings.phonePort() : ""),
                 icon.isPresent() ? "tray icon shown" : "no tray icon",
                 self.map(HostOwner::describe).orElse("pid " + ProcessHandle.current().pid()));
 
