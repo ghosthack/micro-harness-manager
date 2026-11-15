@@ -69,6 +69,12 @@ public final class ClientDaemonControl implements DaemonControl {
     }
 
     @Override
+    public void resize(String name, int columns, int rows) {
+        // attaching at a size resizes the session; closing detaches and the size stays
+        client.attach(name, columns, rows).close();
+    }
+
+    @Override
     public OptionalLong daemonPid() {
         return client.ping().map(info -> OptionalLong.of(info.pid())).orElse(OptionalLong.empty());
     }

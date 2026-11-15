@@ -57,6 +57,25 @@ final class LauncherSpawnerTest {
     }
 
     @Test
+    void resumeTellsTheWindowFirstThenStartsTheSessionAgain() throws Exception {
+        FakeSessionHost host = new FakeSessionHost();
+        SessionRegistry registry = SessionRegistry.load(dir.resolve("sessions.json"));
+        SessionLauncher launcher = SessionLauncher.withoutMcp(registry, host, SessionLabeller.NONE);
+        SessionEvents events = new SessionEvents();
+        List<String> order = new ArrayList<>();
+        events.addSessionRunEndedListener(s -> order.add("run ended " + s + " after " + host.newSessionCalls.size()));
+        events.addSessionsChangedListener(s -> order.add("changed " + s));
+        Path project = Files.createDirectories(dir.resolve("api"));
+        SessionEntry entry = SessionEntry.newlyCreated("mhm-api", project.toString(), HarnessType.SHELL, null);
+        registry.put(entry);
+
+        new LauncherSpawner(launcher, host, events).resume(entry);
+
+        assertEquals(List.of("mhm-api " + project + " 120x32"), host.newSessionCalls);
+        assertEquals(List.of("run ended mhm-api after 0", "changed null", "changed mhm-api"), order);
+    }
+
+    @Test
     void killDeletesTheSessionsMcpConfigFile() throws Exception {
         FakeSessionHost host = new FakeSessionHost();
         SessionRegistry registry = SessionRegistry.load(dir.resolve("sessions.json"));

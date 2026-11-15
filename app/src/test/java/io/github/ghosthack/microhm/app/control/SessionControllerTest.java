@@ -21,6 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -159,6 +160,73 @@ final class SessionControllerTest {
         assertTrue(keys.description().contains("PageDown"));
         JsonNode harnesses = controller.tools().get(5).inputSchema().path("properties").path("harness").path("enum");
         assertEquals(HarnessType.values().length, harnesses.size());
+    }
+
+    // ------------------------------------------------------------------ phone page
+
+    @Test
+    void summariesAndScreenGiveThePhonePageData() {
+        agent("mhm-a", CLAUDE_APPROVAL);
+        register("mhm-a", HarnessType.CLAUDE_CODE, "Alpha");
+        shell("mhm-b").show("$ ls\n");
+        controller.summaries(); // first look: just changed, so working
+        clock.advance(Duration.ofSeconds(30));
+
+        List<SessionController.SessionSummary> summaries = controller.summaries();
+        assertEquals(List.of("mhm-a", "mhm-b"), summaries.stream().map(SessionController.SessionSummary::name).toList());
+        assertEquals("Alpha", summaries.get(0).display());
+        assertEquals("claude-code", summaries.get(0).harness());
+        assertEquals("WAITING_FOR_INPUT", summaries.get(0).state());
+        assertEquals("/proj/mhm-a", summaries.get(0).project());
+
+        SessionController.ScreenView view = controller.screen("Alpha").orElseThrow();
+        assertEquals("mhm-a", view.name());
+        assertEquals("WAITING_FOR_INPUT", view.state());
+        assertTrue(view.text().contains("Do you want to proceed?"), view.text());
+        assertFalse(view.text().contains("▶"), "plain text, no markers: " + view.text());
+        assertThrows(RuntimeException.class, () -> controller.screen("nope"));
+    }
+
+    @Test
+    void endedListsSavedSessionsTheDaemonIsNotRunningNewestFirst() {
+        registry.put(new SessionEntry("mhm-old", "/p/old", HarnessType.CLAUDE_CODE, "abc",
+                java.time.Instant.parse("2026-11-01T00:00:00Z"), null));
+        registry.put(new SessionEntry("mhm-new", "/p/new", HarnessType.CODEX, null,
+                java.time.Instant.parse("2026-11-10T00:00:00Z"), null));
+        register("mhm-live", HarnessType.SHELL, null);
+        shell("mhm-live").show("$ ");
+
+        // a session whose program ended but the daemon still lists counts as ended
+        register("mhm-gone", HarnessType.SHELL, null);
+        shell("mhm-gone").show("$ exit").alive = false;
+        assertEquals(List.of("mhm-live"), controller.summaries().stream()
+                .map(SessionController.SessionSummary::name).toList());
+
+        List<SessionController.EndedSession> ended = controller.ended();
+        assertEquals(List.of("mhm-gone", "mhm-new", "mhm-old"), // newest first: mhm-gone was just made
+                ended.stream().map(SessionController.EndedSession::name).toList());
+        assertFalse(ended.get(1).conversation());
+        assertTrue(ended.get(2).conversation());
+        assertEquals("/p/old", ended.get(2).project());
+    }
+
+    @Test
+    void resumeStartsAnEndedSessionByNameOrSidebarName() {
+        registry.put(SessionEntry.newlyCreated("mhm-a", "/p/a", HarnessType.CLAUDE_CODE, "abc").withDisplayName("Alpha"));
+        assertEquals("mhm-a", controller.resume("alpha"));
+        assertEquals(List.of("mhm-a"), spawner.resumed);
+        assertEquals("mhm-a is already running",
+                assertThrows(RuntimeException.class, () -> controller.resume("mhm-a")).getMessage());
+        assertTrue(assertThrows(RuntimeException.class, () -> controller.resume("nope")).getMessage()
+                .contains("no saved session named nope"));
+    }
+
+    @Test
+    void summariesOfNoDaemonAreEmpty() {
+        daemon.down = true;
+        assertEquals(List.of(), controller.summaries());
+        // and a session asked for by name has ended, rather than "the daemon is not answering"
+        assertEquals(Optional.empty(), controller.screen("mhm-gone"));
     }
 
     @Test
@@ -1273,7 +1341,14 @@ final class SessionControllerTest {
     private final class FakeSpawner implements SessionSpawner {
         final List<SpawnRequest> requests = new CopyOnWriteArrayList<>();
         final List<String> killed = new CopyOnWriteArrayList<>();
+        final List<String> resumed = new CopyOnWriteArrayList<>();
         String harnessLabel;
+
+        @Override
+        public void resume(io.github.ghosthack.microhm.app.registry.SessionEntry entry) {
+            resumed.add(entry.sessionName());
+            daemon.add(entry.sessionName()).show("$ ");
+        }
         /** Runs at the start of every spawn, e.g. to hold one in flight. */
         volatile Runnable onSpawn = () -> { };
 

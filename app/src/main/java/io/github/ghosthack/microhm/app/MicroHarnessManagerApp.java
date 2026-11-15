@@ -97,12 +97,14 @@ public final class MicroHarnessManagerApp {
         McpStack stack = McpStack.create(registry, host);
         McpService mcpService = stack.service();
         startMcpServer(mcpService);
+        startPhoneServer(stack.phone());
         // However the app ends, agents keep their MCP tools while sessions live: a
         // headless host takes over the server (and the registry) until the app is back.
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("mhm-mcp-handoff").unstarted(
                 () -> HostLauncher.launchIfNeeded(registry, host)));
         SwingUtilities.invokeLater(() -> {
-            MainWindow window = new MainWindow(registry, host, stack.launcher(), mcpService, stack.events());
+            MainWindow window = new MainWindow(registry, host, stack.launcher(), mcpService, stack.events(),
+                    stack.phone());
             if (training) {
                 recordStart(window);
                 return;
@@ -152,6 +154,21 @@ public final class MicroHarnessManagerApp {
                     "The MCP server could not start on port " + AppSettings.mcpPort() + ": " + e.getMessage()
                             + "\n" + MainWindow.APP_NAME + " runs without it; pick another port in Settings.",
                     "MCP server", JOptionPane.WARNING_MESSAGE));
+        }
+    }
+
+    /** Starts the phone page when the setting is on; a taken port is reported the same way. */
+    private static void startPhoneServer(io.github.ghosthack.microhm.app.phone.PhoneService phone) {
+        if (!AppSettings.phoneServerEnabled()) {
+            return;
+        }
+        try {
+            phone.start(AppSettings.phonePort(), AppSettings.phoneToken());
+        } catch (IOException | RuntimeException e) {
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null,
+                    "The phone page could not start on port " + AppSettings.phonePort() + ": " + e.getMessage()
+                            + "\n" + MainWindow.APP_NAME + " runs without it; pick another port in Settings.",
+                    "Phone page", JOptionPane.WARNING_MESSAGE));
         }
     }
 

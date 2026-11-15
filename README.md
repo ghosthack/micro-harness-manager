@@ -52,6 +52,28 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   files made in it are readable by you alone, and the folder ignores itself for git, but
   the logs hold other sessions' output as plain text and travel with anything that
   copies the project folder.
+- **Phone page.** A web page for Safari (or any browser) on a phone on your network, or
+  reaching it over a VPN such as Tailscale, for when you are away from the desk. Any
+  number of phones can have it open.
+  - *Sessions:* the running ones with their state, and the ended ones to resume (▶) or the
+    running ones to close (■, only once idle, with the same checks as Close). The funnel
+    shows sorting by status, session or folder (grouped, the default) and filters by
+    state and agent, as in the sidebar.
+  - *One session:* its live screen in colour, with box and block characters drawn to fill
+    their cells as the window draws them; the earlier output above it, to swipe back
+    through; a message box; a keypad for menus (Esc, arrows, return, 1/2/3, y/n, tab,
+    page up/down, ⌃C) behind the button left of it. While a phone watches a session, the
+    session runs at the phone's size, so the program lays itself out for it; it gets its
+    size back a minute after the last phone leaves (at once when the app quits).
+  - *New:* start an agent or a shell in a folder, with an optional name and first message.
+  - *Turning it on:* Settings → Phone (off by default; port 7393). **Show QR code** shows
+    the link to scan with the phone's camera (**Copy phone link** copies it); Safari keeps
+    a cookie from then on. It keeps serving after you quit, like the MCP server.
+  - *What it is:* plain HTTP on every interface with one shared secret, meant for a home
+    network: whoever has the link can type into your sessions, shells included.
+  - *Working on the page:* run from source with `MICROHM_WEB_DIR=app/src/main/resources/web`
+    and the server reads the page's files from that folder on every request, so a change
+    to the HTML, JavaScript or CSS shows on the next refresh, with no rebuild or restart.
 - **Background icon.** While sessions run with the app closed, a menu-bar icon (macOS) or
   system-tray icon (Windows; Linux desktops with a tray) shows how many are running and
   whether MCP is serving, and opens the app (end sessions from the app). On by default;
@@ -92,7 +114,9 @@ Java runtime. See [packaging/README.md](packaging/README.md) for how releases ar
 run.cmd         # Windows
 ```
 
-This builds the jar when the sources changed and launches it. The session daemon starts
+This builds the jar when the sources changed and launches it, from a copy named after
+its content (`app/target/run/`): the session daemon starts from the same jar and outlives
+the app, and a rebuild that overwrote its jar would break it. The session daemon starts
 on demand from the same jar and keeps running after you quit the app.
 
 `./microhm-mux` (`microhm-mux.cmd` on Windows) is the daemon's command-line client:

@@ -29,6 +29,15 @@ public final class SessionEvents {
         void sessionKilled(String session);
     }
 
+    /** A session's run ended or is being replaced by something other than the window's
+     * own Close or Resume (the phone page): a terminal still showing that run must go,
+     * while the saved session stays. */
+    @FunctionalInterface
+    public interface SessionRunEndedListener {
+        void sessionRunEnded(String session);
+    }
+
+    private final CopyOnWriteArrayList<SessionRunEndedListener> runEnded = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<SessionsChangedListener> changed = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<SessionKilledListener> killed = new CopyOnWriteArrayList<>();
 
@@ -46,6 +55,27 @@ public final class SessionEvents {
 
     public void removeSessionKilledListener(SessionKilledListener listener) {
         killed.remove(listener);
+    }
+
+    public void addSessionRunEndedListener(SessionRunEndedListener listener) {
+        runEnded.addIfAbsent(listener);
+    }
+
+    public void removeSessionRunEndedListener(SessionRunEndedListener listener) {
+        runEnded.remove(listener);
+    }
+
+    /** Announces that a session's run ended or is being replaced; run-ended listeners run
+     * first, then a sessions-changed. */
+    public void fireSessionRunEnded(String session) {
+        for (SessionRunEndedListener listener : runEnded) {
+            try {
+                listener.sessionRunEnded(session);
+            } catch (RuntimeException e) {
+                LOG.warn("session-run-ended listener failed for {}", session, e);
+            }
+        }
+        fireSessionsChanged(null);
     }
 
     public void fireSessionsChanged(String createdOrNull) {

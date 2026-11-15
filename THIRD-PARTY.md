@@ -10,6 +10,7 @@ own licenses; their license texts and notices are kept under `licenses/`.
 | FlatLaf | 3.6 | Apache-2.0 | Swing look and feel |
 | Jackson databind, core, annotations and JSR-310 | 2.18.2 | Apache-2.0 with retained parser notices | JSON and date/time serialization |
 | SLF4J API and simple provider | 2.0.17 | MIT | logging |
+| QR Code generator (Project Nayuki) | 1.8.0 | MIT | QR code for the phone link |
 
 The installers and portable archives also bundle a trimmed Java runtime (Azul Zulu
 OpenJDK, GPL-2.0 with the Classpath Exception). Its legal files ship inside the package
