@@ -34,3 +34,6 @@ jobs:
       - name: Run the test suite
         shell: bash
         run: mvn -B test
+      - name: Test the phone page
+        shell: bash
+        run: node --test app/src/test/web/app.test.mjs
