@@ -21,7 +21,9 @@ import java.util.Objects;
  *
  * <p>Wire shape: {@code {fg, bg, rows: [[run…]…]}}; a run is {@code {t, f?, b?, s?}}: its
  * text, its colours as {@code #rrggbb} (absent: the defaults) and its style bits
- * ({@link #BOLD}, {@link #DIM}, {@link #ITALIC}, {@link #UNDERLINE}, {@link #STRIKE}). Inverse
+ * ({@link #BOLD}, {@link #DIM}, {@link #ITALIC}, {@link #UNDERLINE}, {@link #STRIKE}; an
+ * underline that is not a single line adds {@link #DOUBLE}, {@link #CURLY}, {@link #DOTTED}
+ * or {@link #DASHED}). Inverse
  * and invisible are resolved here. Trailing blank cells on the default background are left out.
  */
 public final class StyledScreen {
@@ -31,6 +33,11 @@ public final class StyledScreen {
     static final int ITALIC = 4;
     static final int UNDERLINE = 8;
     static final int STRIKE = 16;
+    /** With {@link #UNDERLINE}: its kind, when not a single line. */
+    static final int DOUBLE = 32;
+    static final int CURLY = 64;
+    static final int DOTTED = 128;
+    static final int DASHED = 256;
 
     private static final int[] CUBE = new int[256];
 
@@ -117,7 +124,7 @@ public final class StyledScreen {
             String cellBg = defaultBg && !Style.inverse(style) ? null : hex(bg);
             int bits = (Style.bold(style) ? BOLD : 0) | (Style.dim(style) ? DIM : 0)
                     | (Style.italic(style) ? ITALIC : 0)
-                    | (Style.underline(style) != Style.UNDERLINE_NONE ? UNDERLINE : 0)
+                    | underlineBits(Style.underline(style))
                     | (Style.strikethrough(style) ? STRIKE : 0);
             if (open && (!Objects.equals(cellFg, runFg) || !Objects.equals(cellBg, runBg) || bits != runStyle)) {
                 runs.add(run(f, text, runFg, runBg, runStyle));
@@ -137,6 +144,17 @@ public final class StyledScreen {
             runs.add(run(f, text, runFg, runBg, runStyle));
         }
         return runs;
+    }
+
+    static int underlineBits(int underline) {
+        return switch (underline) {
+            case Style.UNDERLINE_NONE -> 0;
+            case Style.UNDERLINE_DOUBLE -> UNDERLINE | DOUBLE;
+            case Style.UNDERLINE_CURLY -> UNDERLINE | CURLY;
+            case Style.UNDERLINE_DOTTED -> UNDERLINE | DOTTED;
+            case Style.UNDERLINE_DASHED -> UNDERLINE | DASHED;
+            default -> UNDERLINE;
+        };
     }
 
     private static ObjectNode run(JsonNodeFactory f, CharSequence text, String fg, String bg, int style) {

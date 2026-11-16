@@ -1,20 +1,20 @@
-after op 100 6d59bd4d87aa7b1c
-after op 200 8fd20f67cca96234
-after op 300 de3bcd4d2e919cb7
-after op 400 fcecc9398b779ab3
-after op 500 c8976de0f3494b8a
-after op 600 95a7af813b288870
-after op 700 b4ac7a34f3032345
-after op 800 d684d9a11b74c03a
-after op 900 4302265281fcf76d
-after op 1000 5cd2bf4f2699f33b
-after op 1100 44a0f5d08b72577b
-after op 1200 8922148939746caf
-after op 1300 e28fa4ae807ce4cc
-after op 1400 fd83d12d9eb4a73b
-after op 1500 e131e2552f16f105
+after op 100 183001cb4742d704
+after op 200 b285d47dd56a1934
+after op 300 3b19dc3453c6a7e4
+after op 400 8620a6e063d787cd
+after op 500 049274e682bc39f1
+after op 600 4192d9bd7a1c304b
+after op 700 d68df1f4a1ad8528
+after op 800 e33772ed1df370e3
+after op 900 b77e42e1712bd7c1
+after op 1000 34e4ec090e64191d
+after op 1100 83958bb6e949147d
+after op 1200 8c2b2e1c0c551506
+after op 1300 25d650723066dd73
+after op 1400 717e7791e4d37380
+after op 1500 042750493d70a6fe
 size 80x24 history 3
-state cursor=15,13 pen=fg=idx86 bg=idx2 underline=1 invisible visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title=title 78 tabs=0,8,16,24,32,40,48,56,64,72,
+state cursor=15,13 pen=fg=idx86 bg=idx2 underline=2 invisible visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title=title 78 tabs=0,8,16,24,32,40,48,56,64,72,
 modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=title 78]
   0 |                                                                                |
   1 |                                                                                |
@@ -31,13 +31,13 @@ modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, application
  12 |                                                                                |
  13 |                                                                                |
  14 |                linkx» 'QéPkjFM^Tsy4&tc-+=/本-AsЖ{+C'                           |
-    cols 16-52 fg=idx86 bg=idx2 underline=1 invisible
+    cols 16-52 fg=idx86 bg=idx2 underline=2 invisible
  15 |7*文I«┌}G;L?&                                                                   |
-    cols 0-12 fg=idx86 bg=idx2 underline=1 invisible
+    cols 0-12 fg=idx86 bg=idx2 underline=2 invisible
  16+|                                                                 }md%λWjg??sPxo |
     cols 65-78 fg=#e03f45 bg=default
  17 |語ña0r                                                                          |
-    cols 0-5 fg=#8ef690 bg=default underline=1
+    cols 0-5 fg=#8ef690 bg=default underline=4
  18 |                                                                                |
  19 |                                                                                |
  20 |                                                                                |
@@ -45,5 +45,5 @@ modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, application
  22 |                  6┌J8!rfakA語&fyR2DBb#Cw7                                      |
     cols 18-41 fg=#1dd29b bg=idx11
  23 |Ｗ)d     ik}+cb1^                                                               |
-    cols 0-3 fg=idx86 bg=idx2 underline=1 invisible
-    cols 9-16 fg=idx86 bg=idx2 underline=1 invisible
+    cols 0-3 fg=idx86 bg=idx2 underline=2 invisible
+    cols 9-16 fg=idx86 bg=idx2 underline=2 invisible

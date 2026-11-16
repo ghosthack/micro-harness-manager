@@ -511,7 +511,8 @@ function renderScreen(view) {
 
 // The screen in colour: rows of runs, each with its colours (absent: the terminal's
 // defaults, which also paint the area) and style bits (bold 1, dim 2, italic 4,
-// underline 8, strikethrough 16), as the server draws them with the Mac's palette.
+// underline 8, strikethrough 16; an underline's kind: double 32, curly 64, dotted 128,
+// dashed 256), as the server draws them with the Mac's palette.
 let drawnStyled = null;
 
 function drawStyled(styled) {
@@ -582,8 +583,18 @@ function textHtml(group) {
   if (group.s & 2) css += "opacity:.6;";
   if (group.s & 4) css += "font-style:italic;";
   const lines = (group.s & 8 ? " underline" : "") + (group.s & 16 ? " line-through" : "");
-  if (lines) css += "text-decoration:" + lines + ";";
+  if (lines) css += "text-decoration:" + lines + underlineStyle(group.s) + ";";
   return css ? '<span style="' + css + '">' + text + "</span>" : text;
+}
+
+/** The underline's kind (double 32, curly 64, dotted 128, dashed 256) as a CSS line style. */
+function underlineStyle(bits) {
+  if (!(bits & 8)) return "";
+  if (bits & 32) return " double";
+  if (bits & 64) return " wavy";
+  if (bits & 128) return " dotted";
+  if (bits & 256) return " dashed";
+  return "";
 }
 
 function escapeHtml(text) {

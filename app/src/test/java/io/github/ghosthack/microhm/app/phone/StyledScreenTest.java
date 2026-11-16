@@ -52,4 +52,15 @@ final class StyledScreenTest {
         assertEquals("  ", row.path(0).path("t").asText());
         assertEquals("#000004", row.path(0).path("b").asText());
     }
+
+    @Test
+    void underlinesCarryTheirKind() {
+        JsonNode row = screen.render("\u001b[4ma\u001b[21mb\u001b[4:3mc\u001b[4:4md\u001b[4:5me", 10, 1)
+                .path("rows").path(0);
+        assertEquals(StyledScreen.UNDERLINE, row.path(0).path("s").asInt());
+        assertEquals(StyledScreen.UNDERLINE | StyledScreen.DOUBLE, row.path(1).path("s").asInt());
+        assertEquals(StyledScreen.UNDERLINE | StyledScreen.CURLY, row.path(2).path("s").asInt());
+        assertEquals(StyledScreen.UNDERLINE | StyledScreen.DOTTED, row.path(3).path("s").asInt());
+        assertEquals(StyledScreen.UNDERLINE | StyledScreen.DASHED, row.path(4).path("s").asInt());
+    }
 }
