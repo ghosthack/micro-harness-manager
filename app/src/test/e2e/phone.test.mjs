@@ -221,6 +221,28 @@ test("lines that scroll off the screen land in the scrollback", async () => {
   assert.ok(history.indexOf("scroll-1\n") < history.indexOf("scroll-2\n"), "in order");
 });
 
+test("typing a long message keeps the screen still at its bottom", async () => {
+  const gap = () => page.$eval("#scroller", (s) => Math.round(s.scrollHeight - s.clientHeight - s.scrollTop));
+  await page.evaluate(() => scrollToBottom());
+  assert.equal(await gap(), 0);
+  // long enough to wrap, then keystrokes that grow it by another line
+  await page.fill("#message", "a message long enough to wrap onto a second line of the box");
+  await page.dispatchEvent("#message", "input");
+  await page.evaluate(() => scrollToBottom());
+  try {
+    await page.focus("#message");
+    await page.press("#message", "End");
+    for (const ch of " and then some more words, enough to make a third line") {
+      await page.keyboard.type(ch);
+      assert.equal(await gap(), 0, "the screen moved after typing " + JSON.stringify(ch));
+    }
+  } finally {
+    // the tests after this one share the page: leave the box empty
+    await page.fill("#message", "");
+    await page.dispatchEvent("#message", "input");
+  }
+});
+
 test("back from a new session, as Safari's swipe does it, is the list, not the form", async () => {
   await page.goBack();
   await waitVisible("#list-view");
