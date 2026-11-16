@@ -249,10 +249,7 @@ final class SettingsDialog {
         JButton showPhoneQrButton = new JButton("Show QR code");
         showPhoneQrButton.addActionListener(e -> showPhoneQr(dialog, io.github.ghosthack.microhm.app.phone.PhoneService
                 .link((Integer) phonePortSpinner.getValue(), AppSettings.phoneToken())));
-        JPanel phoneLinkButtons = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEADING, 0, 0));
-        phoneLinkButtons.add(copyPhoneLinkButton);
-        phoneLinkButtons.add(javax.swing.Box.createHorizontalStrut(8));
-        phoneLinkButtons.add(showPhoneQrButton);
+        JPanel phoneLinkButtons = buttonRow(copyPhoneLinkButton, showPhoneQrButton);
 
         Runnable updatePollControlsEnabled = () -> {
             boolean pollingOn = statusPollEnabledBox.isSelected();
@@ -315,7 +312,7 @@ final class SettingsDialog {
 
         agents.addRow("MCP server:", mcpServerBox);
         agents.addRow("MCP port:", mcpPortSpinner);
-        agents.addRow("MCP token:", regenerateMcpTokenButton);
+        agents.addRow("MCP token:", buttonRow(regenerateMcpTokenButton));
         agents.addRow("", note("A new token restarts the server."));
         agents.addRow("", note("Earlier sessions reconnect after Resume."));
         agents.addRow("", note("Off by default. Loopback only, token-protected; applies live."));
@@ -535,6 +532,20 @@ final class SettingsDialog {
         }
         combo.setSelectedItem(current);
         return combo;
+    }
+
+    /** Buttons at their own width, left-aligned, 8 px apart: a form row stretches a lone
+     * component across the whole field column. */
+    static JPanel buttonRow(JButton... buttons) {
+        JPanel row = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEADING, 0, 0));
+        row.setOpaque(false);
+        for (int i = 0; i < buttons.length; i++) {
+            if (i > 0) {
+                row.add(javax.swing.Box.createHorizontalStrut(8));
+            }
+            row.add(buttons[i]);
+        }
+        return row;
     }
 
     static JLabel note(String text) {
