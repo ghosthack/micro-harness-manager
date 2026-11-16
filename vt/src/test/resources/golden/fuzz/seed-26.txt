@@ -1,20 +1,20 @@
-after op 100 5470cede95b4b9a8
-after op 200 46f2e862acb9d065
-after op 300 64f6c7e93b7a2562
-after op 400 c56681475e715380
-after op 500 abb5b1de76d9b6ed
-after op 600 8e14c43338cdce8d
-after op 700 0bb8f456bc3a6a29
-after op 800 d064e89c07c5bfa2
-after op 900 56a67c6f2ea96678
-after op 1000 ab0eaac0c6a6bb4c
-after op 1100 2430616d92ae9c9b
-after op 1200 20772b0bf05f3714
-after op 1300 a77fb563b37ef4ba
-after op 1400 f1738c1223294aff
-after op 1500 13183a52e0f5f128
+after op 100 71a6b26c047780f0
+after op 200 4086aeb1b552824a
+after op 300 32cf6ece4aa92a6c
+after op 400 1283dcc96ee70e55
+after op 500 80830f481ba4c1c4
+after op 600 07bf464542acd05e
+after op 700 f82a59fae90e3708
+after op 800 75b2624d80275a6e
+after op 900 be3bb2d05a0494d8
+after op 1000 5e5d419388a42661
+after op 1100 05a152124876d2d6
+after op 1200 c630d575851ea016
+after op 1300 4bd4844d0144da48
+after op 1400 e4e6f52c9bf84dbd
+after op 1500 bfc154eb6cc054ea
 size 20x8 history 0
-state cursor=5,4 pen=fg=default bg=idx190 underline=1 strike visible=false shape=2 blink=false alt=true paste=true ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=2-7 kitty=0 charsets=0 title=title 40 tabs=1,
+state cursor=5,4 pen=fg=default bg=idx190 underline=5 strike visible=false shape=2 blink=false alt=true paste=true ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=2-7 kitty=0 charsets=0 title=title 40 tabs=1,
 modes Modes[cursorVisible=false, cursorShape=2, bracketedPaste=true, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=true, autoWrap=true, originMode=false, scrollTop=3, scrollBottom=8, title=title 40]
   0 |                    |
   1+|]OC9Ｗ]'KQ}»k#C#']&`|

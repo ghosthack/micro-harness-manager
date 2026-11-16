@@ -34,8 +34,18 @@ class SgrNormalizerTest {
     }
 
     @Test
-    void underlineStyleToPlainUnderline() {
-        assertEquals("[4m", normalized("[4:3m"));
+    void curlyDottedAndDashedUnderlinesKept() {
+        assertEquals("[4:3m", normalized("[4:3m"));
+        assertEquals("[4:4m", normalized("[4:4m"));
+        assertEquals("[4:5m", normalized("[4:5m"));
+    }
+
+    @Test
+    void singleAndDoubleUnderlinesToSemicolonForm() {
+        assertEquals("[4m", normalized("[4:1m"));
+        assertEquals("[21m", normalized("[4:2m"));
+        assertEquals("[4m", normalized("[4:9m"));
+        assertEquals("[4m", normalized("[4:m"));
     }
 
     @Test
@@ -53,7 +63,7 @@ class SgrNormalizerTest {
     void underlineColourResetDropped() {
         // 59 (default underline colour) is dropped when the token is being normalised — i.e.
         // when it carries a colon somewhere. A colon-free token passes through untouched.
-        assertEquals("[4m", normalized("[59;4:3m"));
+        assertEquals("[4:3m", normalized("[59;4:3m"));
         VtToken colonFree = csi("[1;59m");
         assertSame(colonFree, SgrNormalizer.normalize(colonFree));
     }
@@ -65,14 +75,14 @@ class SgrNormalizerTest {
 
     @Test
     void mixedGroups() {
-        assertEquals("[0;38;2;255;0;0;4m", normalized("[0;38:2::255:0:0;4:3m"));
+        assertEquals("[0;38;2;255;0;0;4:3m", normalized("[0;38:2::255:0:0;4:3m"));
     }
 
     @Test
     void semicolonColourArgumentsAreValuesNotCodes() {
         // A blue of 59 is not SGR 59 (default underline colour), nor a 5 a blink.
         assertEquals("\u001b[48;2;1;2;3;38;2;186;172;59m", normalized("\u001b[48:2::1:2:3;38;2;186;172;59m"));
-        assertEquals("\u001b[4;38;5;59m", normalized("\u001b[4:3;38;5;59m"));
+        assertEquals("\u001b[4:3;38;5;59m", normalized("\u001b[4:3;38;5;59m"));
         // A semicolon-form underline colour goes as a whole.
         assertEquals("\u001b[1;24;31m", normalized("\u001b[1;58;2;10;20;30;4:0;31m"));
     }

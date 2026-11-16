@@ -83,6 +83,9 @@ jobs:
       - name: Run the test suite
         shell: bash
         run: mvn -B -Drevision=${{ needs.metadata.outputs.version }} test
+      - name: Test the phone page
+        shell: bash
+        run: node --test app/src/test/web/app.test.mjs
 
   package:
     needs: [metadata, verify]

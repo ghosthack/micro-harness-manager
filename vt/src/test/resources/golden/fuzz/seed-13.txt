@@ -1,26 +1,26 @@
-after op 100 8dfd5de719017981
-after op 200 651fd26a4d4e55fc
-after op 300 0a322396d216d90c
-after op 400 9cc8fdd6c4017c7b
-after op 500 6247c62e258718fd
-after op 600 8fc4462f8323f5da
-after op 700 c488df96c04b7595
-after op 800 9cbafa962f318c64
-after op 900 2ab28c4524b24f32
-after op 1000 c8dbaeb443995c6c
-after op 1100 0f0f389c090e822d
-after op 1200 3665c2edc4c95433
-after op 1300 41eddda3d4709fda
-after op 1400 7bfca80628e15ae2
-after op 1500 f62e209876ddc880
+after op 100 bc30e32144ebf0e4
+after op 200 d8b15eca3567a925
+after op 300 f5ed9421b5fcf241
+after op 400 16beb70e84ca9e7b
+after op 500 b249c4996e20295e
+after op 600 0fb5e0fd287aac3e
+after op 700 66d73d44c93f0267
+after op 800 f42549bb3cb60419
+after op 900 ba25bf6ae903e6f6
+after op 1000 82f5a9b07febb8e4
+after op 1100 359e48897e03751f
+after op 1200 092226e1569f1cd2
+after op 1300 474a2c766f4a79bb
+after op 1400 4b1a733b78d0dfe6
+after op 1500 f7969e985b341cb2
 size 40x12 history 69
 state cursor=11,28 pen=fg=#219862 bg=idx132 strike visible=false shape=1 blink=false alt=false paste=false ckm=true keypad=true mouse=NORMAL/SGR focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=10-11 kitty=0 charsets=0 title=icon+title tabs=
 modes Modes[cursorVisible=false, cursorShape=1, bracketedPaste=false, applicationCursorKeys=true, applicationKeypad=true, mouseTrackingMode=1000, mouseSgr=true, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=11, scrollBottom=12, title=icon+title]
   0 |>3nXS N)"A│},M:h      ^V>, 4한字i>(q<Gnx|
     cols 0-11 fg=idx6 bg=default
-    cols 12-15 fg=#317ec8 bg=idx204 italic underline=1
-    cols 22-27 fg=#317ec8 bg=default italic underline=1
-    cols 28-39 fg=#317ec8 bg=idx204 italic underline=1
+    cols 12-15 fg=#317ec8 bg=idx204 italic underline=5
+    cols 22-27 fg=#317ec8 bg=default italic underline=5
+    cols 28-39 fg=#317ec8 bg=idx204 italic underline=5
   1 |                        Q~Nj=+4⌚C#]l7Жg|
   2 |                                       %|
   3 |                                        |

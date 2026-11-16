@@ -74,6 +74,7 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
   - *Working on the page:* run from source with `MICROHM_WEB_DIR=app/src/main/resources/web`
     and the server reads the page's files from that folder on every request, so a change
     to the HTML, JavaScript or CSS shows on the next refresh, with no rebuild or restart.
+    Its tests run with `node --test app/src/test/web/app.test.mjs` (see [Tests](#tests)).
 - **Background icon.** While sessions run with the app closed, a menu-bar icon (macOS) or
   system-tray icon (Windows; Linux desktops with a tray) shows how many are running and
   whether MCP is serving, and opens the app (end sessions from the app). On by default;
@@ -194,9 +195,14 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,316 tests: vt 529, pty 39, mux 174, app 574. Each platform skips the
+`mvn test` runs 1,351 tests: vt 530, pty 39, mux 175, app 607. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
+
+`node --test app/src/test/web/app.test.mjs` tests the phone page's script (Node 20 or
+later, no packages to install): it runs in a small fake browser with a fake server, and
+the tests cover drawing the screen, the session list, sign-in, closing and what the
+phone remembers.
 
 ## Known gaps
 
