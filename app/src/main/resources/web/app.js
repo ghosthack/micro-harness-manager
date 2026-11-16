@@ -61,8 +61,36 @@ async function login(token) {
 
 // ------------------------------------------------------------------ routing
 
+// The list is home, and history holds at most the list and one view above it, so Safari's
+// swipe back (and its back button) always lands on the list. Opening a session or the form
+// from the list adds that one entry; leaving it by the page's own buttons steps back
+// through it rather than adding another; starting a session takes the form's place.
+let fromList = false; // the view shown sits one history entry above the list
+let navigation = null; // "open" or "replace": how the next address change came about
+
+/** From the list to a view: one history entry above the list. */
+function openView(hash) {
+  navigation = "open";
+  location.hash = hash;
+}
+
+/** This view's history entry becomes {@code hash}'s, still above the list if it was. */
+function replaceView(hash) {
+  navigation = "replace";
+  location.replace("#" + hash);
+}
+
+/** Back to the list: the entry below when there is one, else this entry becomes the list
+ * (a view reached by a link or a reload has no list below it). */
+function toList() {
+  if (fromList) history.back(); else replaceView("");
+}
+
 function route() {
   const hash = decodeURIComponent(location.hash.slice(1));
+  if (navigation === "open") fromList = true;
+  else if (navigation !== "replace") fromList = false; // swipe back or forward, a link, a reload
+  navigation = null;
   stopList();
   stopStream();
   hideSheet();
@@ -291,7 +319,10 @@ function row(s) {
   el.className = "row" + (s.ended ? " ended" : "");
   const main = document.createElement(s.ended ? "div" : "a");
   main.className = "row-main";
-  if (!s.ended) main.href = "#s=" + encodeURIComponent(s.name);
+  if (!s.ended) {
+    main.href = "#s=" + encodeURIComponent(s.name);
+    main.onclick = () => { navigation = "open"; }; // the link itself goes there
+  }
   const name = document.createElement("span");
   name.className = "name";
   name.textContent = label(s);
@@ -318,7 +349,7 @@ function row(s) {
     // close from the list: open the session, so you see what you close, and ask there
     action.onclick = () => {
       closeOnOpen = s.name;
-      location.hash = "s=" + encodeURIComponent(s.name);
+      openView("s=" + encodeURIComponent(s.name));
     };
     side.append(status(s.state), action);
   }
@@ -346,7 +377,7 @@ async function resumeSession(s, button) {
   button.disabled = true;
   try {
     const result = await api("/api/resume", { session: s.name });
-    location.hash = "s=" + encodeURIComponent(result.name);
+    openView("s=" + encodeURIComponent(result.name));
   } catch (e) {
     failed("list-problem", e);
     button.disabled = false;
@@ -896,7 +927,7 @@ async function closeFlow(name, title, fromSession) {
       try {
         await api("/api/close", { session: name });
         hideSheet();
-        if (fromSession) location.hash = ""; else refreshList();
+        if (fromSession) toList(); else refreshList();
       } catch (e) {
         hideSheet();
         failed(problemId, e);
@@ -971,9 +1002,9 @@ async function startSession(event) {
     writePref("project", body.project);
     $("new-name").value = "";
     $("new-prompt").value = "";
-    // the reply reads "<name> started (...)"
+    // the reply reads "<name> started (...)"; the session takes the form's place in history
     const started = result.text.split(" ")[0];
-    location.hash = "s=" + encodeURIComponent(started);
+    replaceView("s=" + encodeURIComponent(started));
   } catch (e) {
     failed("new-problem", e);
   } finally {
@@ -1001,10 +1032,10 @@ function writeJson(key, value) {
 
 // ------------------------------------------------------------------ start
 
-$("new-button").onclick = () => { location.hash = "new"; };
+$("new-button").onclick = () => openView("new");
 $("view-button").onclick = toggleControls;
-$("back-button").onclick = () => { location.hash = ""; };
-$("cancel-new").onclick = () => { location.hash = ""; };
+$("back-button").onclick = toList;
+$("cancel-new").onclick = toList;
 $("close-button").onclick = () => closeFlow(current, $("session-title").textContent, true);
 $("sheet-cancel").onclick = hideSheet;
 $("sheet").addEventListener("click", (event) => { if (event.target === $("sheet")) hideSheet(); });

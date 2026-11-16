@@ -221,9 +221,13 @@ test("lines that scroll off the screen land in the scrollback", async () => {
   assert.ok(history.indexOf("scroll-1\n") < history.indexOf("scroll-2\n"), "in order");
 });
 
-test("the list shows the session in its folder", async () => {
-  await page.click("#back-button");
+test("back from a new session, as Safari's swipe does it, is the list, not the form", async () => {
+  await page.goBack();
   await waitVisible("#list-view");
+  assert.equal(await visible("#new-view"), false);
+});
+
+test("the list shows the session in its folder", async () => {
   await waitText("#sessions", new RegExp(NAME));
   const heads = await page.$$eval("#sessions .group-head b", (bs) => bs.map((b) => b.textContent));
   assert.deepEqual(heads, ["alpha"]);

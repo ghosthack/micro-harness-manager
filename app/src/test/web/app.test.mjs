@@ -346,6 +346,56 @@ test("confirming closes, and from the session view goes back to the list", async
   assert.equal(page.location.hash, "");
 });
 
+// ------------------------------------------------------------------ history: swipe back lands on the list
+
+// The fake browser fires no hashchange: route() stands in for it after each address change.
+
+test("a session opened from the list goes back to it through history, as a swipe does", async () => {
+  const page = load({ server: (path) => ({ body: path === "/api/sessions" ? { sessions: SESSIONS, ended: [] } : { ok: true } }) });
+  page.window.route();
+  await page.settle();
+  page.$("sessions").querySelectorAll("a.row-main")[0].onclick(); // the link then goes there
+  page.location.hash = "s=mhm-a";
+  page.window.route();
+  page.$("back-button").onclick();
+  assert.deepEqual(plain(page.steps), [["back"]]);
+});
+
+test("starting a session takes the form's place, so back from it is the list", async () => {
+  const page = load({ server: (path) => ({ body: path === "/api/spawn" ? { ok: true, text: "mhm-new started (shell in /tmp)" } : { sessions: [], ended: [], harnesses: ["shell"] } }) });
+  page.window.route();
+  page.$("new-button").onclick();
+  page.window.route();
+  await page.settle();
+  page.$("new-project").value = "/tmp";
+  await page.window.startSession({ preventDefault() {} });
+  assert.deepEqual(plain(page.steps), [["replace", "#s=mhm-new"]]);
+  page.window.route();
+  page.$("back-button").onclick();
+  assert.deepEqual(plain(page.steps), [["replace", "#s=mhm-new"], ["back"]]);
+});
+
+test("a session reached by a link or a reload has no list below: its entry becomes the list", () => {
+  const page = load({ hash: "s=mhm-a" });
+  page.window.route();
+  page.$("back-button").onclick();
+  assert.deepEqual(plain(page.steps), [["replace", "#"]]);
+  assert.equal(page.location.hash, "");
+});
+
+test("swiping back to the list and forward again: the session no longer sits above the list", () => {
+  const page = load();
+  page.window.route();
+  page.$("new-button").onclick();
+  page.window.route();
+  page.location.hash = ""; // swipe back
+  page.window.route();
+  page.location.hash = "new"; // swipe forward
+  page.window.route();
+  page.$("cancel-new").onclick();
+  assert.deepEqual(plain(page.steps), [["replace", "#"]]);
+});
+
 // ------------------------------------------------------------------ scrollback
 
 test("scrollback pieces join line by line, and a reset starts over", () => {
