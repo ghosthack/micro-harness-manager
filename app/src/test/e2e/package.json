@@ -1,0 +1,12 @@
+{
+  "name": "microhm-phone-e2e",
+  "private": true,
+  "description": "End-to-end tests for the phone page; run scripts/phone-e2e.sh",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 phone.test.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56.1"
+  }
+}

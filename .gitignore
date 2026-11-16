@@ -3,3 +3,6 @@ target/
 .idea/
 .DS_Store
 .flattened-pom.xml
+
+# phone page end-to-end tests (scripts/phone-e2e.sh)
+app/src/test/e2e/node_modules/
