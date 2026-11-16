@@ -143,6 +143,8 @@ export function load({ hash = "", storage = new Map(), storageFails = false, ser
     server: server || ((path) => ({ body: path === "/api/sessions" ? { sessions: [], ended: [] } : { ok: true } })),
     calls,
     replaced: [],
+    // history steps the page took itself: ["replace", url] and ["back"]
+    steps: [],
     streams: [],
   };
 
@@ -170,7 +172,10 @@ export function load({ hash = "", storage = new Map(), storageFails = false, ser
     addEventListener() {}
     close() { this.readyState = EventSource.CLOSED; }
   }
-  const location = { hash, pathname: "/" };
+  const location = {
+    hash, pathname: "/",
+    replace(url) { page.steps.push(["replace", url]); location.hash = url.replace(/^#/, ""); },
+  };
   // new Option(text, value), as a select or datalist holds them
   function Option(text, value) {
     const option = new FakeElement("option");
@@ -184,7 +189,10 @@ export function load({ hash = "", storage = new Map(), storageFails = false, ser
     window: { addEventListener() {}, innerWidth: 390 },
     localStorage,
     location,
-    history: { replaceState: (state, title, url) => { page.replaced.push(url); location.hash = ""; } },
+    history: {
+      replaceState: (state, title, url) => { page.replaced.push(url); location.hash = ""; },
+      back: () => { page.steps.push(["back"]); },
+    },
     EventSource,
     Option,
     fetch: async (path, options = {}) => {
