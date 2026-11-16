@@ -75,6 +75,14 @@ function covers(rects, x, y) {
   return rects.some(([rx, ry, w, h]) => x >= rx && x < rx + w && y >= ry && y < ry + h);
 }
 
+test("Claude's ⏺ bullet is a dot in the text colour, one cell wide, never the emoji", () => {
+  const { window } = load();
+  assert.match(window.glyphSvg(0x23fa), /<circle cx="4" cy="8.5" r="3"\/>/);
+  const html = window.rowHtml([{ t: "⏺", f: "#4eba65" }, { t: " Bash(ls)" }], "#000000");
+  assert.match(html, /^<span class="g g\w+" style="width:1ch;color:#4eba65;"><\/span> Bash\(ls\)$/);
+  assert.doesNotMatch(html, /⏺/);
+});
+
 test("a full block fills its cell, and a run of them is one path", () => {
   const { window } = load();
   const one = window.runSvg("█");
