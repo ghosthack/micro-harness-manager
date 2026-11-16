@@ -894,8 +894,15 @@ async function sendMessage(event) {
 
 function growMessage() {
   const box = $("message");
+  // Measuring collapses the box for a moment; the screen above grows, its scroll position
+  // is clamped, and the box growing back would leave the screen a line up from where it was,
+  // until the next screen update scrolled it back: the screen shook with every keystroke.
+  // Keep the screen's distance from its bottom instead (the reader's place, or the bottom).
+  const scroller = $("scroller");
+  const fromBottom = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
   box.style.height = "auto";
   box.style.height = box.scrollHeight + "px";
+  scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight - fromBottom;
 }
 
 // Close asks first, the way Microhm's Close does: a session whose agent is working or
