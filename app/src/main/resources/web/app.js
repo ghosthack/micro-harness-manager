@@ -661,8 +661,13 @@ const LINES_3 = ["0001", "1000", "0100", "0010", "0002", "2000", "0200", "0020",
 // U+2596–259F: bit 1 upper left, 2 upper right, 4 lower left, 8 lower right
 const QUADRANTS = [4, 8, 1, 1 | 4 | 8, 1 | 8, 1 | 2 | 4, 1 | 2 | 8, 2, 2 | 4, 2 | 4 | 8];
 
+// ⏺ (U+23FA), Claude Code's bullet (it blinks while a tool runs): no monospace font has it,
+// so iPhone Safari falls back to Apple Color Emoji, a grey tile wider than the cell that
+// ignores the run's colour. Drawn as a dot in the text colour instead.
+const RECORD = 0x23fa;
+
 function isTile(cp) {
-  return cp >= 0x2500 && cp <= 0x259f;
+  return (cp >= 0x2500 && cp <= 0x259f) || cp === RECORD;
 }
 
 const runClasses = new Map(); // run text -> class name
@@ -720,7 +725,10 @@ function glyphInto(cp, dx, out) {
   };
   const stroke = (d) => parts.push('<path transform="translate(' + dx + ' 0)" d="' + d
     + '" fill="none" stroke="#000" stroke-width="' + LIGHT + '"/>');
-  if (cp >= 0x2580) {
+  if (cp === RECORD) {
+    // a dot about a lowercase letter wide, centred on the lowercase height
+    parts.push('<circle cx="' + (dx + GW / 2) + '" cy="8.5" r="3"/>');
+  } else if (cp >= 0x2580) {
     block(cp, rect);
   } else {
     let arms = null;
