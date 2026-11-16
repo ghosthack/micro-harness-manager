@@ -197,7 +197,7 @@ The shipped jar's runtime dependencies are FlatLaf, Jackson and SLF4J.
 
 ## Tests
 
-`mvn test` runs 1,351 tests: vt 530, pty 39, mux 175, app 607. Each platform skips the
+`mvn test` runs 1,353 tests: vt 530, pty 39, mux 175, app 609. Each platform skips the
 other's PTY tests, and Windows runs PowerShell session tests of its own. The tests spawn
 real PTYs and daemons in temporary homes and never touch `~/.micro-harness-manager`.
 
