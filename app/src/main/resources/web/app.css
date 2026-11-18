@@ -230,6 +230,8 @@ a.row-main:active { background: var(--fill); }
 .progress span { flex: none; }
 /* The session runs at the size that fits here (phoneSize in app.js): lines never wrap. */
 .screen { white-space: pre; }
+/* A web link on the screen (findLinks in app.js): its own colours, underlined; a tap opens it. */
+.screen a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
 /* Earlier lines were drawn at whatever width the session had then: wrap them. */
 .history { white-space: pre-wrap; overflow-wrap: anywhere; opacity: 0.7; }
 .history:not(:empty) { padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px dashed rgba(255, 255, 255, 0.16); }

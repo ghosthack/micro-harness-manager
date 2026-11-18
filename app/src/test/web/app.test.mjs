@@ -62,6 +62,46 @@ test("a late screen from the previous session is ignored", () => {
   assert.equal(page.$("screen").textContent, "new");
 });
 
+// ------------------------------------------------------------------ links
+
+test("a web link on a row is a link, without the sentence around it", () => {
+  const { window } = load();
+  const links = plain(window.findLinks(["see (https://a.example/x?q=1&r=2). ok"], 60));
+  assert.deepEqual(links, [[{ from: 5, to: 32, url: "https://a.example/x?q=1&r=2" }]]);
+  const html = window.rowHtml([{ t: "see (https://a.example/x?q=1&r=2). ok", f: "#aaaaaa" }], "#000000", links[0]);
+  assert.match(html, /<a href="https:\/\/a.example\/x\?q=1&amp;r=2" target="_blank" rel="noopener noreferrer"><span style="color:#aaaaaa;">https:\/\/a.example\/x\?q=1&amp;r=2<\/span><\/a>/);
+  assert.match(html, /^<span style="color:#aaaaaa;">see \(<\/span><a /);
+});
+
+test("a link Claude Code broke at the right edge goes on at the same indent", () => {
+  const { window } = load();
+  // its /rc at 55 columns, as the phone showed it
+  const rows = [
+    "  /remote-control is active · Continue here, on your",
+    "  phone, or at https://claude.ai/code/session_01VwoQ7kk",
+    "  6qR2T3BjAuWd5Hk",
+    "  next line",
+  ];
+  const url = "https://claude.ai/code/session_01VwoQ7kk6qR2T3BjAuWd5Hk";
+  assert.deepEqual(plain(window.findLinks(rows, 55)), [[], [{ from: 15, to: 55, url }], [{ from: 2, to: 17, url }], []]);
+});
+
+test("a link short of the edge, or a next row at another indent, ends the link", () => {
+  const { window } = load();
+  assert.deepEqual(plain(window.findLinks(["  - https://a.example/x", "  - next"], 40))[1], []);
+  assert.deepEqual(plain(window.findLinks(["  https://a.example/", "    word"], 20))[1], []);
+  // a terminal wrap: the row is full and the next starts at the left edge
+  assert.deepEqual(plain(window.findLinks(["$ echo https://a.ex", "ample/x", "$"], 19)),
+    [[{ from: 7, to: 19, url: "https://a.example/x" }], [{ from: 0, to: 7, url: "https://a.example/x" }], []]);
+});
+
+test("a link's pieces keep their own colours", () => {
+  const { window } = load();
+  const links = [{ from: 0, to: 4, url: "http://x" }];
+  const html = window.rowHtml([{ t: "ht", f: "#ff0000" }, { t: "tp", f: "#00ff00" }], "#000000", links);
+  assert.equal((html.match(/<a /g) || []).length, 2);
+});
+
 // ------------------------------------------------------------------ cell glyphs
 
 /** The solid rectangles of a glyph mask's path, as [x, y, w, h]. */

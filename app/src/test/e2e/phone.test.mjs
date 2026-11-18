@@ -194,6 +194,14 @@ test("colours and underline kinds reach the page", async () => {
   assert.match(styles["bold-e2e"], /font-weight:700/);
 });
 
+test("a web link on the screen is a link that opens in a new tab", async () => {
+  await send("printf 'see (https://e2e.example/%s).\\n' path-42");
+  await waitText("#screen", /see \(https:\/\/e2e\.example\/path-42\)\./);
+  const links = await page.$$eval("#screen a", (as) => as.map((a) => [a.textContent, a.getAttribute("href"), a.target]));
+  assert.ok(links.some(([t, href, target]) => t === "https://e2e.example/path-42"
+    && href === "https://e2e.example/path-42" && target === "_blank"), JSON.stringify(links));
+});
+
 test("Close is refused while a command runs, and ⌃C from the keypad stops it", async () => {
   await send("sleep 60");
   await waitState("Working");

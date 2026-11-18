@@ -16,6 +16,8 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.AWTEvent;
 import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -28,6 +30,7 @@ import java.awt.Toolkit;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.FocusEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.InputMethodEvent;
 import java.awt.event.InputMethodListener;
 import java.awt.event.KeyEvent;
@@ -36,6 +39,7 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.font.TextHitInfo;
 import java.awt.geom.Path2D;
 import java.awt.im.InputMethodRequests;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.text.AttributedCharacterIterator;
 import java.text.AttributedString;
@@ -1390,6 +1394,14 @@ public final class TerminalView extends JComponent implements TerminalListener {
             e.consume();
             return;
         }
+        if (e.getID() == MouseEvent.MOUSE_PRESSED && e.getButton() == MouseEvent.BUTTON1 && linkModifier(e)) {
+            String url = linkAt(e);
+            if (url != null) {
+                e.consume();
+                linkOpener.accept(url);
+                return;
+            }
+        }
         switch (e.getID()) {
             case MouseEvent.MOUSE_PRESSED -> mousePressed(e);
             case MouseEvent.MOUSE_RELEASED -> mouseReleased(e);
@@ -1405,6 +1417,52 @@ public final class TerminalView extends JComponent implements TerminalListener {
             mouseDragged(e);
         } else if (e.getID() == MouseEvent.MOUSE_MOVED) {
             mouseMoved(e);
+        }
+    }
+
+    // Links: ⌘-click (Ctrl-click off the Mac) opens a web link, even where the program tracks
+    // the mouse, as in other terminals; a plain click still selects.
+
+    private static final int LINK_MASK = System.getProperty("os.name", "").startsWith("Mac")
+            ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK;
+
+    /** Opens a link; tests replace it. */
+    private Consumer<String> linkOpener = TerminalView::openLink;
+
+    void setLinkOpenerForTest(Consumer<String> opener) {
+        linkOpener = opener;
+    }
+
+    private static boolean linkModifier(MouseEvent e) {
+        return (e.getModifiersEx() & LINK_MASK) != 0 && !e.isShiftDown();
+    }
+
+    /** The web link under the pointer, or null. */
+    private String linkAt(MouseEvent e) {
+        emulator.lock().lock();
+        try {
+            int index = viewRowAt(e.getY()) - Math.min(scrollOffset, emulator.historySize());
+            return Links.urlAt(emulator, index, columnAt(e.getX()));
+        } finally {
+            emulator.lock().unlock();
+        }
+    }
+
+    private static void openLink(String url) {
+        Thread.ofVirtual().name("open-link").start(() -> {
+            try {
+                Desktop.getDesktop().browse(URI.create(url));
+            } catch (Exception ex) { // no browser, or not a URI
+                Toolkit.getDefaultToolkit().beep();
+            }
+        });
+    }
+
+    /** The hand cursor while ⌘ is held over a link. */
+    private void updateLinkCursor(MouseEvent e) {
+        int type = linkModifier(e) && linkAt(e) != null ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR;
+        if (getCursor().getType() != type) {
+            setCursor(Cursor.getPredefinedCursor(type));
         }
     }
 
@@ -1532,6 +1590,7 @@ public final class TerminalView extends JComponent implements TerminalListener {
     }
 
     private void mouseMoved(MouseEvent e) {
+        updateLinkCursor(e);
         boolean anyMotion;
         emulator.lock().lock();
         try {

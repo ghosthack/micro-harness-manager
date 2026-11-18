@@ -460,6 +460,22 @@ class TerminalViewTest {
     }
 
     @Test
+    void commandClickOpensTheLinkUnderThePointer() throws Exception {
+        List<String> opened = new ArrayList<>();
+        edtRun(() -> view.setLinkOpenerForTest(opened::add));
+        // 20 columns: the link wraps onto the second row; the program tracks the mouse
+        feed("\u001b[?1000hgo https://a.example/path/x end");
+        int link = System.getProperty("os.name", "").startsWith("Mac")
+                ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK;
+        edtRun(() -> view.processMouseEvent(mouse(MouseEvent.MOUSE_PRESSED, 2, 1, link | InputEvent.BUTTON1_DOWN_MASK, 1)));
+        assertEquals(List.of("https://a.example/path/x"), opened);
+        assertEquals("", takeWritten(), "the click is not reported to the program");
+        edtRun(() -> view.processMouseEvent(mouse(MouseEvent.MOUSE_PRESSED, 1, 0, link | InputEvent.BUTTON1_DOWN_MASK, 1)));
+        edtRun(() -> view.processMouseEvent(mouse(MouseEvent.MOUSE_PRESSED, 4, 0, InputEvent.BUTTON1_DOWN_MASK, 1)));
+        assertEquals(1, opened.size(), "off the link, or without the modifier, nothing opens");
+    }
+
+    @Test
     void dragSelectsCharacters() throws Exception {
         feed("hello world\r\nsecond line");
         edtRun(() -> drag(6, 0, 6, 1, 0));

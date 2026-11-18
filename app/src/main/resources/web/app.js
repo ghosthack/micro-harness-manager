@@ -531,7 +531,7 @@ function renderScreen(view) {
   $("session-title").textContent = view.display || view.name;
   setSessionState(view.state);
   if (view.styled) {
-    drawStyled(view.styled);
+    drawStyled(view.styled, view.columns);
   } else if (screen.textContent !== view.text) {
     drawnStyled = null;
     screen.textContent = view.text;
@@ -546,14 +546,86 @@ function renderScreen(view) {
 // dashed 256), as the server draws them with the Mac's palette.
 let drawnStyled = null;
 
-function drawStyled(styled) {
+function drawStyled(styled, columns) {
   const key = JSON.stringify(styled.rows);
   if (key === drawnStyled) return;
   drawnStyled = key;
   const scroller = $("scroller");
   scroller.style.background = styled.bg;
   scroller.style.color = styled.fg;
-  $("screen").innerHTML = styled.rows.map((runs) => rowHtml(runs, styled.bg)).join("\n");
+  const links = findLinks(styled.rows.map((runs) => runs.map((run) => run.t).join("")), columns);
+  $("screen").innerHTML = styled.rows.map((runs, i) => rowHtml(runs, styled.bg, links[i])).join("\n");
+}
+
+// Web links on the screen, tapped to open. A long link may run on over several rows: the
+// program broke it at the right edge itself (Claude Code does), going on in the next row
+// at the same indent, or the terminal wrapped it (the next row then starts with it). The
+// Mac window finds them the same way (Links.java).
+const LINK = /https?:\/\/[^\s<>"'`]+/g;
+const LINK_GOES_ON = /^[^\s<>"'`]+/;
+
+/** Per row, the pieces of links on it: {from, to, url}, in characters (code points). */
+function findLinks(texts, columns) {
+  const rows = texts.map((t) => Array.from(t));
+  const found = rows.map(() => []);
+  const taken = rows.map(() => 0); // characters already part of a link from above
+  rows.forEach((chars, i) => {
+    const text = chars.join("");
+    for (const m of text.matchAll(LINK)) {
+      const start = Array.from(text.slice(0, m.index)).length;
+      if (start < taken[i]) continue;
+      const base = indent(chars);
+      let end = start + Array.from(m[0]).length;
+      let raw = m[0];
+      const pieces = [{ row: i, from: start, to: end }];
+      for (let row = i; row + 1 < rows.length && goesOn(rows[row], end, columns); row++) {
+        const next = rows[row + 1];
+        const at = indent(next);
+        // the same indent; or none, after a row filled to the edge (a terminal wrap)
+        if (at !== base && !(at === 0 && end === columns)) break;
+        const piece = next.slice(at).join("").match(LINK_GOES_ON);
+        if (!piece) break;
+        end = at + Array.from(piece[0]).length;
+        taken[row + 1] = end;
+        pieces.push({ row: row + 1, from: at, to: end });
+        raw += piece[0];
+      }
+      const url = trimLink(raw);
+      let cut = Array.from(raw).length - Array.from(url).length;
+      for (let p = pieces.length - 1; p >= 0 && cut > 0; p--) {
+        const drop = Math.min(cut, pieces[p].to - pieces[p].from);
+        pieces[p].to -= drop;
+        cut -= drop;
+      }
+      for (const p of pieces) if (p.to > p.from) found[p.row].push({ from: p.from, to: p.to, url });
+    }
+  });
+  return found;
+}
+
+/** Nothing follows the link on its row, and it reaches the right edge (a program may leave
+ * a column or two free there). */
+function goesOn(chars, end, columns) {
+  return !!columns && end >= columns - 2 && chars.slice(end).join("").trim() === "";
+}
+
+function indent(chars) {
+  let n = 0;
+  while (n < chars.length && chars[n] === " ") n++;
+  return n;
+}
+
+/** Leaves out what usually ends the sentence around a link: trailing punctuation, and a
+ * closing bracket the link did not open. */
+function trimLink(url) {
+  const count = (s, c) => s.split(c).length - 1;
+  for (;;) {
+    const last = url.slice(-1);
+    const pair = { ")": "(", "]": "[", "}": "{" }[last];
+    if (last && ".,;:!?".includes(last)) url = url.slice(0, -1);
+    else if (pair && count(url, pair) < count(url, last)) url = url.slice(0, -1);
+    else return url;
+  }
 }
 
 /**
@@ -563,7 +635,7 @@ function drawStyled(styled) {
  * into one run (see runSvg), whichever styled run they came from. Separate pieces meeting
  * off a device pixel leave a faint seam; Claude's logo mixes blocks and coloured spaces.
  */
-function rowHtml(runs, screenBackground) {
+function rowHtml(runs, screenBackground, links = []) {
   const cells = [];
   for (const run of runs) {
     // a background the same as the screen's is no background: Claude's logo paints part of
@@ -577,17 +649,22 @@ function rowHtml(runs, screenBackground) {
       }
     }
   }
+  for (const link of links) {
+    for (let x = link.from; x < link.to && x < cells.length; x++) cells[x].link = link.url;
+  }
   let html = "";
   let group = null;
   const flush = () => {
-    if (group) html += group.tile ? tileHtml(group) : textHtml(group);
+    if (!group) return;
+    const inner = group.tile ? tileHtml(group) : textHtml(group);
+    html += group.link ? '<a href="' + escapeHtml(group.link) + '" target="_blank" rel="noopener noreferrer">' + inner + "</a>" : inner;
     group = null;
   };
   for (const cell of cells) {
-    const key = (cell.tile ? "T" : "X") + "|" + cell.f + "|" + cell.b + "|" + (cell.tile ? cell.s & 2 : cell.s);
+    const key = (cell.tile ? "T" : "X") + "|" + cell.f + "|" + cell.b + "|" + (cell.tile ? cell.s & 2 : cell.s) + "|" + (cell.link || "");
     if (!group || group.key !== key) {
       flush();
-      group = { key, tile: cell.tile, f: cell.f, b: cell.b, s: cell.s, text: "", count: 0 };
+      group = { key, tile: cell.tile, f: cell.f, b: cell.b, s: cell.s, link: cell.link, text: "", count: 0 };
     }
     group.text += cell.ch;
     group.count++;
