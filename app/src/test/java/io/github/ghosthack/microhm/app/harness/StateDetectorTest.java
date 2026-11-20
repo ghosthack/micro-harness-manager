@@ -559,6 +559,34 @@ final class StateDetectorTest {
         assertEquals(SessionState.WAITING_FOR_INPUT, d.classify(s).state());
     }
 
+    /** Claude Code's folder trust prompt, captured live (2026-11-20, 100x30): an
+     * unnumbered menu, so only its footer marks it as waiting. */
+    @Test
+    void claudeCodeFolderTrustPromptIsWaitingForInput() {
+        StateDetector d = new StateDetector(new ClaudeCodePlugin(), clock, SHORT, LONG);
+        Screen s = screen(String.join("\n",
+                "─".repeat(100),
+                " Accessing workspace:",
+                "",
+                " /private/tmp/trust-probe.SpRT",
+                "",
+                " Quick safety check: Is this a project you created or one you trust? (Like your own code, a",
+                " well-known open source project, or work from your team). If not, take a moment to review what's in",
+                " this folder first.",
+                "",
+                " Claude Code'll be able to read, edit, and execute files here.",
+                "",
+                " Security guide",
+                "",
+                " ❯ No, exit",
+                "   Yes, I trust this folder",
+                "",
+                " Enter to confirm · Esc to cancel"));
+        d.classify(s);
+        clock.advance(Duration.ofSeconds(6));
+        assertEquals(SessionState.WAITING_FOR_INPUT, d.classify(s).state());
+    }
+
     /** Build output on the screen is content: "fatal error" and "panic:" from a command
      * claude ran must not read as claude having crashed while it works or asks. */
     @Test

@@ -52,9 +52,32 @@ final class ClaudeUsageClient {
             throw new IOException("Claude login expired; run 'claude auth login' and retry");
         }
         if (response.statusCode() / 100 != 2) {
-            throw new IOException("Claude usage API returned HTTP " + response.statusCode());
+            throw new IOException(failureMessage(response.statusCode(),
+                    response.headers().firstValue("Retry-After")));
         }
         return parse(MAPPER.readTree(response.body()));
+    }
+
+    /** What a failed usage request says: a rate limit in words, anything else by status. */
+    static String failureMessage(int status, java.util.Optional<String> retryAfter) {
+        if (status == 429) {
+            String when = retryAfter.flatMap(ClaudeUsageClient::retryMinutes)
+                    .map(minutes -> "in " + minutes + (minutes == 1 ? " minute" : " minutes"))
+                    .orElse("in a few minutes");
+            return "Claude usage is rate-limited for now; try again " + when;
+        }
+        return "Claude usage API returned HTTP " + status;
+    }
+
+    /** Retry-After in delta-seconds, rounded up to whole minutes; dates are ignored. */
+    private static java.util.Optional<Long> retryMinutes(String value) {
+        try {
+            long seconds = Long.parseLong(value.trim());
+            return seconds <= 0 ? java.util.Optional.empty()
+                    : java.util.Optional.of(Math.max(1, (seconds + 59) / 60));
+        } catch (NumberFormatException e) {
+            return java.util.Optional.empty();
+        }
     }
 
     static UsageSnapshot parse(JsonNode root) {

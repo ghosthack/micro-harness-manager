@@ -169,6 +169,80 @@ final class HarnessBudgetPanelTest {
                         Optional.of(Instant.parse("2026-08-21T00:00:00Z")), clock).orElseThrow());
     }
 
+    @Test
+    void sessionResetOfADayOrMoreReadsAsDaysAndHours() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-22T00:00:00Z"), ZoneOffset.UTC);
+
+        assertEquals("4d 17h", HarnessBudgetPanel.sessionReset(
+                Optional.of(Instant.parse("2026-08-26T17:13:00Z")), clock).orElseThrow().remaining());
+        assertEquals("1d 0h", HarnessBudgetPanel.sessionReset(
+                Optional.of(Instant.parse("2026-08-23T00:00:00Z")), clock).orElseThrow().remaining());
+        assertEquals("23h59m", HarnessBudgetPanel.sessionReset(
+                Optional.of(Instant.parse("2026-08-22T23:59:00Z")), clock).orElseThrow().remaining());
+    }
+
+    @Test
+    void aFailedRefreshKeepsTheEarlierFigures() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-22T00:00:00Z"), ZoneOffset.UTC);
+        HarnessBudgetPanel panel = new HarnessBudgetPanel(clock);
+        UsageSnapshot snapshot = new UsageSnapshot("Claude", "test", List.of(
+                limit("Monthly credits", 50)), List.of(), Optional.empty());
+        panel.showLoading(Set.of(HarnessType.CLAUDE_CODE));
+        panel.showSnapshot(HarnessType.CLAUDE_CODE, snapshot);
+
+        // the next refresh shows the old bars while it loads, and after it fails
+        panel.showLoading(Set.of(HarnessType.CLAUDE_CODE));
+        assertEquals(List.of(50, 32), progressValues(panel));
+        panel.showError(HarnessType.CLAUDE_CODE, new java.io.IOException("HTTP 429"));
+        assertEquals(List.of(50, 32), progressValues(panel));
+        assertEquals(true, labelTexts(panel).contains("Not updated — showing earlier figures"));
+
+        // a later success clears the stale note
+        panel.showLoading(Set.of(HarnessType.CLAUDE_CODE));
+        panel.showSnapshot(HarnessType.CLAUDE_CODE, snapshot);
+        assertEquals(false, labelTexts(panel).contains("Not updated — showing earlier figures"));
+    }
+
+    @Test
+    void aFailureWithNoEarlierFiguresSaysUnavailable() {
+        HarnessBudgetPanel panel = new HarnessBudgetPanel(Clock.systemUTC());
+        panel.showLoading(Set.of(HarnessType.CLAUDE_CODE));
+        panel.showError(HarnessType.CLAUDE_CODE, new java.io.IOException("boom"));
+        assertEquals(List.of(), progressValues(panel));
+        assertEquals(true, labelTexts(panel).contains("Usage unavailable"));
+    }
+
+    @Test
+    void foldingHidesTheBarsBehindAOneLineSummaryAndReportsIt() {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-22T00:00:00Z"), ZoneOffset.UTC);
+        List<Boolean> saved = new ArrayList<>();
+        HarnessBudgetPanel panel = new HarnessBudgetPanel(clock, false, saved::add);
+        panel.showLoading(Set.of(HarnessType.CLAUDE_CODE));
+        panel.showSnapshot(HarnessType.CLAUDE_CODE, new UsageSnapshot("Claude", "test", List.of(
+                limit("Current session (5 hours)", 12, "2026-08-22T05:00:00Z")), List.of(), Optional.empty()));
+
+        panel.setCollapsed(true);
+        assertEquals(List.of(true), saved);
+        assertEquals("Claude 88%", panel.collapsedSummaryText());
+        assertEquals(true, labelTexts(panel).contains("Claude 88%"));
+
+        panel.setCollapsed(false);
+        assertEquals(List.of(true, false), saved);
+    }
+
+    private static List<String> labelTexts(Container root) {
+        List<String> texts = new ArrayList<>();
+        for (Component component : root.getComponents()) {
+            if (component instanceof javax.swing.JLabel label && label.isVisible() && label.getText() != null) {
+                texts.add(label.getText());
+            }
+            if (component instanceof Container child) {
+                texts.addAll(labelTexts(child));
+            }
+        }
+        return texts;
+    }
+
     private static List<Integer> progressValues(Container root) {
         List<Integer> values = new ArrayList<>();
         for (Component component : root.getComponents()) {

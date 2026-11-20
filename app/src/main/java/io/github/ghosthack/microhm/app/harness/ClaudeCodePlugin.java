@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  */
 public final class ClaudeCodePlugin implements HarnessPlugin {
 
-    static final String PATTERNS_VERSION = "2026-08-17.6";
+    static final String PATTERNS_VERSION = "2026-11-20.1";
 
     private static final Pattern WORKING_INDICATOR = Pattern.compile(
             "(?i)esc to interrupt");
@@ -32,6 +32,12 @@ public final class ClaudeCodePlugin implements HarnessPlugin {
 
     private static final Pattern OPTION_SELECTOR = Pattern.compile(
             "[❯›]\\s*\\d+\\.\\s");
+
+    /** The footer under Claude Code's unnumbered menus, the folder trust prompt among them
+     * ({@code ❯ No, exit} / {@code Yes, I trust this folder}), which OPTION_SELECTOR's
+     * numbered shape misses. */
+    private static final Pattern MENU_FOOTER = Pattern.compile(
+            "(?i)enter to confirm\\s*·\\s*esc to (cancel|exit|go back)");
 
     private static final Pattern BACKGROUND_WORK = Pattern.compile(
             "(?im)(·\\s*\\d+\\s+shells?\\s*·|^\\s*◯\\s+\\S+)");
@@ -185,7 +191,7 @@ public final class ClaudeCodePlugin implements HarnessPlugin {
                     "permission dialog shape (patterns " + PATTERNS_VERSION + ")",
                     Classification.Origin.PLUGIN));
         }
-        if (OPTION_SELECTOR.matcher(tailText).find()) {
+        if (OPTION_SELECTOR.matcher(tailText).find() || MENU_FOOTER.matcher(tailText).find()) {
             return Optional.of(new Classification(SessionState.WAITING_FOR_INPUT, Confidence.HIGH,
                     "option selector widget (patterns " + PATTERNS_VERSION + ")",
                     Classification.Origin.PLUGIN));
