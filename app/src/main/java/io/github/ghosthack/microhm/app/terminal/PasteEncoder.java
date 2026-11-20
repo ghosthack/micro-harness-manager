@@ -36,4 +36,35 @@ final class PasteEncoder {
 
     private PasteEncoder() {
     }
+
+    /**
+     * Dropped files → what a drop types: each path quoted for the shell, separated by
+     * spaces, with a trailing space so the next word starts clean. POSIX paths of only safe
+     * characters stay bare and the rest take single quotes (as Terminal.app does); on
+     * Windows a path with a space or shell metacharacter takes double quotes.
+     */
+    static String droppedPaths(java.util.List<String> paths, boolean windows) {
+        if (paths.isEmpty()) return "";
+        StringBuilder out = new StringBuilder();
+        for (String path : paths) {
+            out.append(windows ? windowsQuote(path) : shellQuote(path)).append(' ');
+        }
+        return out.toString();
+    }
+
+    private static final java.util.regex.Pattern SAFE_POSIX =
+            java.util.regex.Pattern.compile("[A-Za-z0-9_./+,:@%=-]+");
+
+    static String shellQuote(String path) {
+        if (SAFE_POSIX.matcher(path).matches()) return path;
+        return "'" + path.replace("'", "'\\''") + "'";
+    }
+
+    static String windowsQuote(String path) {
+        if (!path.isEmpty() && path.chars().noneMatch(c -> " &()[]{}^=;!'+,`~%$\"".indexOf(c) >= 0)) {
+            return path;
+        }
+        // a double quote cannot appear in a Windows path, so wrapping is enough
+        return "\"" + path + "\"";
+    }
 }
