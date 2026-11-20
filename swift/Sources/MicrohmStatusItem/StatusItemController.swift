@@ -1,13 +1,17 @@
 import AppKit
 
-/// The menu-bar icon (Java's `mcphost.StatusIcon`, here owned by the app): a resistor glyph
+/// The menu-bar icon (Java's `mcphost.StatusIcon`), shown by the app while it runs and by the background host while it is closed: a resistor glyph
 /// with the number of running sessions beside it, and a menu that says how many sessions
 /// run, whether MCP is serving, and opens the app or hides the icon. Ending sessions stays
 /// in the window, whose close flow asks each harness to quit.
-final class StatusItemController: NSObject {
+public final class StatusItemController: NSObject {
 
-    var onOpen: (() -> Void)?
-    var onHide: (() -> Void)?
+    public static let appName = "Microhm"
+
+    public override init() { super.init() }
+
+    public var onOpen: (() -> Void)?
+    public var onHide: (() -> Void)?
 
     private var item: NSStatusItem?
     private let sessionsItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -17,9 +21,9 @@ final class StatusItemController: NSObject {
     private var mcpPort = -2
     private var phonePort = -2
 
-    var isShown: Bool { item != nil }
+    public var isShown: Bool { item != nil }
 
-    func show() {
+    public func show() {
         guard item == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = StatusItemController.glyph()
@@ -31,7 +35,7 @@ final class StatusItemController: NSObject {
             menu.addItem(info)
         }
         menu.addItem(.separator())
-        let open = NSMenuItem(title: "Open \(AppModel.appName)", action: #selector(open(_:)), keyEquivalent: "")
+        let open = NSMenuItem(title: "Open \(StatusItemController.appName)", action: #selector(open(_:)), keyEquivalent: "")
         open.target = self
         menu.addItem(open)
         menu.addItem(.separator())
@@ -44,14 +48,14 @@ final class StatusItemController: NSObject {
         update(liveSessions: 0, mcpPort: nil, phonePort: nil)
     }
 
-    func remove() {
+    public func remove() {
         if let item {
             NSStatusBar.system.removeStatusItem(item)
         }
         item = nil
     }
 
-    func update(liveSessions: Int, mcpPort: Int?, phonePort: Int?) {
+    public func update(liveSessions: Int, mcpPort: Int?, phonePort: Int?) {
         guard let item else { return }
         let mcp = mcpPort ?? -1, phone = phonePort ?? -1
         guard liveSessions != sessions || mcp != self.mcpPort || phone != self.phonePort else { return }
@@ -75,7 +79,7 @@ final class StatusItemController: NSObject {
     }
 
     static func tooltip(_ sessions: Int, _ port: Int) -> String {
-        "\(AppModel.appName) — \(sessionsLabel(sessions))" + (port > 0 ? " · MCP :\(port)" : "")
+        "\(StatusItemController.appName) — \(sessionsLabel(sessions))" + (port > 0 ? " · MCP :\(port)" : "")
     }
 
     @objc private func open(_ sender: Any?) { onOpen?() }
@@ -83,7 +87,7 @@ final class StatusItemController: NSObject {
 
     /// A schematic resistor on the diagonal — two leads and a zigzag body — as a template
     /// image, so the menu bar tints it for light, dark and highlighted states.
-    static func glyph() -> NSImage {
+    public static func glyph() -> NSImage {
         let side: CGFloat = 18
         let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
@@ -111,7 +115,7 @@ final class StatusItemController: NSObject {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = AppModel.appName
+        image.accessibilityDescription = StatusItemController.appName
         return image
     }
 }

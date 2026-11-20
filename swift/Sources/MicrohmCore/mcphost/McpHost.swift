@@ -84,6 +84,12 @@ public enum McpHost {
     static let EMPTY_CHECKS_TO_EXIT = 2
 
     /// `microhm-host`'s entry point; returns the exit status.
+    /// Makes the menu-bar icon (Java's `StatusIcon`) for the host's life; set by the
+    /// `microhm-host` executable, which owns AppKit (this module doesn't link it). Called on
+    /// the host's watch thread; nil (or a nil result) means no icon.
+    nonisolated(unsafe) public static var statusIconFactory:
+        ((_ onOpen: @escaping () -> Void, _ onHide: @escaping () -> Void) -> HostStatusIcon?)?
+
     public static func main(_ args: [String]) -> Int32 {
         if args.contains(PHONE_ONLY_FLAG) {
             return phoneMain(args)
@@ -96,8 +102,9 @@ public enum McpHost {
         applyStateOptions(args)
         let mcp = AppSettings.mcpServerEnabled()
         let phone = AppSettings.phoneServerEnabled()
-        if !mcp && !phone {
-            Log.info("neither the MCP server nor the phone page is on; nothing to host", tag: "host")
+        let wantIcon = AppSettings.trayIconEnabled() && statusIconFactory != nil
+        if !mcp && !phone && !wantIcon {
+            Log.info("neither the MCP server, the phone page nor the menu-bar icon is on; nothing to host", tag: "host")
             return 0
         }
         let registryFile = RegistryPaths.resolve()
@@ -142,8 +149,35 @@ public enum McpHost {
                          tag: "host")
             }
         }
-        if servingPort <= 0 && !phoneServing {
-            Log.info("nothing to serve (MCP and the phone page off or unavailable); exiting", tag: "host")
+        // the icon's Hide flips this from the main thread; the watch loop below reads it
+        let iconLock = NSLock()
+        var icon: HostStatusIcon?
+        if wantIcon, let factory = statusIconFactory {
+            icon = factory({ HostLauncher.openApp() }, {
+                AppSettings.saveTrayIconEnabled(false)
+                iconLock.lock()
+                let shown = icon
+                icon = nil
+                iconLock.unlock()
+                shown?.remove()
+                // with nothing else to do, hiding the icon ends the host, as in Java
+                if servingPort <= 0 && !phoneServing {
+                    Log.info("menu-bar icon hidden and nothing to serve; background host exiting", tag: "host")
+                    me.map { HostOwner.clear(registryFile, $0) }
+                    exit(0)
+                }
+            })
+        }
+        func refreshIcon(_ live: Int) {
+            iconLock.lock()
+            let shown = icon
+            iconLock.unlock()
+            shown?.update(liveSessions: live, mcpPort: servingPort > 0 ? servingPort : nil,
+                          phonePort: phoneServing ? AppSettings.phonePort() : nil)
+        }
+        refreshIcon(live)
+        if servingPort <= 0 && !phoneServing && icon == nil {
+            Log.info("nothing to show or serve (no icon, MCP and the phone page off or unavailable); exiting", tag: "host")
             me.map { HostOwner.clear(registryFile, $0) }
             return 0
         }
@@ -155,6 +189,7 @@ public enum McpHost {
         Log.info("background host running while the app is closed: "
                  + (servingPort > 0 ? "MCP on 127.0.0.1:\(servingPort)" : "no MCP")
                  + (phoneServing ? ", phone page on port \(AppSettings.phonePort())" : "")
+                 + (icon != nil ? ", menu-bar icon shown" : ", no menu-bar icon")
                  + " (" + (me.map(HostOwner.describe) ?? "pid \(getpid())") + ")", tag: "host")
 
         var empty = 0
@@ -162,7 +197,12 @@ public enum McpHost {
             Thread.sleep(forTimeInterval: CHECK_EVERY)
             live = liveRegistered(registry, host)
             empty = live == 0 ? empty + 1 : 0
+            refreshIcon(live)
         }
+        iconLock.lock()
+        let shown = icon
+        iconLock.unlock()
+        shown?.remove()
         Log.info("no registered session is live any more; background host exiting", tag: "host")
         stack.service.stop()
         stack.phone.stop()
@@ -266,10 +306,10 @@ public enum McpHost {
 public enum HostLauncher {
 
     /// Launches the host when a registered session is live and it has something to do: the
-    /// MCP server or the phone page is on. True when a host process was started.
+    /// MCP server, the phone page or the menu-bar icon is on. True when a host process was started.
     @discardableResult
     public static func launchIfNeeded(_ registry: SessionRegistry, _ host: SessionHost) -> Bool {
-        if !AppSettings.mcpServerEnabled() && !AppSettings.phoneServerEnabled() {
+        if !AppSettings.mcpServerEnabled() && !AppSettings.trayIconEnabled() && !AppSettings.phoneServerEnabled() {
             return false
         }
         if McpHost.liveRegistered(registry, host) == 0 {
@@ -316,5 +356,34 @@ public enum HostLauncher {
         }
         Log.info("started \(what) (pid \(pid))", tag: "host")
         return true
+    }
+}
+
+
+/// The background host's menu-bar icon, as `McpHost` drives it. Implementations hop to the
+/// main thread themselves: these are called from the host's watch thread.
+public protocol HostStatusIcon: AnyObject {
+    func update(liveSessions: Int, mcpPort: Int?, phonePort: Int?)
+    func remove()
+}
+
+extension HostLauncher {
+    /// Opens the app (from the icon's menu); it stops this host as it starts. The app
+    /// bundle is the one this executable sits in (`…/Microhm.app/Contents/MacOS/`), else the
+    /// `Microhm` executable beside it (a SwiftPM build).
+    public static func openApp() {
+        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        let bundle = exe.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let process = Process()
+        if bundle.pathExtension == "app" {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = [bundle.path]
+        } else if let app = MicrohmPaths.siblingExecutable("Microhm") {
+            process.executableURL = app
+        } else {
+            Log.warn("could not open the app: no Microhm beside \(exe.path)", tag: "host")
+            return
+        }
+        do { try process.run() } catch { Log.warn("could not open the app: \(error)", tag: "host") }
     }
 }

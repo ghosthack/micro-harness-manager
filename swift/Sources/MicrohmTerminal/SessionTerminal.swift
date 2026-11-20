@@ -281,6 +281,9 @@ public final class SessionTerminal {
 /// on the terminal's background.
 final class TerminalContainerView: NSView {
 
+    /// Horizontal and vertical margin around the cell grid, in points.
+    static let contentInset = NSSize(width: 8, height: 6)
+
     let terminal: TerminalView
     private let scroller: NSScroller
     var scrollbarHidden: Bool {
@@ -323,7 +326,12 @@ final class TerminalContainerView: NSView {
         super.layout()
         let width = scrollbarHidden ? 0 : NSScroller.scrollerWidth(for: .small, scrollerStyle: .legacy)
         scroller.isHidden = scrollbarHidden
-        terminal.frame = NSRect(x: 0, y: 0, width: max(0, bounds.width - width), height: bounds.height)
+        // a small margin in the terminal's own background colour (painted by this view's
+        // layer), so text never sits flush against the sidebar divider or the toolbar
+        let inset = TerminalContainerView.contentInset
+        terminal.frame = NSRect(x: inset.width, y: inset.height,
+                                width: max(0, bounds.width - width - inset.width * 2),
+                                height: max(0, bounds.height - inset.height * 2))
         scroller.frame = NSRect(x: bounds.width - width, y: 0, width: width, height: bounds.height)
     }
 

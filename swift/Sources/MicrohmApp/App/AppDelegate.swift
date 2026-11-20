@@ -1,4 +1,5 @@
 import AppKit
+import MicrohmStatusItem
 import MicrohmCore
 import MicrohmShared
 
@@ -75,9 +76,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 mainWindow?.debugCreate(args[0], harness, message: args.count > 2 ? args.dropFirst(2).joined(separator: " ") : nil)
             }
         case "type":
-            if let responder = mainWindow?.window?.firstResponder as? NSResponder {
-                responder.insertText(args.joined(separator: " ") + "\r")
+            // real key events through the window, so the test covers keyDown → input
+            // method → encoder → daemon, the path a person's typing takes
+            guard let window = mainWindow?.window else { break }
+            let text = args.joined(separator: " ")
+            func post(_ chars: String, keyCode: UInt16) {
+                for type in [NSEvent.EventType.keyDown, .keyUp] {
+                    if let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+                                                    timestamp: ProcessInfo.processInfo.systemUptime,
+                                                    windowNumber: window.windowNumber, context: nil,
+                                                    characters: chars, charactersIgnoringModifiers: chars,
+                                                    isARepeat: false, keyCode: keyCode) {
+                        window.sendEvent(event)
+                    }
+                }
             }
+            for ch in text { post(String(ch), keyCode: ch == " " ? 49 : 0) }
+            post("\r", keyCode: 36)
+        case "quit": NSApp.terminate(nil)
         case "refresh": mainWindow?.refreshSessions(nil)
         case "usage": mainWindow?.showUsage(nil)
         case "about": showAbout(nil)
