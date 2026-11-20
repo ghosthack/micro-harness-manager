@@ -66,6 +66,14 @@ final class NewSessionSheet: NSWindowController, NSWindowDelegate {
         let choose = NSButton(title: "Choose…", target: self, action: #selector(chooseFolder(_:)))
         let pathRow = NSStackView(views: [pathField, choose])
         pathRow.spacing = 8
+        pathRow.distribution = .fill
+        // the field takes the row's width; the button keeps its own
+        pathField.translatesAutoresizingMaskIntoConstraints = false
+        pathField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        pathField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        choose.setContentHuggingPriority(.required, for: .horizontal)
+        pathRow.translatesAutoresizingMaskIntoConstraints = false
+        pathRow.widthAnchor.constraint(equalToConstant: 380).isActive = true
 
         for type in HarnessType.allCases {
             harnessPopup.addItem(withTitle: type == .shell ? "Shell" : "\(SidebarView.label(type))  ·  \(type.id)")
@@ -91,9 +99,23 @@ final class NewSessionSheet: NSWindowController, NSWindowDelegate {
         messageScroll.documentView = messageView
         messageScroll.hasVerticalScroller = true
         messageScroll.borderType = .bezelBorder
+        messageScroll.drawsBackground = true
+        messageView.drawsBackground = true
+        messageView.backgroundColor = .textBackgroundColor
+        messageView.textColor = .labelColor
+        messageView.insertionPointColor = .labelColor
+        // a text view in a scroll view needs a real frame and a tracking container, or it
+        // lays out at zero width and nothing (not even its background) is drawn
+        messageView.frame = NSRect(x: 0, y: 0, width: 380, height: 72)
+        messageView.minSize = NSSize(width: 0, height: 72)
+        messageView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        messageView.isVerticallyResizable = true
+        messageView.isHorizontallyResizable = false
+        messageView.textContainer?.widthTracksTextView = true
         messageView.autoresizingMask = [.width]
         messageScroll.translatesAutoresizingMaskIntoConstraints = false
         messageScroll.heightAnchor.constraint(equalToConstant: 72).isActive = true
+        messageScroll.widthAnchor.constraint(equalToConstant: 380).isActive = true
         let messageHint = hint("Optional. Typed into the agent once it is ready at its prompt.")
 
         resumeField.placeholderString = "Blank starts a fresh conversation"
