@@ -16,7 +16,7 @@ The exceptions are listed under [Differences from the Java app](#differences-fro
 ```sh
 scripts/build-app.sh                 # dist/Microhm.app (release, ad-hoc signed)
 open dist/Microhm.app
-swift test                           # 798 tests
+swift test                           # 802 tests
 scripts/phone-e2e.sh                 # the phone page's Playwright suite against the Swift server
 ```
 

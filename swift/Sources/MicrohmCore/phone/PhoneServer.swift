@@ -20,6 +20,8 @@ import MicrohmShared
 ///   `POST /api/spawn {harness,project,name,prompt}`, `POST /api/resume {session}`;
 /// - `GET /api/close-check?session=` says whether a session can be closed now and why not;
 ///   `POST /api/close {session}` closes it politely or refuses (409);
+/// - `POST /api/upload?name=` keeps the body as a file and answers its path, for a prompt
+///   to name (a screenshot of the problem, say);
 /// - `GET /api/sessions` also lists the saved sessions that are not running, as `ended`, to
 ///   resume.
 ///
@@ -66,6 +68,9 @@ public final class PhoneServer: @unchecked Sendable {
     private let keepalive: TimeInterval
     private let giveBackAfter: TimeInterval
     private let giveBacks = DispatchQueue(label: "mhm-phone-size")
+
+    /// Where files sent from the page are kept; `MicrohmPaths.uploadsDir` unless a test says.
+    var uploadDir: URL?
 
     /// Sessions held at a phone's size, by session name; guarded by `holdsLock`.
     private var holds: [String: Hold] = [:]
@@ -221,6 +226,7 @@ public final class PhoneServer: @unchecked Sendable {
             case "POST /api/resume": try resume(ex)
             case "GET /api/close-check": try closeCheck(ex)
             case "POST /api/close": try close(ex)
+            case "POST /api/upload": try upload(ex)
             default: try sendError(ex, 404, "no such endpoint")
             }
         } catch let e as HttpError where ex.responseStarted {
@@ -655,6 +661,25 @@ public final class PhoneServer: @unchecked Sendable {
     /// The page as built into this module (`Resources/web`).
     static func bundledWebDir() -> URL? {
         Bundle.module.url(forResource: "web", withExtension: nil)
+    }
+
+    /// Keeps the request body as a file and answers its absolute path, for the page to put
+    /// in the message. `?name=` is the file's own name, kept for its extension and as a hint.
+    private func upload(_ ex: HttpExchange) throws {
+        guard let body = try ex.readBody(limit: PhoneUploads.maxBytes) else {
+            try sendError(ex, 413, PhoneUploads.tooLargeMessage)
+            return
+        }
+        let uploads = PhoneUploads(dir: uploadDir ?? MicrohmPaths.uploadsDir)
+        let saved: URL
+        do {
+            saved = try uploads.save(body, name: query(ex, "name"), contentType: ex.header("Content-Type"))
+        } catch {
+            try sendError(ex, 400, "could not keep that file: \(error.localizedDescription)")
+            return
+        }
+        Log.info("kept a file from the phone page at \(saved.path)", tag: "phone")
+        try sendJson(ex, 200, .obj([("ok", .bool(true)), ("path", .string(saved.path))]))
     }
 
     // MARK: - helpers

@@ -110,6 +110,8 @@ h1, h2 { margin: 0; }
 .btn.close:active, .btn.default:active { filter: brightness(0.88); }
 /* not on offer right now (Close while the session is busy): faded */
 .btn.unavailable { opacity: 0.35; }
+.btn.busy { animation: busy 1s ease-in-out infinite alternate; }
+@keyframes busy { from { opacity: 1; } to { opacity: 0.35; } }
 /* a toggle that is open (the funnel, the keys), or filters that hide sessions */
 .btn.on { background: var(--fill-strong); }
 .btn.filtered { color: var(--accent); }

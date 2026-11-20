@@ -29,6 +29,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PhoneServerTest {
@@ -370,6 +372,39 @@ class PhoneServerTest {
         }
         // and the original size, not the first phone's, comes back after it leaves
         assertEquals("hm-a 120x40", backend.resizes.get(3));
+    }
+
+    @Test
+    void anUploadIsKeptAndItsPathAnswered() throws Exception {
+        Path uploads = web.resolve("uploads");
+        server.uploadDir(uploads);
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
+        HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri("/api/upload?name=" + "My%20Screen%20Shot.PNG"))
+                .header("Cookie", COOKIE).header("Content-Type", "image/png")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(png)).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, r.statusCode(), r.body());
+        Path saved = Path.of(new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.body()).path("path").asText());
+        assertTrue(saved.isAbsolute());
+        assertEquals(uploads.toAbsolutePath(), saved.getParent());
+        assertTrue(saved.getFileName().toString().matches("\\d{8}-\\d{6}-[0-9a-f]{4}-My_Screen_Shot\\.png"),
+                saved.getFileName().toString());
+        assertArrayEquals(png, Files.readAllBytes(saved));
+    }
+
+    @Test
+    void anUploadNeedsTheSecretAndFitsTheLimit() throws Exception {
+        Path uploads = web.resolve("uploads");
+        server.uploadDir(uploads);
+        HttpResponse<String> locked = http.send(HttpRequest.newBuilder(uri("/api/upload?name=a.png"))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1})).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(401, locked.statusCode());
+        HttpResponse<String> big = http.send(HttpRequest.newBuilder(uri("/api/upload?name=a.png"))
+                .header("Cookie", COOKIE)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[(int) PhoneUploads.MAX_BYTES + 1])).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(413, big.statusCode());
+        assertFalse(Files.exists(uploads) && Files.list(uploads).findAny().isPresent(), "nothing kept");
     }
 
     @Test

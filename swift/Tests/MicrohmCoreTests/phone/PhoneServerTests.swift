@@ -132,6 +132,25 @@ final class PhoneServerTests: XCTestCase {
         return try SvcHttp.request(server.port, "POST", path, headers: headers, body: json)
     }
 
+    func testAnUploadIsKeptAndItsPathAnswered() throws {
+        let uploads = web.appendingPathComponent("uploads")
+        server.uploadDir = uploads
+        let locked = try SvcHttp.request(server.port, "POST", "/api/upload?name=a.png", body: "x")
+        XCTAssertEqual(401, locked.status)
+        let r = try SvcHttp.request(server.port, "POST", "/api/upload?name=My%20Screen%20Shot.PNG",
+                                    headers: [("Cookie", PhoneServerTests.COOKIE), ("Content-Type", "image/png")],
+                                    body: "fake png bytes")
+        XCTAssertEqual(200, r.status, r.body)
+        let path = try XCTUnwrap(CoreJSON.parse(Data(r.body.utf8)).path("path").asText(nil))
+        let saved = URL(fileURLWithPath: path)
+        XCTAssertTrue(path.hasPrefix("/"))
+        XCTAssertEqual(uploads.standardizedFileURL.resolvingSymlinksInPath().path,
+                       saved.deletingLastPathComponent().resolvingSymlinksInPath().path)
+        XCTAssertNotNil(saved.lastPathComponent.range(of: #"^\d{8}-\d{6}-[0-9a-f]{4}-My_Screen_Shot\.png$"#,
+                                                      options: .regularExpression), saved.lastPathComponent)
+        XCTAssertEqual("fake png bytes", try String(contentsOf: saved, encoding: .utf8))
+    }
+
     private func stream(_ path: String) throws -> SvcSocket {
         let (socket, status, headers) = try SvcHttp.stream(server.port, path, headers: [("Cookie", PhoneServerTests.COOKIE)])
         XCTAssertEqual(200, status)

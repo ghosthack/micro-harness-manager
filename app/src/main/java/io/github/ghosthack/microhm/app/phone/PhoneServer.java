@@ -172,6 +172,20 @@ public final class PhoneServer implements AutoCloseable {
         this.poll = Objects.requireNonNull(poll, "poll");
     }
 
+    /** Where files sent from the page are kept; beside the registry unless a test says. */
+    private volatile Path uploadDir;
+
+    void uploadDir(Path dir) {
+        this.uploadDir = dir;
+    }
+
+    private Path uploadDir() {
+        Path dir = uploadDir;
+        return dir != null ? dir
+                : io.github.ghosthack.microhm.app.registry.RegistryPaths.resolve().toAbsolutePath()
+                        .resolveSibling("uploads");
+    }
+
     /** The folder {@code MICROHM_WEB_DIR} or {@code -Dmicrohm.web.dir} names, if any. */
     public static Path webDirOverride() {
         String dir = System.getProperty(WEB_DIR_PROPERTY);
@@ -273,6 +287,7 @@ public final class PhoneServer implements AutoCloseable {
                 case "POST /api/resume" -> resume(ex);
                 case "GET /api/close-check" -> closeCheck(ex);
                 case "POST /api/close" -> close(ex);
+                case "POST /api/upload" -> upload(ex);
                 default -> sendError(ex, 404, "no such endpoint");
             }
         } catch (RuntimeException e) {
@@ -691,6 +706,39 @@ public final class PhoneServer implements AutoCloseable {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * Keeps the request body as a file (a screenshot, say) and answers its absolute path, for
+     * the page to put in the message. {@code ?name=} is the file's own name, kept for its
+     * extension and as a hint in the saved name.
+     */
+    private void upload(HttpExchange ex) throws IOException {
+        String length = ex.getRequestHeaders().getFirst("Content-Length");
+        if (length != null) {
+            try {
+                if (Long.parseLong(length.trim()) > PhoneUploads.MAX_BYTES) {
+                    sendError(ex, 413, new PhoneUploads.TooLarge().getMessage());
+                    return;
+                }
+            } catch (NumberFormatException ignored) {
+                // read it and count instead
+            }
+        }
+        Path saved;
+        try (InputStream body = ex.getRequestBody()) {
+            saved = new PhoneUploads(uploadDir(), java.time.Clock.systemDefaultZone())
+                    .save(body, query(ex, "name"), ex.getRequestHeaders().getFirst("Content-Type"));
+        } catch (PhoneUploads.TooLarge e) {
+            sendError(ex, 413, e.getMessage());
+            return;
+        } catch (IOException e) {
+            LOG.debug("could not keep an upload", e);
+            sendError(ex, 400, "could not keep that file: " + e.getMessage());
+            return;
+        }
+        LOG.info("kept a file from the phone page at {}", saved);
+        sendJson(ex, 200, json.createObjectNode().put("ok", true).put("path", saved.toString()));
+    }
 
     private JsonNode readJson(HttpExchange ex) throws IOException {
         byte[] body = ex.getRequestBody().readNBytes(MAX_BODY + 1);

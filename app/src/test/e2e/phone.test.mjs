@@ -174,6 +174,20 @@ test("a message runs as a command, and its output shows", async () => {
   await waitText("#screen", /^e2e-42$/m);
 });
 
+test("an attached file's path goes into the message, and the session can read it", async () => {
+  await page.fill("#message", "cat");
+  await page.$eval("#message", (e) => e.setSelectionRange(3, 3));
+  await page.setInputFiles("#attach-input",
+    { name: "Screen Shot.png", mimeType: "image/png", buffer: Buffer.from("e2e-attached-bytes") });
+  await page.waitForFunction(() => /^cat \/\S+Screen_Shot\.png $/.test(document.getElementById("message").value));
+  const file = (await page.$eval("#message", (e) => e.value)).trim().split(" ")[1];
+  assert.ok(fs.realpathSync(file).startsWith(WORK), `kept in the scratch home, not yours: ${file}`);
+  assert.equal(fs.readFileSync(file, "utf8"), "e2e-attached-bytes");
+  await page.click("#send-button");
+  await page.waitForFunction(() => document.getElementById("message").value === "");
+  await waitText("#screen", /^e2e-attached-bytes/m);
+});
+
 test("the session runs at the phone's size while the phone watches", async () => {
   await send("stty size");
   await waitText("#screen", /^\d+ \d+$/m);
