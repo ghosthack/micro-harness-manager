@@ -424,7 +424,7 @@ public final class SessionServerClient {
             return Optional.empty();
         }
         try (ServerConnection connection = opened.get()) {
-            JsonNode reply = connection.request(op, args);
+            JsonNode reply = connection.request(op, args, timeoutFor(op, args));
             checkOk(reply);
             return Optional.of(reply);
         } catch (ServerConnection.NoServerException e) {
@@ -432,6 +432,17 @@ public final class SessionServerClient {
         } catch (IOException e) {
             throw new SessionServerException(op + " failed: " + e.getMessage(), e);
         }
+    }
+
+    /** {@code wait} blocks on the server for up to its own timeout, so its deadline is that
+     * plus the ordinary one; every other request gets {@link ServerConnection#REQUEST_TIMEOUT}. */
+    static java.time.Duration timeoutFor(String op, ObjectNode args) {
+        if (Protocol.OP_WAIT.equals(op) && args != null) {
+            long waitMs = Math.max(0, Math.min(Protocol.WAIT_MAX_MS,
+                    args.path(Protocol.F_TIMEOUT_MS).asLong(Protocol.WAIT_DEFAULT_TIMEOUT_MS)));
+            return ServerConnection.REQUEST_TIMEOUT.plusMillis(waitMs);
+        }
+        return ServerConnection.REQUEST_TIMEOUT;
     }
 
     private static void checkOk(JsonNode reply) {

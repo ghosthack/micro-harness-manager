@@ -371,6 +371,20 @@ public final class AppSettings {
     }
 
     /**
+     * Whether the sidebar's Budgets panel is folded to its one-line summary:
+     * {@code sidebar.budgets-collapsed=on|off}. Off (unset — the default) shows every bar.
+     */
+    public static boolean sidebarBudgetsCollapsed() {
+        String value = load().getProperty("sidebar.budgets-collapsed");
+        return value != null && value.trim().equalsIgnoreCase("on");
+    }
+
+    /** Persists the Budgets panel's folded state. */
+    public static void saveSidebarBudgetsCollapsed(boolean collapsed) {
+        save(p -> p.setProperty("sidebar.budgets-collapsed", collapsed ? "on" : "off"));
+    }
+
+    /**
      * Whether bare Page Up/Down and Home/End page the terminal's scrollback:
      * {@code terminal.page-keys=on|off}. On (unset, or anything but {@code off} — the
      * default): the app intercepts those four keys for an attached view. Off: they pass

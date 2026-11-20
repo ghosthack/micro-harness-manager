@@ -1,6 +1,7 @@
 package io.github.ghosthack.microhm.app.ui;
 
 import io.github.ghosthack.microhm.app.harness.HarnessType;
+import io.github.ghosthack.microhm.app.settings.AppSettings;
 import io.github.ghosthack.microhm.app.usage.UsageSnapshot;
 
 import javax.swing.BorderFactory;
@@ -26,6 +27,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /** Harness-level provider quota summary shown below the live session list. */
 final class HarnessBudgetPanel extends JPanel {
@@ -59,14 +62,25 @@ final class HarnessBudgetPanel extends JPanel {
     private final Map<HarnessType, UsageSnapshot> snapshots = new EnumMap<>(HarnessType.class);
     private final Map<HarnessType, String> errors = new EnumMap<>(HarnessType.class);
     private final EnumSet<HarnessType> loading = EnumSet.noneOf(HarnessType.class);
+    private final JButton heading = new JButton();
+    /** One line of what is left, shown in the header while the panel is folded. */
+    private final JLabel collapsedSummary = new JLabel();
+    private final Consumer<Boolean> collapsedListener;
+    private boolean collapsed;
 
     HarnessBudgetPanel() {
-        this(Clock.systemUTC());
+        this(Clock.systemUTC(), AppSettings.sidebarBudgetsCollapsed(), AppSettings::saveSidebarBudgetsCollapsed);
     }
 
     HarnessBudgetPanel(Clock clock) {
+        this(clock, false, collapsed -> { });
+    }
+
+    HarnessBudgetPanel(Clock clock, boolean collapsed, Consumer<Boolean> collapsedListener) {
         super(new BorderLayout());
         this.clock = clock;
+        this.collapsed = collapsed;
+        this.collapsedListener = collapsedListener;
         setBorder(BorderFactory.createEmptyBorder(0, 0, 3, 0));
         add(new JSeparator(), BorderLayout.NORTH);
 
@@ -74,12 +88,18 @@ final class HarnessBudgetPanel extends JPanel {
         header.setOpaque(false);
         header.setLayout(new BoxLayout(header, BoxLayout.X_AXIS));
         header.setBorder(BorderFactory.createEmptyBorder(5, 12, 3, 5));
-        JLabel heading = new JLabel("Budgets");
+        // the heading folds the panel away, for short windows and long session lists
+        MainWindow.configureSidebarControlButton(heading);
         heading.setFont(heading.getFont().deriveFont(Font.BOLD));
+        heading.addActionListener(e -> setCollapsed(!this.collapsed));
         // A fixed minimum here would floor the sidebar's width the same way the metric
         // row's did (see below) — BoxLayout/BorderLayout propagate it up to the JSplitPane.
         heading.setMinimumSize(new Dimension(0, heading.getPreferredSize().height));
         header.add(heading);
+        header.add(Box.createHorizontalStrut(4));
+        collapsedSummary.setEnabled(false);
+        collapsedSummary.setMinimumSize(new Dimension(0, collapsedSummary.getPreferredSize().height));
+        header.add(collapsedSummary);
         header.add(Box.createHorizontalGlue());
         MainWindow.configureSidebarControlButton(refresh);
         refresh.setIcon(LucidIcon.refresh(13));
@@ -93,6 +113,40 @@ final class HarnessBudgetPanel extends JPanel {
         content.setBorder(BorderFactory.createEmptyBorder(1, 12, 7, 12));
         add(content, BorderLayout.SOUTH);
         render();
+    }
+
+    boolean isCollapsed() {
+        return collapsed;
+    }
+
+    void setCollapsed(boolean collapsed) {
+        if (this.collapsed == collapsed) return;
+        this.collapsed = collapsed;
+        collapsedListener.accept(collapsed);
+        render();
+    }
+
+    /** The folded header's line: each harness's session budget (else its week). */
+    String collapsedSummaryText() {
+        return activeHarnesses.stream()
+                .filter(snapshots::containsKey)
+                .map(harness -> {
+                    Summary summary = summarize(snapshots.get(harness));
+                    return summary.session().or(summary::week)
+                            .map(budget -> label(harness) + " " + budget.availablePercent() + "%")
+                            .orElse(null);
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.joining(" · "));
+    }
+
+    private void updateHeading() {
+        heading.setText(collapsed ? "Budgets ▸" : "Budgets ▾");
+        heading.setToolTipText(collapsed ? "Show budgets" : "Hide budgets");
+        heading.getAccessibleContext().setAccessibleName(collapsed ? "Show budgets" : "Hide budgets");
+        collapsedSummary.setText(collapsed ? collapsedSummaryText() : "");
+        collapsedSummary.setVisible(collapsed);
+        content.setVisible(!collapsed);
     }
 
     void setRefreshAction(Runnable action) {
@@ -121,9 +175,9 @@ final class HarnessBudgetPanel extends JPanel {
     void showError(HarnessType harness, Exception failure) {
         if (!activeHarnesses.contains(harness)) return;
         String message = failure.getMessage();
+        // a failed refresh keeps the last figures on screen, marked as stale
         errors.put(harness, message == null || message.isBlank()
                 ? "Usage unavailable" : message);
-        snapshots.remove(harness);
         loading.remove(harness);
         finishOne();
     }
@@ -134,6 +188,7 @@ final class HarnessBudgetPanel extends JPanel {
     }
 
     private void render() {
+        updateHeading();
         content.removeAll();
         if (activeHarnesses.isEmpty()) {
             content.add(muted("No budgets available."));
@@ -164,13 +219,20 @@ final class HarnessBudgetPanel extends JPanel {
         name.setAlignmentX(0f);
         row.add(name);
 
-        if (loading.contains(harness)) {
+        boolean haveFigures = snapshots.containsKey(harness);
+        if (haveFigures && errors.containsKey(harness)) {
+            // the last refresh failed; the figures below are from the one before
+            JLabel stale = muted("Not updated — showing earlier figures");
+            stale.setToolTipText("Last refresh failed: " + errors.get(harness));
+            row.add(stale);
+        }
+        if (loading.contains(harness) && !haveFigures) {
             JLabel state = muted("Loading usage…");
             state.setAlignmentX(0f);
             row.add(state);
             return row;
         }
-        if (errors.containsKey(harness)) {
+        if (errors.containsKey(harness) && !haveFigures) {
             JLabel state = muted("Usage unavailable");
             state.setToolTipText(errors.get(harness));
             state.setAlignmentX(0f);
@@ -334,6 +396,10 @@ final class HarnessBudgetPanel extends JPanel {
         long totalMinutes = seconds / 60;
         long hours = totalMinutes / 60;
         long minutes = totalMinutes % 60;
+        // a day or more reads as days and hours, so a long window fits the column
+        if (hours >= 24) {
+            return (hours / 24) + "d " + (hours % 24) + "h";
+        }
         return hours + "h" + String.format(Locale.ROOT, "%02d", minutes) + "m";
     }
 

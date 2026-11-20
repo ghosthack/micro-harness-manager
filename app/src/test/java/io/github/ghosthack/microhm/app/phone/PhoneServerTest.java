@@ -58,12 +58,29 @@ class PhoneServerTest {
 
         @Override
         public void resize(String session, int c, int r) {
+            java.util.concurrent.CountDownLatch gate = resizeGate.getAndSet(null);
+            if (gate != null) {
+                resizeEntered.countDown();
+                try {
+                    gate.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            if (failResizes.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+                throw new IllegalStateException("daemon restarting");
+            }
             resizes.add(session + " " + c + "x" + r);
             columns = c;
             rows = r;
         }
 
         volatile boolean failSessions;
+        /** When set, the next resize waits on it (once). */
+        final AtomicReference<java.util.concurrent.CountDownLatch> resizeGate = new AtomicReference<>();
+        final java.util.concurrent.CountDownLatch resizeEntered = new java.util.concurrent.CountDownLatch(1);
+        /** How many coming resizes fail. */
+        final java.util.concurrent.atomic.AtomicInteger failResizes = new java.util.concurrent.atomic.AtomicInteger();
         final List<String> closed = Collections.synchronizedList(new ArrayList<>());
 
         @Override
@@ -293,6 +310,66 @@ class PhoneServerTest {
             Thread.sleep(20);
         }
         assertEquals(List.of("hm-a 45x30", "hm-a 50x28", "hm-a 120x40"), backend.resizes);
+    }
+
+    /** A phone whose resize fails is counted out again; otherwise the session would keep a
+     * phantom viewer and never get its size back after the next phone leaves. */
+    @Test
+    void aFailedResizeDoesNotLeaveAPhantomViewer() throws Exception {
+        backend.failResizes.set(1);
+        HttpResponse<java.io.InputStream> failed = http.send(HttpRequest.newBuilder(
+                uri("/api/stream?session=hm-a&cols=45&rows=30")).header("Cookie", COOKIE).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        nextData(new BufferedReader(new InputStreamReader(failed.body(), StandardCharsets.UTF_8)));
+        assertEquals(List.of(), backend.resizes);
+
+        HttpResponse<java.io.InputStream> next = http.send(HttpRequest.newBuilder(
+                uri("/api/stream?session=hm-a&cols=50&rows=28")).header("Cookie", COOKIE).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        nextData(new BufferedReader(new InputStreamReader(next.body(), StandardCharsets.UTF_8)));
+        next.body().close();
+        failed.body().close();
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (backend.resizes.size() < 2 && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
+        assertEquals(List.of("hm-a 50x28", "hm-a 120x40"), backend.resizes);
+    }
+
+    @Test
+    void aPhoneArrivingDuringTheSizeBackIsSizedAfterIt() throws Exception {
+        HttpResponse<java.io.InputStream> first = http.send(HttpRequest.newBuilder(
+                uri("/api/stream?session=hm-a&cols=45&rows=30")).header("Cookie", COOKIE).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        nextData(new BufferedReader(new InputStreamReader(first.body(), StandardCharsets.UTF_8)));
+        java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
+        backend.resizeGate.set(gate);
+        first.body().close();
+        // the size-back (120x40) is now stuck in the daemon call
+        assertTrue(backend.resizeEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        var second = http.sendAsync(HttpRequest.newBuilder(
+                uri("/api/stream?session=hm-a&cols=50&rows=28")).header("Cookie", COOKIE).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        Thread.sleep(200); // the second phone reaches its hold while the size-back is in flight
+        gate.countDown();
+        HttpResponse<java.io.InputStream> watching = second.get(5, java.util.concurrent.TimeUnit.SECONDS);
+        nextData(new BufferedReader(new InputStreamReader(watching.body(), StandardCharsets.UTF_8)));
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (backend.resizes.size() < 3 && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
+        // sized back first, then to the new phone: it watches at its own size
+        assertEquals(List.of("hm-a 45x30", "hm-a 120x40", "hm-a 50x28"), backend.resizes);
+        assertEquals(50, backend.columns);
+
+        watching.body().close();
+        deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (backend.resizes.size() < 4 && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
+        // and the original size, not the first phone's, comes back after it leaves
+        assertEquals("hm-a 120x40", backend.resizes.get(3));
     }
 
     @Test

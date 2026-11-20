@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HostLauncherTest {
@@ -50,5 +51,29 @@ class HostLauncherTest {
         Path muxHome = Path.of("/tmp/m");
         List<String> command = HostLauncher.command(List.of("/opt/mhm/bin/mhm"), registry, muxHome);
         assertEquals(List.of("/opt/mhm/bin/mhm", "--registry=" + registry, "--mux-home=" + muxHome), command);
+    }
+
+    @Test
+    void aDaemonThatDoesNotAnswerStillGetsAHost() {
+        java.util.concurrent.CountDownLatch never = new java.util.concurrent.CountDownLatch(1);
+        long start = System.nanoTime();
+        assertTrue(HostLauncher.anyLive(() -> {
+            try {
+                never.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return 0;
+        }, java.time.Duration.ofMillis(200)));
+        assertTrue(System.nanoTime() - start < java.time.Duration.ofSeconds(2).toNanos());
+    }
+
+    @Test
+    void anAnswerDecides() {
+        assertTrue(HostLauncher.anyLive(() -> 2, java.time.Duration.ofSeconds(5)));
+        assertFalse(HostLauncher.anyLive(() -> 0, java.time.Duration.ofSeconds(5)));
+        assertFalse(HostLauncher.anyLive(() -> {
+            throw new IllegalStateException("boom");
+        }, java.time.Duration.ofSeconds(5)));
     }
 }

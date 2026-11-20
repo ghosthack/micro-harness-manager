@@ -113,6 +113,17 @@ public final class PhoneServer implements AutoCloseable {
     /** Sessions held at a phone's size, by session name; guarded by itself. */
     private final java.util.HashMap<String, Hold> holds = new java.util.HashMap<>();
 
+    /** One lock per session name, held across a hold's or a size-back's daemon calls so the
+     * two never interleave on one session (a phone arriving while the size-back is in flight
+     * would otherwise take the phone size for the original, or be resized back under it).
+     * Separate from {@link #holds}: a slow daemon stalls only that session's streams. */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object> sizeLocks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private Object sizeLock(String name) {
+        return sizeLocks.computeIfAbsent(name, n -> new Object());
+    }
+
     /** A session some phones are watching: its size before the first one came, how many
      * watch, the size the last one asked for, and the size-back waiting to run once the
      * last one has left. */
@@ -555,20 +566,38 @@ public final class PhoneServer implements AutoCloseable {
                 return null;
             }
             String name = view.get().name();
-            synchronized (holds) {
-                Hold hold = holds.computeIfAbsent(name, n -> new Hold(view.get().columns(), view.get().rows()));
-                if (hold.giveBack != null) {
-                    hold.giveBack.cancel(false); // back within the grace time: keep the size
-                    hold.giveBack = null;
+            synchronized (sizeLock(name)) {
+                // read again under the session's lock: a size-back may have just run
+                Optional<ScreenView> now = backend.screen(name);
+                if (now.isEmpty()) {
+                    return null;
                 }
-                hold.viewers++;
-                hold.phoneColumns = columns;
-                hold.phoneRows = rows;
-                if (view.get().columns() != columns || view.get().rows() != rows) {
-                    backend.resize(name, columns, rows);
+                int currentColumns = now.get().columns();
+                int currentRows = now.get().rows();
+                synchronized (holds) {
+                    Hold hold = holds.computeIfAbsent(name, n -> new Hold(currentColumns, currentRows));
+                    if (hold.giveBack != null) {
+                        hold.giveBack.cancel(false); // back within the grace time: keep the size
+                        hold.giveBack = null;
+                    }
+                    hold.viewers++;
+                    hold.phoneColumns = columns;
+                    hold.phoneRows = rows;
                 }
+                // the daemon call stays outside the holds lock: a slow daemon must not stall
+                // every other stream's hold and release (and the server's close)
+                if (currentColumns != columns || currentRows != rows) {
+                    try {
+                        backend.resize(name, columns, rows);
+                    } catch (RuntimeException e) {
+                        // no stream will release this hold: count the viewer out again, or
+                        // the session never gets its size back
+                        release(name);
+                        throw e;
+                    }
+                }
+                return name;
             }
-            return name;
         } catch (RuntimeException e) {
             LOG.debug("could not size {} for the phone", session, e);
             return null;
@@ -584,24 +613,28 @@ public final class PhoneServer implements AutoCloseable {
             if (hold == null || --hold.viewers > 0) {
                 return;
             }
-            if (!running || giveBackAfter.isZero()) {
-                giveBack(name);
+            if (running && !giveBackAfter.isZero()) {
+                hold.giveBack = giveBacks.schedule(() -> giveBack(name), giveBackAfter.toMillis(),
+                        java.util.concurrent.TimeUnit.MILLISECONDS);
                 return;
             }
-            hold.giveBack = giveBacks.schedule(() -> giveBack(name), giveBackAfter.toMillis(),
-                    java.util.concurrent.TimeUnit.MILLISECONDS);
         }
+        giveBack(name); // at once, and outside the lock (it calls the daemon)
     }
 
     /** Gives {@code name} its size from before the phones came, unless something else (the
      * app's window) has resized it since, or a phone is watching it again. */
     private void giveBack(String name) {
-        synchronized (holds) {
-            Hold hold = holds.get(name);
-            if (hold == null || hold.viewers > 0) {
-                return;
+        synchronized (sizeLock(name)) { // a phone arriving now waits until the size is back
+            Hold hold;
+            synchronized (holds) {
+                hold = holds.get(name);
+                if (hold == null || hold.viewers > 0) {
+                    return;
+                }
+                holds.remove(name);
             }
-            holds.remove(name);
+            // the daemon calls stay outside the holds lock (see hold)
             try {
                 Optional<ScreenView> view = backend.screen(name);
                 if (view.isPresent() && view.get().columns() == hold.phoneColumns

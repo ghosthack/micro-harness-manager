@@ -101,4 +101,22 @@ final class ClaudeUsageClientTest {
         assertEquals("Current week (Fable)", snapshot.limits().getFirst().label());
         assertEquals(44, snapshot.limits().getFirst().usedPercent());
     }
+
+    @Test
+    void rateLimitReadsInWordsWithRetryAfterInMinutes() {
+        assertEquals("Claude usage is rate-limited for now; try again in 2 minutes",
+                ClaudeUsageClient.failureMessage(429, java.util.Optional.of("90")));
+        assertEquals("Claude usage is rate-limited for now; try again in 1 minute",
+                ClaudeUsageClient.failureMessage(429, java.util.Optional.of("30")));
+        assertEquals("Claude usage is rate-limited for now; try again in a few minutes",
+                ClaudeUsageClient.failureMessage(429, java.util.Optional.of("Wed, 21 Oct 2026 07:28:00 GMT")));
+        assertEquals("Claude usage is rate-limited for now; try again in a few minutes",
+                ClaudeUsageClient.failureMessage(429, java.util.Optional.empty()));
+    }
+
+    @Test
+    void otherFailuresKeepTheirStatus() {
+        assertEquals("Claude usage API returned HTTP 500",
+                ClaudeUsageClient.failureMessage(500, java.util.Optional.empty()));
+    }
 }

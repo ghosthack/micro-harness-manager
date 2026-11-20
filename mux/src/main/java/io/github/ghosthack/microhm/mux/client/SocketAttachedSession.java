@@ -55,8 +55,20 @@ final class SocketAttachedSession implements AttachedSession {
 
     @Override
     public void write(byte[] bytes) throws IOException {
-        send(Frame.of(FrameType.DATA_IN, bytes));
+        // one frame per slice: a paste larger than Frame.MAX_PAYLOAD would otherwise be
+        // refused whole (and dropped) before a byte was sent
+        if (bytes.length <= MAX_INPUT_SLICE) {
+            send(Frame.of(FrameType.DATA_IN, bytes));
+            return;
+        }
+        for (int off = 0; off < bytes.length; off += MAX_INPUT_SLICE) {
+            send(Frame.of(FrameType.DATA_IN,
+                    java.util.Arrays.copyOfRange(bytes, off, Math.min(bytes.length, off + MAX_INPUT_SLICE))));
+        }
     }
+
+    /** Largest DATA_IN payload one {@link #write} sends; a bigger write goes as several. */
+    static final int MAX_INPUT_SLICE = 1024 * 1024;
 
     @Override
     public void resize(int columns, int rows) throws IOException {

@@ -228,6 +228,7 @@ public final class TerminalView extends JComponent implements TerminalListener {
                 | AWTEvent.FOCUS_EVENT_MASK | AWTEvent.COMPONENT_EVENT_MASK
                 | AWTEvent.INPUT_METHOD_EVENT_MASK);
         enableInputMethods(true);
+        installFileDrop();
         addInputMethodListener(new InputMethodListener() {
             @Override
             public void inputMethodTextChanged(InputMethodEvent event) {
@@ -1277,6 +1278,64 @@ public final class TerminalView extends JComponent implements TerminalListener {
         if (text != null && !text.isEmpty()) {
             pasteText(text);
         }
+    }
+
+    /**
+     * Files dropped on the terminal type their quoted paths; dropped text is pasted.
+     * Either way it goes through {@link #pasteText}, so nothing dropped acts as keys.
+     */
+    private void installFileDrop() {
+        if (java.awt.GraphicsEnvironment.isHeadless()) return; // DropTarget throws there
+        new java.awt.dnd.DropTarget(this, java.awt.dnd.DnDConstants.ACTION_COPY,
+                new java.awt.dnd.DropTargetAdapter() {
+            @Override
+            public void dragEnter(java.awt.dnd.DropTargetDragEvent event) {
+                if (canDrop(event.getCurrentDataFlavorsAsList())) {
+                    event.acceptDrag(java.awt.dnd.DnDConstants.ACTION_COPY);
+                } else {
+                    event.rejectDrag();
+                }
+            }
+
+            @Override
+            public void drop(java.awt.dnd.DropTargetDropEvent event) {
+                event.acceptDrop(java.awt.dnd.DnDConstants.ACTION_COPY);
+                String text = droppedText(event.getTransferable());
+                if (text == null || text.isEmpty()) {
+                    event.dropComplete(false);
+                    return;
+                }
+                requestFocusInWindow();
+                pasteText(text);
+                event.dropComplete(true);
+            }
+        }, true);
+    }
+
+    private static boolean canDrop(java.util.List<DataFlavor> flavors) {
+        return flavors.contains(DataFlavor.javaFileListFlavor) || flavors.contains(DataFlavor.stringFlavor);
+    }
+
+    static String droppedText(java.awt.datatransfer.Transferable transferable) {
+        try {
+            if (transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                java.util.List<?> files = (java.util.List<?>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
+                java.util.List<String> paths = files.stream()
+                        .filter(java.io.File.class::isInstance)
+                        .map(f -> ((java.io.File) f).getAbsolutePath())
+                        .toList();
+                if (!paths.isEmpty()) {
+                    return PasteEncoder.droppedPaths(paths,
+                            System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows"));
+                }
+            }
+            if (transferable.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                return (String) transferable.getTransferData(DataFlavor.stringFlavor);
+            }
+        } catch (java.awt.datatransfer.UnsupportedFlavorException | java.io.IOException | ClassCastException e) {
+            return null;
+        }
+        return null;
     }
 
     void pasteText(String text) {
