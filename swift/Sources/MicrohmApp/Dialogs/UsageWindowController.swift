@@ -190,10 +190,22 @@ final class UsageWindowController: NSWindowController, NSWindowDelegate {
             let title = NSTextField(labelWithString: "Usage details")
             title.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
             views.append(title)
-            let grid = NSGridView(views: snapshot.statistics.map { [muted("\($0.label):"), NSTextField(labelWithString: $0.value)] })
+            let grid = NSGridView(views: snapshot.statistics.map { stat -> [NSView] in
+                let value = NSTextField(labelWithString: stat.value)
+                value.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .medium)
+                value.isSelectable = true
+                let label = muted("\(stat.label):")
+                label.setContentHuggingPriority(.required, for: .horizontal)
+                value.setContentHuggingPriority(.required, for: .horizontal)
+                // an empty third column takes the slack, so values sit beside their labels
+                let slack = NSView()
+                slack.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
+                return [label, value, slack]
+            })
             grid.rowSpacing = 4
             grid.columnSpacing = 14
             grid.xPlacement = .leading
+            grid.rowAlignment = .firstBaseline
             views.append(grid)
         }
         if let note = snapshot.note {

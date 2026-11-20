@@ -127,7 +127,7 @@ enum SidebarView {
 
         var label: String {
             switch self {
-            case .sessionName: return "Session"
+            case .sessionName: return "Name"
             case .directoryName: return "Folder"
             case .status: return "Status"
             }

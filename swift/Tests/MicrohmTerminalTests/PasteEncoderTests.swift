@@ -31,3 +31,23 @@ final class PasteEncoderTests: XCTestCase {
         same(paste("a\u{9b}b", true), "\u{1b}[200~ab\u{1b}[201~")
     }
 }
+
+final class DroppedPathsTests: XCTestCase {
+    func testSafePathsStayBare() {
+        XCTAssertEqual(PasteEncoder.droppedPaths(["/Users/me/a.png"]), "/Users/me/a.png ")
+    }
+
+    func testSpacesAndQuotesAreQuoted() {
+        XCTAssertEqual(PasteEncoder.droppedPaths(["/tmp/My File.txt", "/tmp/it's"]),
+                       "'/tmp/My File.txt' '/tmp/it'\\''s' ")
+    }
+
+    func testShellMetacharactersAreQuoted() {
+        XCTAssertEqual(PasteEncoder.droppedPaths(["/tmp/$(rm -rf ~)"]), "'/tmp/$(rm -rf ~)' ")
+        XCTAssertEqual(PasteEncoder.droppedPaths(["/tmp/a;b"]), "'/tmp/a;b' ")
+    }
+
+    func testNothingDroppedIsEmpty() {
+        XCTAssertEqual(PasteEncoder.droppedPaths([]), "")
+    }
+}

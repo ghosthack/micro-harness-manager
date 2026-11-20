@@ -65,4 +65,21 @@ public enum PasteEncoder {
         let out = bracketed ? start + sanitize(normalized) + end : normalized
         return Array(out.utf8)
     }
+
+    /// Dropped files → what a drop types: each path shell-quoted (single quotes, as
+    /// Terminal.app does when it must), separated by spaces, with a trailing space so the
+    /// next word starts clean. Paths made only of safe characters are left bare.
+    public static func droppedPaths(_ paths: [String]) -> String {
+        guard !paths.isEmpty else { return "" }
+        return paths.map(shellQuote).joined(separator: " ") + " "
+    }
+
+    static func shellQuote(_ path: String) -> String {
+        let safe = CharacterSet(charactersIn:
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./+,:@%=")
+        if !path.isEmpty, path.unicodeScalars.allSatisfy({ safe.contains($0) }) {
+            return path
+        }
+        return "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
 }

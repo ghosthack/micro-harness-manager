@@ -243,7 +243,7 @@ final class SidebarViewController: NSViewController, NSOutlineViewDataSource, NS
         sortButton.toolTip = "Sort: \(sortLabel) (\(sortDescending ? "descending" : "ascending")) — choose how sessions are sorted"
         filterButton.toolTip = "\(filterSummary) — choose which statuses are visible"
         harnessButton.toolTip = "\(harnessSummary) — choose which harness families are visible"
-        heading.stringValue = "Sessions · \(sortLabel)"
+        heading.stringValue = "Sessions · by \(sortLabel.lowercased())"
     }
 
     /// The sidebar surface: the system's translucent source list, or a solid fill.

@@ -31,6 +31,13 @@ final class HarnessBudgetPanel: NSView {
     var onRefresh: (() -> Void)?
 
     private let content = NSStackView()
+    private let headingButton = NSButton()
+    /// One line of what is left, shown in the header while the panel is collapsed.
+    private let collapsedSummary = NSTextField(labelWithString: "")
+    private static let collapsedKey = "MicrohmBudgetsCollapsed"
+    private var collapsed = UserDefaults.standard.bool(forKey: HarnessBudgetPanel.collapsedKey) {
+        didSet { UserDefaults.standard.set(collapsed, forKey: HarnessBudgetPanel.collapsedKey) }
+    }
     private let refreshButton = NSButton()
     private var active: [HarnessType] = []
     private var snapshots: [HarnessType: UsageSnapshot] = [:]
@@ -40,9 +47,17 @@ final class HarnessBudgetPanel: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        let heading = NSTextField(labelWithString: "Budgets")
-        heading.font = .systemFont(ofSize: 11, weight: .semibold)
-        heading.textColor = .secondaryLabelColor
+        // the heading folds the panel away, for short windows and long session lists
+        headingButton.isBordered = false
+        headingButton.imagePosition = .imageTrailing
+        headingButton.imageHugsTitle = true
+        headingButton.target = self
+        headingButton.action = #selector(toggleCollapsed(_:))
+        headingButton.setButtonType(.momentaryChange)
+        collapsedSummary.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        collapsedSummary.textColor = .tertiaryLabelColor
+        collapsedSummary.lineBreakMode = .byTruncatingTail
+        collapsedSummary.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         refreshButton.bezelStyle = .accessoryBarAction
         refreshButton.showsBorderOnlyWhileMouseInside = true
         refreshButton.controlSize = .small
@@ -51,7 +66,7 @@ final class HarnessBudgetPanel: NSView {
         refreshButton.toolTip = "Update budgets"
         refreshButton.target = self
         refreshButton.action = #selector(refresh(_:))
-        let header = NSStackView(views: [heading, NSView(), refreshButton])
+        let header = NSStackView(views: [headingButton, collapsedSummary, NSView(), refreshButton])
         header.orientation = .horizontal
 
         content.orientation = .vertical
@@ -79,6 +94,31 @@ final class HarnessBudgetPanel: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("not used")
+    }
+
+    @objc func toggleCollapsed(_ sender: Any?) {
+        collapsed.toggle()
+        render()
+    }
+
+    private func updateHeading() {
+        let title = NSAttributedString(string: "Budgets", attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        headingButton.attributedTitle = title
+        headingButton.image = HarnessIcons.symbol(collapsed ? "chevron.right" : "chevron.down",
+                                                  collapsed ? "Show budgets" : "Hide budgets", pointSize: 8, weight: .semibold)
+        headingButton.contentTintColor = .tertiaryLabelColor
+        headingButton.toolTip = collapsed ? "Show budgets" : "Hide budgets"
+        collapsedSummary.isHidden = !collapsed
+        // collapsed: each harness's session budget (else its week) in one line
+        collapsedSummary.stringValue = active.compactMap { harness -> String? in
+            guard let snapshot = snapshots[harness] else { return nil }
+            let summary = HarnessBudgetPanel.summarize(snapshot)
+            guard let budget = summary.session ?? summary.week else { return nil }
+            return "\(SidebarView.label(harness)) \(budget.availablePercent)%"
+        }.joined(separator: " · ")
     }
 
     @objc private func refresh(_ sender: Any?) {
@@ -112,15 +152,18 @@ final class HarnessBudgetPanel: NSView {
     func showError(_ harness: HarnessType, _ error: Error) {
         guard active.contains(harness) else { return }
         let message = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+        // a failed refresh keeps the last figures on screen, marked as stale
         errors[harness] = message.isEmpty ? "Usage unavailable" : message
-        snapshots[harness] = nil
         loading.remove(harness)
         refreshButton.isEnabled = loading.isEmpty
         render()
     }
 
     private func render() {
+        updateHeading()
         content.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        // emptied rather than hidden: a hidden arranged view loses its width constraint
+        if collapsed { return }
         if active.isEmpty {
             content.addArrangedSubview(muted("No budgets available."))
             return
@@ -139,17 +182,26 @@ final class HarnessBudgetPanel: NSView {
         name.font = .systemFont(ofSize: 12, weight: .semibold)
         let title = NSStackView(views: [icon, name])
         title.spacing = 5
+        if snapshots[harness] != nil, let error = errors[harness] {
+            // the last refresh failed; the figures below are from the one before
+            let stale = NSImageView(image: HarnessIcons.symbol("exclamationmark.triangle", "Stale", pointSize: 10))
+            stale.contentTintColor = .tertiaryLabelColor
+            let tip = "Last refresh failed: \(error). Showing the earlier figures."
+            stale.toolTip = tip
+            name.toolTip = tip
+            title.addArrangedSubview(stale)
+        }
         let rows = NSStackView(views: [title])
         rows.orientation = .vertical
         rows.alignment = .leading
         rows.spacing = 3
         rows.translatesAutoresizingMaskIntoConstraints = false
 
-        if loading.contains(harness) {
+        if loading.contains(harness), snapshots[harness] == nil {
             rows.addArrangedSubview(muted("Loading usage…"))
             return rows
         }
-        if let error = errors[harness] {
+        if snapshots[harness] == nil, let error = errors[harness] {
             let label = muted("Usage unavailable")
             label.toolTip = error
             rows.addArrangedSubview(label)
@@ -292,7 +344,10 @@ final class HarnessBudgetPanel: NSView {
         guard let reset else { return nil }
         let seconds = max(0, reset.timeIntervalSince(now).rounded(.down))
         let totalMinutes = Int(seconds) / 60
-        let remaining = "\(totalMinutes / 60)h" + String(format: "%02d", totalMinutes % 60) + "m"
+        // a day or more reads as days and hours, so a long window fits the column
+        let remaining = totalMinutes >= 24 * 60
+            ? "\(totalMinutes / (24 * 60))d \((totalMinutes / 60) % 24)h"
+            : "\(totalMinutes / 60)h" + String(format: "%02d", totalMinutes % 60) + "m"
         return Reset(value: remaining, remainingPercent: clampPercent(seconds * 100 / sessionSeconds),
                      tooltip: seconds == 0 ? "Session reset due" : "\(remaining) left in session")
     }

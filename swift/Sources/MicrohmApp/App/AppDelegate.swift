@@ -98,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "quit": NSApp.terminate(nil)
         case "refresh": mainWindow?.refreshSessions(nil)
         case "usage": mainWindow?.showUsage(nil)
+        case "budgets": mainWindow?.debugToggleBudgets()
         case "about": showAbout(nil)
         case "batch": mainWindow?.batchCloseSessions(nil)
         case "kill": mainWindow?.killSession(nil)

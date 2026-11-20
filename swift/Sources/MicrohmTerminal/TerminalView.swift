@@ -226,6 +226,7 @@ public final class TerminalView: NSView, NSTextInputClient, NSMenuItemValidation
                            object: nil)
         center.addObserver(self, selector: #selector(windowKeyChanged), name: NSWindow.didResignKeyNotification,
                            object: nil)
+        registerForDraggedTypes([.fileURL, .URL, .string])
     }
 
     @available(*, unavailable)
@@ -1259,6 +1260,39 @@ public final class TerminalView: NSView, NSTextInputClient, NSMenuItemValidation
     public func pasteText(_ text: String) {
         let bracketed = locked { emulator.bracketedPaste() }
         typeInput(PasteEncoder.encode(text, bracketed: bracketed))
+    }
+
+    // MARK: - Drag and drop
+
+    /// Files dropped on the terminal type their quoted paths; dropped text or a URL is
+    /// pasted. Either way it goes through `pasteText`, so nothing dropped acts as keys.
+    public override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        droppedText(sender.draggingPasteboard) == nil ? [] : .copy
+    }
+
+    public override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        droppedText(sender.draggingPasteboard) == nil ? [] : .copy
+    }
+
+    public override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let text = droppedText(sender.draggingPasteboard) else { return false }
+        window?.makeFirstResponder(self)
+        pasteText(text)
+        return true
+    }
+
+    private func droppedText(_ pasteboard: NSPasteboard) -> String? {
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self],
+                                             options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
+            return PasteEncoder.droppedPaths(urls.map(\.path))
+        }
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+            return urls.map(\.absoluteString).joined(separator: " ")
+        }
+        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            return text
+        }
+        return nil
     }
 
     public func copySelection() {

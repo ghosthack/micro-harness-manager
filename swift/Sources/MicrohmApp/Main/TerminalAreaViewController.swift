@@ -173,6 +173,7 @@ final class MessageCard: NSView {
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 10
+        stack.setCustomSpacing(18, after: imageView)
         stack.setCustomSpacing(16, after: messageField)
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)

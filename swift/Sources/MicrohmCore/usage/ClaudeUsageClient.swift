@@ -31,6 +31,9 @@ final class ClaudeUsageClient: @unchecked Sendable {
         if status == 401 || status == 403 {
             throw UsageError("Claude login expired; run 'claude auth login' and retry")
         }
+        if status == 429 {
+            throw UsageError("Claude usage is rate-limited for now; try again in a few minutes")
+        }
         if status / 100 != 2 {
             throw UsageError("Claude usage API returned HTTP \(status)")
         }

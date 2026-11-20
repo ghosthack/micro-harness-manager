@@ -496,10 +496,23 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func refreshPerformance(_ sender: Any?) {
+        let rows = PerfStats.snapshot()
+        // same rows as last time: update the values in place
+        if perfGrid.numberOfRows == rows.count, perfGrid.numberOfColumns == 2 {
+            for (i, row) in rows.enumerated() {
+                (perfGrid.cell(atColumnIndex: 0, rowIndex: i).contentView as? NSTextField)?.stringValue = row.label + ":"
+                (perfGrid.cell(atColumnIndex: 1, rowIndex: i).contentView as? NSTextField)?.stringValue = row.value
+            }
+            return
+        }
+        // removeRow leaves the row's views in the grid, drawn over the new ones
         while perfGrid.numberOfRows > 0 {
+            for c in 0..<perfGrid.numberOfColumns {
+                perfGrid.cell(atColumnIndex: c, rowIndex: 0).contentView?.removeFromSuperview()
+            }
             perfGrid.removeRow(at: 0)
         }
-        for row in PerfStats.snapshot() {
+        for row in rows {
             let (label, value) = (row.label, row.value)
             let title = NSTextField(labelWithString: label + ":")
             title.textColor = .secondaryLabelColor

@@ -1470,6 +1470,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, SidebarV
     }
 
     /// `DebugHooks`: select a row as a click would.
+    func debugToggleBudgets() {
+        sidebar.budgetPanel.toggleCollapsed(nil)
+    }
+
     func debugSelect(_ name: String) {
         selectSession(name)
     }
