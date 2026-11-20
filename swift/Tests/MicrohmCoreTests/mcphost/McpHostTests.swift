@@ -22,6 +22,18 @@ final class HostOwnerTests: XCTestCase {
         XCTAssertNil(HostOwner.read(registry))
     }
 
+    func testAPidOutsidePidTIsNoRecordAndStoppingIgnoresIt() throws {
+        let registry = try makeTempDir(self).appendingPathComponent("sessions.json")
+        for corrupt in ["99999999999 1700000000000", "4294967297 1", "-5 1", "0 1"] {
+            try writeString(HostOwner.file(registry), corrupt + "\n")
+            XCTAssertNil(HostOwner.read(registry), corrupt)
+            XCTAssertTrue(HostOwner.stop(registry, 0.1), corrupt) // no trap: nothing to stop
+        }
+        XCTAssertFalse(HostOwner.live(HostOwner.Record(99_999_999_999, 1)))
+        try writeString(HostOwner.file(registry), "\(Int32.max) 1\n")
+        XCTAssertEqual(HostOwner.Record(Int64(Int32.max), 1), HostOwner.read(registry))
+    }
+
     func testThisProcessIsLiveUnderItsOwnRecord() throws {
         let me = try XCTUnwrap(HostOwner.current())
         XCTAssertEqual(Int64(getpid()), me.pid)

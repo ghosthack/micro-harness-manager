@@ -40,7 +40,12 @@ private final class FakeBackend: PhoneBackend, @unchecked Sendable {
         return SessionController.HistoryView(all[from...].joined(separator: "\n"), Int64(all.count), false)
     }
 
+    @Atomic var failResize = false
+
     func resize(_ session: String, _ c: Int, _ r: Int) throws {
+        if failResize {
+            throw Failure(description: "daemon down")
+        }
         resizes.append("\(session) \(c)x\(r)")
         columns = c
         rows = r
@@ -276,6 +281,22 @@ final class PhoneServerTests: XCTestCase {
         a.close() // the last phone leaves: its size is given back after the grace time
         svcAwait(5) { backend.resizes.count >= 3 }
         XCTAssertEqual(["hm-a 45x30", "hm-a 50x28", "hm-a 120x40"], backend.resizes.all)
+    }
+
+    func testAPhoneWhoseResizeFailedDoesNotKeepTheSessionHeld() throws {
+        backend.failResize = true
+        let failed = try stream("/api/stream?session=hm-a&cols=45&rows=30")
+        _ = try nextData(failed)
+        backend.failResize = false
+        XCTAssertTrue(backend.resizes.all.isEmpty)
+
+        let watching = try stream("/api/stream?session=hm-a&cols=50&rows=28")
+        _ = try nextData(watching)
+        XCTAssertEqual(["hm-a 50x28"], backend.resizes.all)
+        failed.close()
+        watching.close() // the last real viewer leaves: the size comes back
+        svcAwait(5) { backend.resizes.count >= 2 }
+        XCTAssertEqual(["hm-a 50x28", "hm-a 120x40"], backend.resizes.all)
     }
 
     func testComingBackWithinTheGraceTimeCostsNoResize() throws {

@@ -70,14 +70,15 @@ public final class HttpServer: @unchecked Sendable {
         let fd = listenFd
         listenFd = -1
         running = false
-        let open = connections
+        // Under the lock: a connection's thread closes its fd under this lock too (and
+        // unregisters it), so every fd here is still that connection's, never a reused number.
+        for c in connections {
+            shutdown(c, SHUT_RDWR)
+        }
         lock.unlock()
         if fd >= 0 {
             shutdown(fd, SHUT_RDWR)
             Darwin.close(fd)
-        }
-        for c in open {
-            shutdown(c, SHUT_RDWR)
         }
         let deadline = Date().addingTimeInterval(wait)
         lock.lock()
@@ -164,10 +165,16 @@ public final class HttpServer: @unchecked Sendable {
         while true {
             let client = accept(fd, nil, nil)
             if client < 0 {
-                if errno == EINTR || errno == ECONNABORTED {
+                let error = errno
+                // Closed under us (ECONNABORTED/EBADF): stop, rather than go on accepting on
+                // a descriptor number that may already belong to something else.
+                if !isRunning {
+                    return
+                }
+                if error == EINTR || error == ECONNABORTED {
                     continue
                 }
-                if isRunning && errno == EMFILE {
+                if error == EMFILE {
                     Thread.sleep(forTimeInterval: 0.1)
                     continue
                 }
@@ -191,12 +198,14 @@ public final class HttpServer: @unchecked Sendable {
             lock.unlock()
             let thread = Thread { [self] in
                 serve(client, handler)
+                // Closed under the lock, together with unregistering it, so `close()` never
+                // shuts down a number this connection no longer owns.
                 lock.lock()
                 connections.remove(client)
+                Darwin.close(client)
                 activeThreads -= 1
                 lock.broadcast()
                 lock.unlock()
-                Darwin.close(client)
             }
             thread.name = "\(name)-conn"
             thread.stackSize = 1 << 20
@@ -528,23 +537,36 @@ public final class HttpExchange: @unchecked Sendable {
                 while let line = connection.readLine(), !line.isEmpty {}
                 break
             }
+            if over || size > limit - body.count {
+                // Over the limit: decided before reading, from the declared size alone, and
+                // the chunk is discarded in bounded pieces up to the drain cap; nothing an
+                // (unauthenticated) client declares is ever held in memory.
+                over = true
+                body.removeAll()
+                var left = size
+                while left > 0 {
+                    let piece = connection.read(min(left, 64 * 1024))
+                    if piece.isEmpty {
+                        keepAlive = false
+                        throw HttpError("connection closed mid-body")
+                    }
+                    left -= piece.count
+                    drained += Int64(piece.count)
+                    if drained > drainLimit {
+                        keepAlive = false
+                        return nil
+                    }
+                }
+                _ = connection.readLine()
+                continue
+            }
             let chunk = connection.read(size)
             _ = connection.readLine()
             if chunk.count < size {
                 keepAlive = false
                 throw HttpError("connection closed mid-body")
             }
-            if over || body.count + size > limit {
-                over = true
-                drained += Int64(size)
-                body.removeAll()
-                if drained > drainLimit {
-                    keepAlive = false
-                    return nil
-                }
-            } else {
-                body.append(contentsOf: chunk)
-            }
+            body.append(contentsOf: chunk)
         }
         bodyComplete = true
         return over ? nil : Data(body)

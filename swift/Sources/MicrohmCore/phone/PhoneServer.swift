@@ -515,57 +515,87 @@ public final class PhoneServer: @unchecked Sendable {
               rows >= PhoneServer.MIN_ROWS, rows <= PhoneServer.MAX_ROWS else {
             return nil
         }
+        let view: SessionController.ScreenView
         do {
-            guard let view = try backend.screen(session) else { return nil }
-            let name = view.name
-            holdsLock.lock(); defer { holdsLock.unlock() }
-            let hold = holds[name] ?? Hold(view.columns, view.rows)
-            holds[name] = hold
-            if let pending = hold.giveBack {
-                pending.cancel() // back within the grace time: keep the size
-                hold.giveBack = nil
-            }
-            hold.viewers += 1
-            hold.phoneColumns = columns
-            hold.phoneRows = rows
-            if view.columns != columns || view.rows != rows {
-                try backend.resize(name, columns, rows)
-            }
-            return name
+            guard let found = try backend.screen(session) else { return nil }
+            view = found
         } catch {
             Log.debug("could not size \(session) for the phone: \(error)", tag: "phone")
             return nil
         }
+        let name = view.name
+        // The bookkeeping under the lock, the daemon I/O (the resize) outside it.
+        holdsLock.lock()
+        let hold = holds[name] ?? Hold(view.columns, view.rows)
+        holds[name] = hold
+        if let pending = hold.giveBack {
+            pending.cancel() // back within the grace time: keep the size
+            hold.giveBack = nil
+        }
+        let previousColumns = hold.phoneColumns
+        let previousRows = hold.phoneRows
+        hold.viewers += 1
+        hold.phoneColumns = columns
+        hold.phoneRows = rows
+        holdsLock.unlock()
+        if view.columns != columns || view.rows != rows {
+            do {
+                try backend.resize(name, columns, rows)
+            } catch {
+                // The stream will not release what it never got: take this viewer back
+                // out, or the session stays held (at the phone's size) for ever.
+                Log.debug("could not size \(session) for the phone: \(error)", tag: "phone")
+                holdsLock.lock()
+                if hold.phoneColumns == columns && hold.phoneRows == rows {
+                    hold.phoneColumns = previousColumns
+                    hold.phoneRows = previousRows
+                }
+                holdsLock.unlock()
+                release(name)
+                return nil
+            }
+        }
+        return name
     }
 
     /// One phone stopped watching `name`. When it was the last, the session gets its size
     /// back after `giveBackAfter` (at once when the server is closing), unless a phone comes
     /// back first.
     private func release(_ name: String) {
-        holdsLock.lock(); defer { holdsLock.unlock() }
-        guard let hold = holds[name] else { return }
+        holdsLock.lock()
+        guard let hold = holds[name] else {
+            holdsLock.unlock()
+            return
+        }
         hold.viewers -= 1
         if hold.viewers > 0 {
+            holdsLock.unlock()
             return
         }
         if !isRunning || giveBackAfter == 0 {
-            giveBack(name)
+            holdsLock.unlock()
+            giveBack(name) // daemon I/O: not under the lock
             return
         }
         let item = DispatchWorkItem { [weak self] in self?.giveBack(name) }
         hold.giveBack = item
+        holdsLock.unlock()
         giveBacks.asyncAfter(deadline: .now() + giveBackAfter, execute: item)
     }
 
     /// Gives `name` its size from before the phones came, unless something else (the app's
     /// window) has resized it since, or a phone is watching it again.
     private func giveBack(_ name: String) {
-        holdsLock.lock(); defer { holdsLock.unlock() }
+        // The bookkeeping under the lock; the screen and resize calls go to the daemon and
+        // may block, so they run after it is released.
+        holdsLock.lock()
         guard let hold = holds[name], hold.viewers <= 0 else {
+            holdsLock.unlock()
             return
         }
         hold.giveBack?.cancel()
         holds.removeValue(forKey: name)
+        holdsLock.unlock()
         do {
             if let view = try backend.screen(name), view.columns == hold.phoneColumns, view.rows == hold.phoneRows {
                 try backend.resize(name, hold.columns, hold.rows)

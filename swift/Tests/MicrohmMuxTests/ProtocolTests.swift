@@ -42,7 +42,7 @@ final class ProtocolTests: XCTestCase {
     }
 
     func testRoundTripsEveryFrameTypeInOrder() throws {
-        let bytes = wire([Frame(.REQUEST, Array(#"{"op":"ping"}"#.utf8)), Frame(.DATA_OUT, [0, 1, 2, 0xff]),
+        let bytes = try wire([Frame(.REQUEST, Array(#"{"op":"ping"}"#.utf8)), Frame(.DATA_OUT, [0, 1, 2, 0xff]),
                           Frame(.DETACH), Frame(.SESSION_EXITED, Array(#"{"exitCode":3}"#.utf8))])
         let codec = reader(bytes)
         let first = try XCTUnwrap(try codec.read())
@@ -58,14 +58,14 @@ final class ProtocolTests: XCTestCase {
         XCTAssertNil(try codec.read(), "clean EOF at a frame boundary is nil")
     }
 
-    func testTheHeaderIsABigEndianLengthOfTypePlusPayloadThenTheType() {
-        XCTAssertEqual([0, 0, 0, 3, 17, 0x41, 0x42], wire([Frame(.DATA_IN, [0x41, 0x42])]))
-        XCTAssertEqual([0, 0, 0, 1, 19], wire([Frame(.DETACH)]))
+    func testTheHeaderIsABigEndianLengthOfTypePlusPayloadThenTheType() throws {
+        XCTAssertEqual([0, 0, 0, 3, 17, 0x41, 0x42], try wire([Frame(.DATA_IN, [0x41, 0x42])]))
+        XCTAssertEqual([0, 0, 0, 1, 19], try wire([Frame(.DETACH)]))
     }
 
     func testLargePayloadsGoOutWhole() throws {
         let payload = (0..<200_000).map { UInt8($0 & 0xff) }
-        let codec = reader(wire([Frame(.DATA_OUT, payload)]))
+        let codec = reader(try wire([Frame(.DATA_OUT, payload)]))
         XCTAssertEqual(payload, try codec.read()?.payload)
     }
 
@@ -76,7 +76,7 @@ final class ProtocolTests: XCTestCase {
     }
 
     func testTruncatedFrameIsAnError() throws {
-        let full = wire([Frame(.DATA_IN, Array("hello world".utf8))])
+        let full = try wire([Frame(.DATA_IN, Array("hello world".utf8))])
         XCTAssertThrowsError(try reader(Array(full.dropLast(3))).read())
         XCTAssertThrowsError(try reader(Array(full.prefix(4))).read())
         // Fewer than four bytes cannot be told from a clean EOF: the codec reports nil.

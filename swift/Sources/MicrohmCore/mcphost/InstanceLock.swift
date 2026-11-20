@@ -102,7 +102,9 @@ public enum HostOwner {
 
         static func decode(_ text: String) -> Record? {
             let parts = JavaText.strip(text).split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" })
-            guard parts.count == 2, let pid = Int64(parts[0]), let start = Int64(parts[1]) else {
+            // A pid must fit pid_t: a corrupt file is no record, never a trap.
+            guard parts.count == 2, let pid = Int64(parts[0]), let start = Int64(parts[1]),
+                  pid > 0, pid <= Int64(Int32.max) else {
                 return nil
             }
             return Record(pid, start)
@@ -125,9 +127,10 @@ public enum HostOwner {
 
     /// When process `pid` started, in epoch milliseconds; nil when there is no such process.
     static func startMillis(_ pid: Int64) -> Int64? {
+        guard pid > 0, let pid32 = Int32(exactly: pid) else { return nil }
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid32]
         guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else {
             return nil
         }

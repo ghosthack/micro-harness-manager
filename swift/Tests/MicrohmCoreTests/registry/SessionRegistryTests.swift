@@ -242,4 +242,44 @@ final class SessionRegistryTests: XCTestCase {
         XCTAssertTrue(saved.contains("must-survive"))
         XCTAssertEqual("resume-foo", SessionRegistry.load(file).find("mhm-foo")!.harnessSessionId)
     }
+
+    func testACreatedAtOutsideInstantsRangeMakesTheEntryUnreadableNotACrash() throws {
+        let file = dir.appendingPathComponent("sessions.json")
+        try writeString(file, """
+            {"sessions": [
+              {"sessionName": "mhm-ok", "projectPath": "/a", "harnessType": "claude-code",
+               "createdAt": 1785000000},
+              {"sessionName": "mhm-year", "projectPath": "/b", "harnessType": "claude-code",
+               "createdAt": "300000000000-01-01T00:00:00Z"},
+              {"sessionName": "mhm-num", "projectPath": "/c", "harnessType": "claude-code",
+               "createdAt": 1e300},
+              {"sessionName": "mhm-neg", "projectPath": "/d", "harnessType": "claude-code",
+               "createdAt": -1e300}
+            ]}
+
+            """)
+
+        let registry = SessionRegistry.load(file)
+        XCTAssertEqual(["mhm-ok"], registry.sessions().map(\.sessionName))
+        // the unreadable ones are kept as they were across a save
+        registry.put(SessionEntry("mhm-new", "/e", .claudeCode, nil, epoch))
+        let saved = try readString(file)
+        XCTAssertTrue(saved.contains("300000000000-01-01T00:00:00Z"), saved)
+        XCTAssertTrue(saved.contains("mhm-num"), saved)
+        XCTAssertTrue(saved.contains("mhm-neg"), saved)
+    }
+
+    func testIsoInstantStaysWithinInstantsRange() {
+        XCTAssertNil(IsoInstant.parse("300000000000-01-01T00:00:00Z"))
+        XCTAssertNil(IsoInstant.parse("-300000000000-01-01T00:00:00.5Z"))
+        XCTAssertNil(IsoInstant.parse("1000000001-01-01T00:00:00Z"))
+        XCTAssertNotNil(IsoInstant.parse("1000000000-12-31T23:59:59.123456Z"))
+        XCTAssertNotNil(IsoInstant.parse("-1000000000-01-01T00:00:00Z"))
+        XCTAssertEqual("2026-08-01T00:00:00.123Z", IsoInstant.format(IsoInstant.parse("2026-08-01T00:00:00.123Z")!))
+        // formatting never traps, whatever the Date holds
+        for seconds in [1e300, -1e300, Double.infinity, -Double.infinity, Double.nan, 1e16, -1e16] {
+            XCTAssertFalse(IsoInstant.format(Date(timeIntervalSince1970: seconds)).isEmpty, "\(seconds)")
+        }
+        XCTAssertEqual("1970-01-01T00:00:00Z", IsoInstant.format(Date(timeIntervalSince1970: .nan)))
+    }
 }

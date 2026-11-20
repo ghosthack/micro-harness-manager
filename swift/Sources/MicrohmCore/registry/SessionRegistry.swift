@@ -223,14 +223,23 @@ public final class SessionRegistry: @unchecked Sendable {
             }
             createdAt = d
         case .int(let seconds):
-            createdAt = Date(timeIntervalSince1970: Double(seconds))
+            createdAt = try epochSeconds(Double(seconds))
         case .double(let seconds):
-            createdAt = Date(timeIntervalSince1970: seconds)
+            createdAt = try epochSeconds(seconds)
         default:
             throw BindError(description: "createdAt is not an instant")
         }
         return SessionEntry(sessionName, try text(node, "projectPath") ?? "", type,
                             try text(node, "harnessSessionId"), createdAt, try text(node, "displayName"))
+    }
+
+    /// A numeric `createdAt` (epoch seconds) as `Instant.ofEpochSecond` takes it: outside
+    /// `Instant`'s range, or not a number at all, the entry is unreadable.
+    private static func epochSeconds(_ seconds: Double) throws -> Date {
+        guard seconds.isFinite, seconds >= Double(IsoInstant.MIN_SECOND), seconds <= Double(IsoInstant.MAX_SECOND) else {
+            throw BindError(description: "createdAt is out of range: \(seconds)")
+        }
+        return Date(timeIntervalSince1970: seconds)
     }
 
     /// A String property as Jackson binds it: null/missing is nil, scalars coerce to text,

@@ -26,7 +26,8 @@ final class AttachedClient: SessionClient, @unchecked Sendable {
     private static let ERROR_DELIVERY_GRACE: TimeInterval = 1
 
     /// Upper bound on the payload of one DATA_OUT frame assembled from several queued
-    /// chunks; a single larger chunk (e.g. a snapshot) still goes out whole.
+    /// chunks; a single larger chunk (e.g. a snapshot) still goes out whole, split only at
+    /// `Frame.MAX_PAYLOAD` (the wire allows any chunking of the byte stream).
     static let MAX_BATCH_BYTES = 64 * 1024
 
     private let session: Session
@@ -105,7 +106,12 @@ final class AttachedClient: SessionClient, @unchecked Sendable {
 
     func onExit(_ exitCode: Int32) {
         let json = Json.object().with(MuxProtocol.F_NAME, sessionName).with(MuxProtocol.F_EXIT_CODE, exitCode)
-        terminate(Frame.json(.SESSION_EXITED, json))
+        do {
+            terminate(try Frame.json(.SESSION_EXITED, json))
+        } catch {
+            Log.warn("cannot frame the exit of \(sessionName): \(error)", tag: "mux")
+            close()
+        }
     }
 
     /// Stops the writer and closes the socket; idempotent. Called by the connection when its
@@ -146,7 +152,13 @@ final class AttachedClient: SessionClient, @unchecked Sendable {
                     return
                 }
                 if !isEmpty {
-                    next = Frame(.DATA_OUT, pollBatch())
+                    // pollBatch never exceeds MAX_PAYLOAD, so this cannot throw; were it to,
+                    // only this connection ends.
+                    guard let frame = try? Frame(.DATA_OUT, pollBatch()) else {
+                        lock.unlock()
+                        return
+                    }
+                    next = frame
                     break
                 }
                 if behind && !resyncRequested {
@@ -187,8 +199,15 @@ final class AttachedClient: SessionClient, @unchecked Sendable {
 
     /// Must hold `lock`; the queue must not be empty. Takes the head chunk and, while the
     /// total stays within `MAX_BATCH_BYTES`, the chunks queued behind it, so a backlog goes
-    /// out as a few large frames rather than one frame per pump read.
+    /// out as a few large frames rather than one frame per pump read. A head chunk over
+    /// `Frame.MAX_PAYLOAD` (a large snapshot) is taken a frame's worth at a time.
     private func pollBatch() -> [UInt8] {
+        if queue[head].count > Frame.MAX_PAYLOAD {
+            let piece = Array(queue[head][0..<Frame.MAX_PAYLOAD])
+            queue[head] = Array(queue[head][Frame.MAX_PAYLOAD...])
+            queued -= piece.count
+            return piece
+        }
         var batch = queue[head]
         head += 1
         while head < queue.count && batch.count + queue[head].count <= AttachedClient.MAX_BATCH_BYTES {
@@ -239,8 +258,10 @@ final class AttachedClient: SessionClient, @unchecked Sendable {
             Thread.sleep(forTimeInterval: Double(due - now) / 1e9)
         }
         Log.info("client of \(sessionName) stayed behind for \(Int(behindTimeout)) s; dropping it", tag: "mux")
-        terminate(Frame.json(.RESPONSE, Json.error("client fell behind and did not drain within "
-                                                   + "\(Int(behindTimeout)) s; detached")))
+        if let frame = try? Frame.json(.RESPONSE, Json.error("client fell behind and did not drain within "
+                                                             + "\(Int(behindTimeout)) s; detached")) {
+            terminate(frame)
+        }
         lock.lock()
         let deadline = Date(timeIntervalSinceNow: AttachedClient.ERROR_DELIVERY_GRACE)
         while !writerDone {

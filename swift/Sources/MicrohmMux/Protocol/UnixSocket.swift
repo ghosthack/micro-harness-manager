@@ -92,6 +92,16 @@ public final class UnixSocket: @unchecked Sendable {
         return !closing
     }
 
+    /// Makes a read that waits longer than `seconds` throw ("read timed out"); 0 = never.
+    /// For request/response connections only: attach and watch streams may idle for ever.
+    func setReceiveTimeout(_ seconds: TimeInterval) {
+        if !enter() { return }
+        defer { exit() }
+        let whole = max(0, seconds)
+        var timeout = timeval(tv_sec: Int(whole), tv_usec: Int32((whole - Double(Int(whole))) * 1_000_000))
+        _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    }
+
     /// Up to `count` bytes; 0 at end of stream (or once closed).
     func read(_ buffer: UnsafeMutableRawPointer, _ count: Int) throws -> Int {
         if !enter() { return 0 }
@@ -102,6 +112,7 @@ public final class UnixSocket: @unchecked Sendable {
             let e = errno
             if e == EINTR { continue }
             if e == ECONNRESET || e == ENOTCONN || e == EBADF { return 0 }
+            if e == EAGAIN || e == EWOULDBLOCK { throw MuxIOError("read timed out") }
             throw MuxIOError("read: \(errnoText(e))")
         }
     }

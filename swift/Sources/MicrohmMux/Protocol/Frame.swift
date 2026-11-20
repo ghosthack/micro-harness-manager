@@ -49,15 +49,20 @@ public struct Frame: Sendable {
     public let type: FrameType
     public let payload: [UInt8]
 
-    public init(_ type: FrameType, _ payload: [UInt8] = []) {
-        precondition(payload.count <= Frame.MAX_PAYLOAD, "frame payload too large: \(payload.count)")
+    /// Throws (Java's `IllegalArgumentException`) when `payload` is over `MAX_PAYLOAD`:
+    /// the caller ends that one connection, or chunks / answers with an error, never the
+    /// whole process.
+    public init(_ type: FrameType, _ payload: [UInt8] = []) throws {
+        if payload.count > Frame.MAX_PAYLOAD {
+            throw MuxIOError("frame payload too large: \(payload.count)")
+        }
         self.type = type
         self.payload = payload
     }
 
-    public static func of(_ type: FrameType, _ payload: [UInt8]) -> Frame { Frame(type, payload) }
+    public static func of(_ type: FrameType, _ payload: [UInt8]) throws -> Frame { try Frame(type, payload) }
 
-    public static func json(_ type: FrameType, _ object: JSONObject) -> Frame { Frame(type, Json.bytes(object)) }
+    public static func json(_ type: FrameType, _ object: JSONObject) throws -> Frame { try Frame(type, Json.bytes(object)) }
 
     public var payloadAsString: String { String(decoding: payload, as: UTF8.self) }
 }
@@ -129,7 +134,7 @@ public final class FrameCodec: @unchecked Sendable {
             let n = try payload.withUnsafeMutableBytes { try readFully($0.baseAddress!, $0.count) }
             if n < payload.count { throw MuxIOError("end of stream inside a frame", isEOF: true) }
         }
-        return Frame(type, payload)
+        return try Frame(type, payload)
     }
 
     /// Writes one frame. Thread-safe.

@@ -290,8 +290,15 @@ final class ClientConnection: @unchecked Sendable {
         }
     }
 
-    private func response(_ body: JSONObject) -> Frame {
-        Frame(.RESPONSE, Json.bytes(body))
+    /// A reply too large for one frame (a huge `capture format:ansi`) is answered with an
+    /// error instead; the connection carries on.
+    private func response(_ body: JSONObject) throws -> Frame {
+        let bytes = Json.bytes(body)
+        if bytes.count > Frame.MAX_PAYLOAD {
+            return try Frame(.RESPONSE, Json.bytes(Json.error("response too large: \(bytes.count) bytes"
+                                                              + " (at most \(Frame.MAX_PAYLOAD))")))
+        }
+        return try Frame(.RESPONSE, bytes)
     }
 }
 

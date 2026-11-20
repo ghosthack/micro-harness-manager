@@ -54,6 +54,9 @@ final class SocketAttachedSession: AttachedSession, @unchecked Sendable {
     /// sees a slow client (see `InboundPipe`).
     static let PIPE_CAPACITY = 1024 * 1024
 
+    /// The largest DATA_IN payload `write` sends.
+    static let MAX_INPUT_CHUNK = 1024 * 1024
+
     let sessionName: String
     private let connection: ServerConnection
     private let codec: FrameCodec
@@ -77,8 +80,19 @@ final class SocketAttachedSession: AttachedSession, @unchecked Sendable {
         try pipe.read(buffer)
     }
 
+    /// A paste can be larger than a frame may carry: it goes out in `MAX_INPUT_CHUNK`
+    /// pieces (the wire allows any chunking of the byte stream).
     func write(_ bytes: [UInt8]) throws {
-        try send(Frame(.DATA_IN, bytes))
+        if bytes.count <= SocketAttachedSession.MAX_INPUT_CHUNK {
+            try send(Frame(.DATA_IN, bytes))
+            return
+        }
+        var offset = 0
+        while offset < bytes.count {
+            let end = min(bytes.count, offset + SocketAttachedSession.MAX_INPUT_CHUNK)
+            try send(Frame(.DATA_IN, Array(bytes[offset..<end])))
+            offset = end
+        }
     }
 
     func resize(columns: Int, rows: Int) throws {

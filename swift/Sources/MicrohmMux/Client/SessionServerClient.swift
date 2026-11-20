@@ -25,6 +25,14 @@ public final class SessionServerClient: @unchecked Sendable {
 
     public static let CONNECT_TIMEOUT_SECONDS: TimeInterval = 10
 
+    /// How long a request/response call waits for a reply that has stopped coming before it
+    /// gives up (a wedged or stopped server must not hang the app's main thread at quit).
+    /// `awaitQuiet` waits this long beyond its own timeout. Attach and watch never time out.
+    public static let REQUEST_TIMEOUT_SECONDS: TimeInterval = 10
+
+    /// `REQUEST_TIMEOUT_SECONDS` unless a test shortens it.
+    var requestTimeout: TimeInterval = SessionServerClient.REQUEST_TIMEOUT_SECONDS
+
     /// How a server answers an operation it does not know (every build so far).
     private static let UNKNOWN_OP_PREFIX = "unknown op: "
 
@@ -196,7 +204,13 @@ public final class SessionServerClient: @unchecked Sendable {
             .with(MuxProtocol.F_SINCE_BYTES, sinceBytes)
             .with(MuxProtocol.F_QUIET_MS, quietMs)
             .with(MuxProtocol.F_TIMEOUT_MS, timeoutMs)
-        guard let reply = try request(MuxProtocol.OP_WAIT, args) else { throw SessionServerException.noServer(name) }
+        // The server holds the reply for up to the (clamped) timeout: the read may wait
+        // that long on top of the usual allowance.
+        let holdSeconds = Double(max(0, min(MuxProtocol.WAIT_MAX_MS, timeoutMs))) / 1000
+        guard let reply = try request(MuxProtocol.OP_WAIT, args,
+                                      timeout: requestTimeout + holdSeconds) else {
+            throw SessionServerException.noServer(name)
+        }
         return WaitResult(quiet: JsonDecoding.path(reply, MuxProtocol.F_QUIET).asBoolean(false),
                           outputBytes: JsonDecoding.path(reply, MuxProtocol.F_OUTPUT_BYTES).asLong(0),
                           alive: JsonDecoding.path(reply, MuxProtocol.F_ALIVE).asBoolean(false))
@@ -342,11 +356,11 @@ public final class SessionServerClient: @unchecked Sendable {
 
     /// One request/response over a fresh connection. Nil means no server is running; an
     /// `ok:false` reply (mismatch included) becomes a `SessionServerException`.
-    private func request(_ op: String, _ args: JSONObject?) throws -> JSONObject? {
+    private func request(_ op: String, _ args: JSONObject?, timeout: TimeInterval? = nil) throws -> JSONObject? {
         guard let connection = try ServerConnection.open(socketFile) else { return nil }
         defer { connection.close() }
         do {
-            let reply = try connection.request(op, args)
+            let reply = try connection.request(op, args, timeout: timeout ?? requestTimeout)
             try checkOk(reply)
             return reply
         } catch is ServerConnection.NoServerError {

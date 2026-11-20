@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: SettingsWindowController?
     private let statusItem = StatusItemController()
     private let settingsQueue = DispatchQueue(label: "microhm-app-settings")
+    /// How long quitting waits for the backend's shutdown (servers, background host).
+    private static let SHUTDOWN_WAIT_SECONDS: Double = 3
     private let serviceQueue = DispatchQueue(label: "microhm-services")
     private var statusTimer: Timer?
 
@@ -289,8 +291,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusTimer?.invalidate()
         mainWindow?.shutdown()
         statusItem.remove()
-        // stops serving and hands MCP to the background host while sessions live
-        model?.backend.shutdown()
+        // stops serving and hands MCP to the background host while sessions live. Daemon
+        // calls are involved (the phone's size-backs, the host's session check): off the
+        // main thread and bounded, so a wedged daemon cannot hang quitting.
+        if let backend = model?.backend {
+            let done = DispatchSemaphore(value: 0)
+            DispatchQueue.global(qos: .userInitiated).async {
+                backend.shutdown()
+                done.signal()
+            }
+            if done.wait(timeout: .now() + AppDelegate.SHUTDOWN_WAIT_SECONDS) == .timedOut {
+                Log.warn("quitting before the backend finished shutting down", tag: "app")
+            }
+        }
         settingsQueue.sync {}
         Log.info("quit", tag: "app")
         InstanceLock.release(RegistryPaths.resolve())

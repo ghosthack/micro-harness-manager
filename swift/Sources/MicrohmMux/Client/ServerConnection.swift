@@ -33,8 +33,14 @@ final class ServerConnection: @unchecked Sendable {
     }
 
     /// Sends `op` with `args` (plus the protocol stamp) and returns the response body,
-    /// which may be `ok:false`.
-    func request(_ op: String, _ args: JSONObject?) throws -> JSONObject {
+    /// which may be `ok:false`. With a `timeout`, a server that stops answering (wedged,
+    /// stopped) makes this throw after that long without a byte instead of blocking the
+    /// caller for ever; the read timeout stays on the socket, so only connections that are
+    /// done after the response pass one (not attach or watch).
+    func request(_ op: String, _ args: JSONObject?, timeout: TimeInterval? = nil) throws -> JSONObject {
+        if let timeout {
+            socket.setReceiveTimeout(timeout)
+        }
         var body = args ?? Json.object()
         body[MuxProtocol.F_OP] = .string(op)
         body[MuxProtocol.F_PROTOCOL] = .int(Int64(MuxProtocol.VERSION))
