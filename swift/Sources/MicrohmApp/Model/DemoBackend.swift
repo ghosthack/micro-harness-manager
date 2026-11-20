@@ -235,3 +235,27 @@ enum DemoScreens {
         """
     }
 }
+
+extension DemoBackend {
+    /// Canned budgets, so the demo never calls a provider's usage API (repeated launches
+    /// would get the real account rate-limited). Resets are relative to now.
+    @Sendable static func usage(_ harness: HarnessType) throws -> UsageSnapshot {
+        let now = Date()
+        func hours(_ h: Double) -> Date { now.addingTimeInterval(h * 3600) }
+        switch harness {
+        case .claudeCode:
+            return UsageSnapshot("Claude Code subscription", "Demo figures", [
+                .init("Current session (5 hours)", 12, hours(3.4), nil),
+                .init("Current week (all models)", 41, hours(113.2), nil),
+                .init("Current week (Fable)", 8, hours(113.2), nil),
+            ], [.init("Extra usage", "Disabled")], nil)
+        case .codex:
+            return UsageSnapshot("Codex account", "Demo figures", [
+                .init("Codex · 5 hours", 27, hours(1.6), nil),
+                .init("Codex · 1 week", 63, hours(52), nil),
+            ], [.init("Plan", "Plus")], nil)
+        default:
+            return try HarnessUsageService().load(harness)
+        }
+    }
+}

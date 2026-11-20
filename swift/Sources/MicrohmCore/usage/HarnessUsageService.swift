@@ -6,10 +6,18 @@ public final class HarnessUsageService: @unchecked Sendable {
     private let claude = ClaudeUsageClient()
     private let codex = CodexUsageClient()
 
-    public init() {}
+    private let override: (@Sendable (HarnessType) throws -> UsageSnapshot)?
+
+    /// `loader` replaces every live source (the demo mode's canned figures, tests).
+    public init(loader: (@Sendable (HarnessType) throws -> UsageSnapshot)? = nil) {
+        self.override = loader
+    }
 
     /// Blocking (an HTTP round trip or an app-server exchange) — never on the main thread.
     public func load(_ harness: HarnessType) throws -> UsageSnapshot {
+        if let override {
+            return try override(harness)
+        }
         switch harness {
         case .claudeCode:
             return try claude.load()

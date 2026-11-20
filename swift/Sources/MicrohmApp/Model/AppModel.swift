@@ -76,11 +76,12 @@ final class AppModel: @unchecked Sendable {
 
     let registry: SessionRegistry
     let backend: SessionBackend
-    let usage = HarnessUsageService()
+    let usage: HarnessUsageService
 
-    init(registry: SessionRegistry, backend: SessionBackend) {
+    init(registry: SessionRegistry, backend: SessionBackend, usage: HarnessUsageService = HarnessUsageService()) {
         self.registry = registry
         self.backend = backend
+        self.usage = usage
     }
 
     /// Picks the backend: `MICROHM_DEMO=1` for the canned demo sessions (screenshots,
@@ -90,7 +91,8 @@ final class AppModel: @unchecked Sendable {
         let registry = SessionRegistry.load()
         let env = ProcessInfo.processInfo.environment
         if env["MICROHM_DEMO"] == "1" {
-            return AppModel(registry: registry, backend: DemoBackend(registry: registry))
+            return AppModel(registry: registry, backend: DemoBackend(registry: registry),
+                            usage: HarnessUsageService(loader: DemoBackend.usage))
         }
         return AppModel(registry: registry, backend: CoreBackendFactory.make(registry: registry))
     }
