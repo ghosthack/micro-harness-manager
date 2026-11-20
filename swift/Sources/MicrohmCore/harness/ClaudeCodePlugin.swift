@@ -8,7 +8,7 @@ import Foundation
 /// nil falls back to the generic behavioral heuristics.
 public final class ClaudeCodePlugin: HarnessPlugin, @unchecked Sendable {
 
-    static let patternsVersion = "2026-08-17.6"
+    static let patternsVersion = "2026-11-20.1"
 
     private static let workingIndicator = JRegex(#"(?i)esc to interrupt"#)
 
@@ -17,6 +17,9 @@ public final class ClaudeCodePlugin: HarnessPlugin, @unchecked Sendable {
             + #"|allow this|\[y/n]|\(y/n\))"#)
 
     private static let optionSelector = JRegex(#"[❯›]\s*\d+\.\s"#)
+    /// The footer under Claude Code's unnumbered menus, the folder trust prompt among them
+    /// (`❯ No, exit` / `Yes, I trust this folder`), which `optionSelector` misses.
+    private static let menuFooter = JRegex(#"(?i)enter to confirm\s*·\s*esc to (cancel|exit|go back)"#)
 
     private static let backgroundWork = JRegex(#"(?im)(·\s*\d+\s+shells?\s*·|^\s*◯\s+\S+)"#)
 
@@ -141,7 +144,7 @@ public final class ClaudeCodePlugin: HarnessPlugin, @unchecked Sendable {
         if ClaudeCodePlugin.approval.find(tailText) {
             return Classification(.waitingForInput, .high, "permission dialog shape (patterns \(v))", .plugin)
         }
-        if ClaudeCodePlugin.optionSelector.find(tailText) {
+        if ClaudeCodePlugin.optionSelector.find(tailText) || ClaudeCodePlugin.menuFooter.find(tailText) {
             return Classification(.waitingForInput, .high, "option selector widget (patterns \(v))", .plugin)
         }
         let content = tail.filter { !ClaudeCodePlugin.isChrome($0) }
