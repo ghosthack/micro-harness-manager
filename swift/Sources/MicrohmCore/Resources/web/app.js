@@ -969,7 +969,8 @@ async function sendMessage(event) {
   }
 }
 
-// Attach: the file goes to Microhm, which keeps it and answers where; that path goes into
+// Attach: the file goes to Microhm, which keeps it (in the session's project, under a
+// .microhm folder git ignores) and answers where; that path goes into
 // the message at the cursor, so the agent can open it (a screenshot of the problem, say).
 async function attachFiles() {
   const input = $("attach-input");
@@ -994,7 +995,9 @@ async function attachFiles() {
 async function uploadFile(file) {
   let response;
   try {
-    response = await fetch("/api/upload?name=" + encodeURIComponent(file.name || ""), {
+    // into the session's project, where its agent can read it without asking
+    response = await fetch("/api/upload?session=" + encodeURIComponent(current || "")
+        + "&name=" + encodeURIComponent(file.name || ""), {
       method: "POST",
       headers: { "Content-Type": file.type || "application/octet-stream" },
       body: file,

@@ -709,8 +709,9 @@ public final class PhoneServer implements AutoCloseable {
 
     /**
      * Keeps the request body as a file (a screenshot, say) and answers its absolute path, for
-     * the page to put in the message. {@code ?name=} is the file's own name, kept for its
-     * extension and as a hint in the saved name.
+     * the page to put in the message. {@code ?session=} puts it in that session's project
+     * ({@code .microhm/uploads}); {@code ?name=} is the file's own name, kept for its extension
+     * and as a hint in the saved name.
      */
     private void upload(HttpExchange ex) throws IOException {
         String length = ex.getRequestHeaders().getFirst("Content-Length");
@@ -726,7 +727,7 @@ public final class PhoneServer implements AutoCloseable {
         }
         Path saved;
         try (InputStream body = ex.getRequestBody()) {
-            saved = new PhoneUploads(uploadDir(), java.time.Clock.systemDefaultZone())
+            saved = uploadsFor(query(ex, "session"))
                     .save(body, query(ex, "name"), ex.getRequestHeaders().getFirst("Content-Type"));
         } catch (PhoneUploads.TooLarge e) {
             sendError(ex, 413, e.getMessage());
@@ -738,6 +739,23 @@ public final class PhoneServer implements AutoCloseable {
         }
         LOG.info("kept a file from the phone page at {}", saved);
         sendJson(ex, 200, json.createObjectNode().put("ok", true).put("path", saved.toString()));
+    }
+
+    /** The session's project's uploads, else the folder beside the registry. */
+    private PhoneUploads uploadsFor(String session) {
+        java.time.Clock clock = java.time.Clock.systemDefaultZone();
+        if (session != null) {
+            try {
+                for (var summary : backend.sessions()) {
+                    if (summary.name().equals(session) && PhoneUploads.usableProject(summary.project())) {
+                        return PhoneUploads.inProject(Path.of(summary.project()), clock);
+                    }
+                }
+            } catch (RuntimeException e) {
+                LOG.debug("could not look up {}'s folder for an upload", session, e);
+            }
+        }
+        return new PhoneUploads(uploadDir(), clock);
     }
 
     private JsonNode readJson(HttpExchange ex) throws IOException {

@@ -1,8 +1,9 @@
 import Foundation
 
 /// Files sent from the phone page (a screenshot of the problem, say), kept in one folder so a
-/// prompt can name them by path. Each gets a fresh name; files older than `keep` are removed
-/// as new ones arrive. Java's `PhoneUploads`.
+/// prompt can name them by path: the session's project's `.microhm/uploads`, where the agent
+/// may read without asking, else a folder in Microhm's home. Each gets a fresh name; files
+/// older than `keep` are removed as new ones arrive. Java's `PhoneUploads`.
 struct PhoneUploads {
 
     /// Big enough for a phone photo or a short screen recording.
@@ -17,8 +18,35 @@ struct PhoneUploads {
         "video/mp4": ".mp4",
     ]
 
+    /// The hidden folder in a project; it ignores itself in git (`.gitignore`: `*`).
+    static let projectFolder = ".microhm"
+
     let dir: URL
     var now: () -> Date = Date.init
+    /// A folder to keep out of git once it exists, or nil.
+    var ignored: URL?
+
+    init(dir: URL) {
+        self.dir = dir
+    }
+
+    /// Uploads kept in `project/.microhm/uploads`.
+    static func inProject(_ project: URL) -> PhoneUploads {
+        let folder = project.appendingPathComponent(projectFolder, isDirectory: true)
+        var uploads = PhoneUploads(dir: folder.appendingPathComponent("uploads", isDirectory: true))
+        uploads.ignored = folder
+        return uploads
+    }
+
+    /// Whether `project` is a folder uploads can go into.
+    static func usableProject(_ project: String?) -> Bool {
+        guard let project, project.hasPrefix("/") else {
+            return false
+        }
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: project, isDirectory: &isDir) && isDir.boolValue
+            && FileManager.default.isWritableFile(atPath: project)
+    }
 
     struct Failure: LocalizedError {
         let errorDescription: String?
@@ -33,6 +61,12 @@ struct PhoneUploads {
             throw Failure(errorDescription: PhoneUploads.tooLargeMessage)
         }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let ignored {
+            let gitignore = ignored.appendingPathComponent(".gitignore")
+            if !FileManager.default.fileExists(atPath: gitignore.path) {
+                try Data("# Microhm's own files (uploads from the phone page)\n*\n".utf8).write(to: gitignore)
+            }
+        }
         prune()
         let target = dir.appendingPathComponent(fileName(name, contentType))
         try body.write(to: target, options: .withoutOverwriting)

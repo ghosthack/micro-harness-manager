@@ -21,7 +21,7 @@ import MicrohmShared
 /// - `GET /api/close-check?session=` says whether a session can be closed now and why not;
 ///   `POST /api/close {session}` closes it politely or refuses (409);
 /// - `POST /api/upload?name=` keeps the body as a file and answers its path, for a prompt
-///   to name (a screenshot of the problem, say);
+///   to name (a screenshot of the problem, say), in `?session=`'s project when it can;
 /// - `GET /api/sessions` also lists the saved sessions that are not running, as `ended`, to
 ///   resume.
 ///
@@ -664,13 +664,14 @@ public final class PhoneServer: @unchecked Sendable {
     }
 
     /// Keeps the request body as a file and answers its absolute path, for the page to put
-    /// in the message. `?name=` is the file's own name, kept for its extension and as a hint.
+    /// in the message. `?session=` puts it in that session's project (`.microhm/uploads`);
+    /// `?name=` is the file's own name, kept for its extension and as a hint.
     private func upload(_ ex: HttpExchange) throws {
         guard let body = try ex.readBody(limit: PhoneUploads.maxBytes) else {
             try sendError(ex, 413, PhoneUploads.tooLargeMessage)
             return
         }
-        let uploads = PhoneUploads(dir: uploadDir ?? MicrohmPaths.uploadsDir)
+        let uploads = uploadsFor(query(ex, "session"))
         let saved: URL
         do {
             saved = try uploads.save(body, name: query(ex, "name"), contentType: ex.header("Content-Type"))
@@ -680,6 +681,15 @@ public final class PhoneServer: @unchecked Sendable {
         }
         Log.info("kept a file from the phone page at \(saved.path)", tag: "phone")
         try sendJson(ex, 200, .obj([("ok", .bool(true)), ("path", .string(saved.path))]))
+    }
+
+    /// The session's project's uploads, else the folder in Microhm's home.
+    private func uploadsFor(_ session: String?) -> PhoneUploads {
+        if let session, let summary = (try? backend.sessions())?.first(where: { $0.name == session }),
+           PhoneUploads.usableProject(summary.project) {
+            return PhoneUploads.inProject(URL(fileURLWithPath: summary.project, isDirectory: true))
+        }
+        return PhoneUploads(dir: uploadDir ?? MicrohmPaths.uploadsDir)
     }
 
     // MARK: - helpers

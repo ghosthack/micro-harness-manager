@@ -78,6 +78,7 @@ class PhoneServerTest {
         }
 
         volatile boolean failSessions;
+        volatile String project = "/p/a";
         /** When set, the next resize waits on it (once). */
         final AtomicReference<java.util.concurrent.CountDownLatch> resizeGate = new AtomicReference<>();
         final java.util.concurrent.CountDownLatch resizeEntered = new java.util.concurrent.CountDownLatch(1);
@@ -120,7 +121,7 @@ class PhoneServerTest {
             if (failSessions) {
                 throw new IllegalStateException("daemon down");
             }
-            return List.of(new SessionSummary("hm-a", "alpha", "claude-code", "WAITING_FOR_INPUT", "/p/a"));
+            return List.of(new SessionSummary("hm-a", "alpha", "claude-code", "WAITING_FOR_INPUT", project));
         }
 
         @Override
@@ -389,6 +390,29 @@ class PhoneServerTest {
         assertTrue(saved.getFileName().toString().matches("\\d{8}-\\d{6}-[0-9a-f]{4}-My_Screen_Shot\\.png"),
                 saved.getFileName().toString());
         assertArrayEquals(png, Files.readAllBytes(saved));
+    }
+
+    @Test
+    void anUploadForASessionGoesIntoItsProjectKeptOutOfGit() throws Exception {
+        Path project = Files.createDirectories(web.resolve("project"));
+        backend.project = project.toString();
+        server.uploadDir(web.resolve("elsewhere"));
+        HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri("/api/upload?session=hm-a&name=shot.png"))
+                .header("Cookie", COOKIE).POST(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1, 2})).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, r.statusCode(), r.body());
+        Path saved = Path.of(new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.body()).path("path").asText());
+        assertEquals(project.resolve(".microhm").resolve("uploads"), saved.getParent());
+        assertTrue(Files.readString(project.resolve(".microhm").resolve(".gitignore")).lines().anyMatch("*"::equals));
+        assertFalse(Files.exists(web.resolve("elsewhere")));
+
+        // a session whose folder is gone: the folder beside the registry
+        backend.project = web.resolve("gone").toString();
+        HttpResponse<String> fallback = http.send(HttpRequest.newBuilder(uri("/api/upload?session=hm-a&name=b.png"))
+                .header("Cookie", COOKIE).POST(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1})).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, fallback.statusCode(), fallback.body());
+        assertTrue(fallback.body().contains("elsewhere"), fallback.body());
     }
 
     @Test

@@ -64,7 +64,9 @@ Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and 
     through; a message box; a keypad for menus (Esc, arrows, return, 1/2/3, y/n, tab,
     page up/down, ⌃C) behind the button left of it; a paperclip that sends a photo,
     screenshot or file to Microhm and puts its path in the message, for the agent to open
-    (kept in `uploads` beside the registry for a week, 25 MB at most). While a phone watches a session, the
+    (kept a week, 25 MB at most, in the session's project under `.microhm/uploads`, a folder
+    with its own `.gitignore` so git leaves it alone; beside the registry when the project
+    folder is gone). While a phone watches a session, the
     session runs at the phone's size, so the program lays itself out for it; it gets its
     size back a minute after the last phone leaves (at once when the app quits).
   - *New:* start an agent or a shell in a folder, with an optional name and first message.

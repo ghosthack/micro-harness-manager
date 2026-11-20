@@ -181,7 +181,9 @@ test("an attached file's path goes into the message, and the session can read it
     { name: "Screen Shot.png", mimeType: "image/png", buffer: Buffer.from("e2e-attached-bytes") });
   await page.waitForFunction(() => /^cat \/\S+Screen_Shot\.png $/.test(document.getElementById("message").value));
   const file = (await page.$eval("#message", (e) => e.value)).trim().split(" ")[1];
-  assert.ok(fs.realpathSync(file).startsWith(WORK), `kept in the scratch home, not yours: ${file}`);
+  // in the session's project, in a folder that keeps itself out of git
+  assert.equal(path.dirname(fs.realpathSync(file)), path.join(PROJECT, ".microhm", "uploads"));
+  assert.match(fs.readFileSync(path.join(PROJECT, ".microhm", ".gitignore"), "utf8"), /^\*$/m);
   assert.equal(fs.readFileSync(file, "utf8"), "e2e-attached-bytes");
   await page.click("#send-button");
   await page.waitForFunction(() => document.getElementById("message").value === "");

@@ -20,8 +20,9 @@ import java.util.Map;
 
 /**
  * Files sent from the phone page (a screenshot of the problem, say), kept in one folder so
- * a prompt can name them by path. Each gets a fresh name; files older than {@link #KEEP}
- * are removed as new ones arrive.
+ * a prompt can name them by path: the session's project's {@code .microhm/uploads}, where
+ * the agent may read without asking, else a folder beside the registry. Each gets a fresh
+ * name; files older than {@link #KEEP} are removed as new ones arrive.
  */
 final class PhoneUploads {
 
@@ -36,13 +37,42 @@ final class PhoneUploads {
             "image/heic", ".heic", "application/pdf", ".pdf", "text/plain", ".txt", "video/quicktime", ".mov",
             "video/mp4", ".mp4");
 
+    /** The hidden folder in a project; it ignores itself in git ({@code .gitignore}: {@code *}). */
+    static final String PROJECT_FOLDER = ".microhm";
+
     private final Path dir;
     private final Clock clock;
+    /** A folder to keep out of git once it exists, or null. */
+    private final Path ignored;
     private final SecureRandom random = new SecureRandom();
 
     PhoneUploads(Path dir, Clock clock) {
+        this(dir, clock, null);
+    }
+
+    private PhoneUploads(Path dir, Clock clock, Path ignored) {
         this.dir = dir;
         this.clock = clock;
+        this.ignored = ignored;
+    }
+
+    /** Uploads kept in {@code project/.microhm/uploads}. */
+    static PhoneUploads inProject(Path project, Clock clock) {
+        Path folder = project.resolve(PROJECT_FOLDER);
+        return new PhoneUploads(folder.resolve("uploads"), clock, folder);
+    }
+
+    /** Whether {@code project} is a folder uploads can go into. */
+    static boolean usableProject(String project) {
+        if (project == null || project.isBlank()) {
+            return false;
+        }
+        try {
+            Path path = Path.of(project);
+            return path.isAbsolute() && Files.isDirectory(path) && Files.isWritable(path);
+        } catch (java.nio.file.InvalidPathException e) {
+            return false;
+        }
     }
 
     /** Thrown when the body is larger than {@link #MAX_BYTES}; nothing is kept. */
@@ -55,6 +85,12 @@ final class PhoneUploads {
     /** Saves {@code body} and answers the absolute path it was saved at. */
     Path save(InputStream body, String name, String contentType) throws IOException {
         Files.createDirectories(dir);
+        if (ignored != null) {
+            Path gitignore = ignored.resolve(".gitignore");
+            if (!Files.exists(gitignore)) {
+                Files.writeString(gitignore, "# Microhm's own files (uploads from the phone page)\n*\n");
+            }
+        }
         prune();
         Path target = dir.resolve(fileName(name, contentType));
         long written = 0;
