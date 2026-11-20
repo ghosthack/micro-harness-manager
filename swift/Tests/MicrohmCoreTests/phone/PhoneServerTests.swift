@@ -18,6 +18,7 @@ private final class FakeBackend: PhoneBackend, @unchecked Sendable {
     /// The scrollback, one entry per line ever added.
     private var _history: [String] = []
     @Atomic var failSessions = false
+    @Atomic var project = "/p/a"
     let closed = SvcList<String>()
     let resumed = SvcList<String>()
 
@@ -80,7 +81,7 @@ private final class FakeBackend: PhoneBackend, @unchecked Sendable {
         if failSessions {
             throw Failure(description: "daemon down")
         }
-        return [SessionController.SessionSummary("hm-a", "alpha", "claude-code", "WAITING_FOR_INPUT", "/p/a")]
+        return [SessionController.SessionSummary("hm-a", "alpha", "claude-code", "WAITING_FOR_INPUT", project)]
     }
 
     func screen(_ session: String) throws -> SessionController.ScreenView? {
@@ -130,6 +131,48 @@ final class PhoneServerTests: XCTestCase {
         if let cookie { headers.append(("Cookie", cookie)) }
         if let origin { headers.append(("Origin", origin)) }
         return try SvcHttp.request(server.port, "POST", path, headers: headers, body: json)
+    }
+
+    func testAnUploadIsKeptAndItsPathAnswered() throws {
+        let uploads = web.appendingPathComponent("uploads")
+        server.uploadDir = uploads
+        let locked = try SvcHttp.request(server.port, "POST", "/api/upload?name=a.png", body: "x")
+        XCTAssertEqual(401, locked.status)
+        let r = try SvcHttp.request(server.port, "POST", "/api/upload?name=My%20Screen%20Shot.PNG",
+                                    headers: [("Cookie", PhoneServerTests.COOKIE), ("Content-Type", "image/png")],
+                                    body: "fake png bytes")
+        XCTAssertEqual(200, r.status, r.body)
+        let path = try XCTUnwrap(CoreJSON.parse(Data(r.body.utf8)).path("path").asText(nil))
+        let saved = URL(fileURLWithPath: path)
+        XCTAssertTrue(path.hasPrefix("/"))
+        XCTAssertEqual(uploads.standardizedFileURL.resolvingSymlinksInPath().path,
+                       saved.deletingLastPathComponent().resolvingSymlinksInPath().path)
+        XCTAssertNotNil(saved.lastPathComponent.range(of: #"^\d{8}-\d{6}-[0-9a-f]{4}-My_Screen_Shot\.png$"#,
+                                                      options: .regularExpression), saved.lastPathComponent)
+        XCTAssertEqual("fake png bytes", try String(contentsOf: saved, encoding: .utf8))
+    }
+
+    func testAnUploadForASessionGoesIntoItsProjectKeptOutOfGit() throws {
+        let project = web.appendingPathComponent("project")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        backend.project = project.path
+        server.uploadDir = web.appendingPathComponent("elsewhere")
+        let r = try SvcHttp.request(server.port, "POST", "/api/upload?session=hm-a&name=shot.png",
+                                    headers: [("Cookie", PhoneServerTests.COOKIE)], body: "xy")
+        XCTAssertEqual(200, r.status, r.body)
+        let path = try XCTUnwrap(CoreJSON.parse(Data(r.body.utf8)).path("path").asText(nil))
+        XCTAssertEqual(project.appendingPathComponent(".microhm/uploads").resolvingSymlinksInPath().path,
+                       URL(fileURLWithPath: path).deletingLastPathComponent().resolvingSymlinksInPath().path)
+        let ignore = try String(contentsOf: project.appendingPathComponent(".microhm/.gitignore"), encoding: .utf8)
+        XCTAssertTrue(ignore.split(separator: "\n").contains("*"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: web.appendingPathComponent("elsewhere").path))
+
+        // a session whose folder is gone: the folder in Microhm's home
+        backend.project = web.appendingPathComponent("gone").path
+        let fallback = try SvcHttp.request(server.port, "POST", "/api/upload?session=hm-a&name=b.png",
+                                           headers: [("Cookie", PhoneServerTests.COOKIE)], body: "x")
+        XCTAssertEqual(200, fallback.status, fallback.body)
+        XCTAssertTrue(fallback.body.contains("elsewhere"), fallback.body)
     }
 
     private func stream(_ path: String) throws -> SvcSocket {

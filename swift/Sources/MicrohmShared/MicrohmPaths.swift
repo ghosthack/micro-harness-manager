@@ -36,6 +36,8 @@ public enum MicrohmPaths {
     public static var registryFile: URL { home.appendingPathComponent("sessions.json") }
     public static var settingsFile: URL { home.appendingPathComponent("settings.properties") }
     public static var mcpConfigDir: URL { home.appendingPathComponent("mcp", isDirectory: true) }
+    /// Files sent from the phone page, for prompts to name by path.
+    public static var uploadsDir: URL { home.appendingPathComponent("uploads", isDirectory: true) }
     public static var instanceLock: URL { home.appendingPathComponent("instance.lock") }
     public static var appLog: URL { home.appendingPathComponent("app.log") }
     public static var mcpHostLog: URL { home.appendingPathComponent("mcp-host.log") }

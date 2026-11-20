@@ -969,6 +969,63 @@ async function sendMessage(event) {
   }
 }
 
+// Attach: the file goes to Microhm, which keeps it (in the session's project, under a
+// .microhm folder git ignores) and answers where; that path goes into
+// the message at the cursor, so the agent can open it (a screenshot of the problem, say).
+async function attachFiles() {
+  const input = $("attach-input");
+  const files = Array.from(input.files || []);
+  input.value = ""; // picking the same file again still fires
+  if (!files.length) return;
+  const button = $("attach-button");
+  button.disabled = true;
+  button.classList.add("busy");
+  try {
+    for (const file of files) {
+      insertInMessage(await uploadFile(file));
+    }
+  } catch (e) {
+    failed("session-problem", e);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("busy");
+  }
+}
+
+async function uploadFile(file) {
+  let response;
+  try {
+    // into the session's project, where its agent can read it without asking
+    response = await fetch("/api/upload?session=" + encodeURIComponent(current || "")
+        + "&name=" + encodeURIComponent(file.name || ""), {
+      method: "POST",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+  } catch (e) {
+    throw new Error("Can't reach Microhm. Is it running, and is this phone on your network?");
+  }
+  if (response.status === 401) throw new Locked();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.path) throw new Error(data.error || response.statusText || "The file was not sent");
+  return data.path;
+}
+
+// Puts text at the cursor, with a space on either side where it would touch a word.
+function insertInMessage(text) {
+  const box = $("message");
+  const start = box.selectionStart ?? box.value.length;
+  const end = box.selectionEnd ?? start;
+  const before = box.value.slice(0, start);
+  const after = box.value.slice(end);
+  const lead = before && !/\s$/.test(before) ? " " : "";
+  const trail = after.startsWith(" ") ? "" : " ";
+  box.value = before + lead + text + trail + after;
+  const caret = (before + lead + text + trail).length;
+  box.setSelectionRange(caret, caret);
+  growMessage();
+}
+
 function growMessage() {
   const box = $("message");
   // Measuring collapses the box for a moment; the screen above grows, its scroll position
@@ -1154,6 +1211,8 @@ $("keys").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-keys]");
   if (button) pressKeys([button.dataset.keys]);
 });
+$("attach-button").onclick = () => $("attach-input").click();
+$("attach-input").addEventListener("change", attachFiles);
 $("compose").addEventListener("submit", sendMessage);
 $("message").addEventListener("input", growMessage);
 $("new-form").addEventListener("submit", startSession);

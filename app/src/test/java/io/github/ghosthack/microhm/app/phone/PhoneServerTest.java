@@ -29,6 +29,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PhoneServerTest {
@@ -76,6 +78,7 @@ class PhoneServerTest {
         }
 
         volatile boolean failSessions;
+        volatile String project = "/p/a";
         /** When set, the next resize waits on it (once). */
         final AtomicReference<java.util.concurrent.CountDownLatch> resizeGate = new AtomicReference<>();
         final java.util.concurrent.CountDownLatch resizeEntered = new java.util.concurrent.CountDownLatch(1);
@@ -118,7 +121,7 @@ class PhoneServerTest {
             if (failSessions) {
                 throw new IllegalStateException("daemon down");
             }
-            return List.of(new SessionSummary("hm-a", "alpha", "claude-code", "WAITING_FOR_INPUT", "/p/a"));
+            return List.of(new SessionSummary("hm-a", "alpha", "claude-code", "WAITING_FOR_INPUT", project));
         }
 
         @Override
@@ -370,6 +373,62 @@ class PhoneServerTest {
         }
         // and the original size, not the first phone's, comes back after it leaves
         assertEquals("hm-a 120x40", backend.resizes.get(3));
+    }
+
+    @Test
+    void anUploadIsKeptAndItsPathAnswered() throws Exception {
+        Path uploads = web.resolve("uploads");
+        server.uploadDir(uploads);
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
+        HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri("/api/upload?name=" + "My%20Screen%20Shot.PNG"))
+                .header("Cookie", COOKIE).header("Content-Type", "image/png")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(png)).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, r.statusCode(), r.body());
+        Path saved = Path.of(new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.body()).path("path").asText());
+        assertTrue(saved.isAbsolute());
+        assertEquals(uploads.toAbsolutePath(), saved.getParent());
+        assertTrue(saved.getFileName().toString().matches("\\d{8}-\\d{6}-[0-9a-f]{4}-My_Screen_Shot\\.png"),
+                saved.getFileName().toString());
+        assertArrayEquals(png, Files.readAllBytes(saved));
+    }
+
+    @Test
+    void anUploadForASessionGoesIntoItsProjectKeptOutOfGit() throws Exception {
+        Path project = Files.createDirectories(web.resolve("project"));
+        backend.project = project.toString();
+        server.uploadDir(web.resolve("elsewhere"));
+        HttpResponse<String> r = http.send(HttpRequest.newBuilder(uri("/api/upload?session=hm-a&name=shot.png"))
+                .header("Cookie", COOKIE).POST(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1, 2})).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, r.statusCode(), r.body());
+        Path saved = Path.of(new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.body()).path("path").asText());
+        assertEquals(project.resolve(".microhm").resolve("uploads"), saved.getParent());
+        assertTrue(Files.readString(project.resolve(".microhm").resolve(".gitignore")).lines().anyMatch("*"::equals));
+        assertFalse(Files.exists(web.resolve("elsewhere")));
+
+        // a session whose folder is gone: the folder beside the registry
+        backend.project = web.resolve("gone").toString();
+        HttpResponse<String> fallback = http.send(HttpRequest.newBuilder(uri("/api/upload?session=hm-a&name=b.png"))
+                .header("Cookie", COOKIE).POST(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1})).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, fallback.statusCode(), fallback.body());
+        assertTrue(fallback.body().contains("elsewhere"), fallback.body());
+    }
+
+    @Test
+    void anUploadNeedsTheSecretAndFitsTheLimit() throws Exception {
+        Path uploads = web.resolve("uploads");
+        server.uploadDir(uploads);
+        HttpResponse<String> locked = http.send(HttpRequest.newBuilder(uri("/api/upload?name=a.png"))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1})).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(401, locked.statusCode());
+        HttpResponse<String> big = http.send(HttpRequest.newBuilder(uri("/api/upload?name=a.png"))
+                .header("Cookie", COOKIE)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[(int) PhoneUploads.MAX_BYTES + 1])).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(413, big.statusCode());
+        assertFalse(Files.exists(uploads) && Files.list(uploads).findAny().isPresent(), "nothing kept");
     }
 
     @Test
