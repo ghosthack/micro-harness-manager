@@ -325,7 +325,7 @@ final class FakeSession implements Session {
 
     /** What attach hands over instead of {@link #SNAPSHOT}, when set. */
     volatile byte[] attachSnapshot;
-        volatile byte[] liveBeforeSnapshot;
+    volatile byte[] liveBeforeSnapshot;
     volatile byte[] liveAfterSnapshot;
 
     @Override

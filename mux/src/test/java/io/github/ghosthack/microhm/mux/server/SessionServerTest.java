@@ -363,7 +363,8 @@ class SessionServerTest {
         FakeSession fake = manager.session("d");
         AttachedSession attached = attach("d", 80, 24);
         readText(attached, FakeSession.SNAPSHOT.length);
-        Session.Client serverSide = fake.attached.get(0);
+        // the snapshot can arrive before the session records the client
+        Session.Client serverSide = awaitAttached(fake, 1);
         attached.close();
         attached.close(); // idempotent
         await(() -> fake.detached.contains(serverSide));
