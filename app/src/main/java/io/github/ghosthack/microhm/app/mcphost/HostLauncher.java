@@ -13,8 +13,14 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.IntSupplier;
 
 /**
  * Starts the {@linkplain McpHost background host} as the app quits, and the app from the
@@ -32,14 +38,38 @@ public final class HostLauncher {
      * Launches the host when a registered session is live and it has something to do: the
      * MCP server or the tray icon is on. True when a host process was started.
      */
-    public static boolean launchIfNeeded(SessionRegistry registry, SessionServerHost host) {
+    public static boolean launchIfNeeded(SessionRegistry registry, SessionServerHost host, Duration wait) {
         if (!AppSettings.mcpServerEnabled() && !AppSettings.trayIconEnabled() && !AppSettings.phoneServerEnabled()) {
             return false;
         }
-        if (McpHost.liveRegistered(registry, host) == 0) {
+        if (!anyLive(() -> McpHost.liveRegistered(registry, host), wait)) {
             return false;
         }
         return start(withState(launcher(), McpHost.FLAG), "mcp-host.log", "the background host");
+    }
+
+    /**
+     * Whether {@code liveCount} finds a registered session live, waiting at most
+     * {@code wait} for it (it asks the daemon). No answer in time counts as yes: the host
+     * checks again itself and exits when nothing is live, whereas giving up here would leave
+     * live sessions without MCP and the phone page until the app is back.
+     */
+    static boolean anyLive(IntSupplier liveCount, Duration wait) {
+        FutureTask<Integer> check = new FutureTask<>(liveCount::getAsInt);
+        Thread.ofPlatform().daemon().name("mhm-mcp-handoff-check").start(check);
+        try {
+            return check.get(wait.toMillis(), TimeUnit.MILLISECONDS) > 0;
+        } catch (TimeoutException e) {
+            LOG.info("the session daemon did not answer within {} ms; starting the background host to check for itself",
+                    wait.toMillis());
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return true;
+        } catch (ExecutionException e) {
+            LOG.debug("could not count live sessions", e.getCause());
+            return false;
+        }
     }
 
     /** Opens the app (from the tray menu); it stops this host as it starts. */

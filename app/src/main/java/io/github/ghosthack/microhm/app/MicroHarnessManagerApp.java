@@ -39,7 +39,8 @@ public final class MicroHarnessManagerApp {
 
     /** How long a running MCP host gets to exit when the app takes the registry back. */
     private static final Duration HOST_STOP_WAIT = Duration.ofSeconds(5);
-    /** How long exit waits for the MCP handoff (it asks the daemon for its sessions). */
+    /** How long exit waits for the daemon to say whether any session is live before
+     * handing off to the background host regardless. */
     private static final Duration HANDOFF_WAIT = Duration.ofSeconds(5);
 
     /** How long a recording run for the AOT cache lives after building its window. */
@@ -103,17 +104,10 @@ public final class MicroHarnessManagerApp {
         // However the app ends, agents keep their MCP tools while sessions live: a
         // headless host takes over the server (and the registry) until the app is back.
         // Bounded: it asks the daemon for its sessions, and the JVM waits on its hooks, so a
-        // daemon that has stopped answering would otherwise hold the exit.
+        // daemon that has stopped answering would otherwise hold the exit. No answer in
+        // time still starts the host, which checks for itself.
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("mhm-mcp-handoff").unstarted(
-                () -> {
-                    Thread handoff = Thread.ofPlatform().daemon().name("mhm-mcp-handoff-run")
-                            .start(() -> HostLauncher.launchIfNeeded(registry, host));
-                    try {
-                        handoff.join(HANDOFF_WAIT.toMillis());
-                    } catch (InterruptedException interrupted) {
-                        Thread.currentThread().interrupt();
-                    }
-                }));
+                () -> HostLauncher.launchIfNeeded(registry, host, HANDOFF_WAIT)));
         SwingUtilities.invokeLater(() -> {
             MainWindow window = new MainWindow(registry, host, stack.launcher(), mcpService, stack.events(),
                     stack.phone());
