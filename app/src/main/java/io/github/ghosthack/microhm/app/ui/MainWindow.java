@@ -658,6 +658,9 @@ public final class MainWindow extends JFrame {
     /** Everything the window does on close short of exiting the JVM: stops the timers
      * and executors, detaches every terminal (kills nothing) and disposes. Separate
      * from the window listener so a test can tear a window down in-process. */
+    /** The longest quit waits on any one step that talks to the session daemon. */
+    static final java.time.Duration QUIT_DAEMON_WAIT = java.time.Duration.ofSeconds(3);
+
     void shutdown() {
         disposed = true;
         sessionEvents.removeSessionsChangedListener(sessionsChangedListener);
@@ -666,7 +669,14 @@ public final class MainWindow extends JFrame {
         mcpApplier.close(); // a queued start must not undo the stop
         mcpService.stop();
         if (phoneService != null) {
-            phoneService.stop();
+            // stopping gives phone-sized sessions their size back over the daemon; a daemon
+            // that has stopped answering must not hold quit, so it gets a bounded wait
+            Thread stopping = Thread.ofPlatform().daemon().name("mhm-phone-stop").start(phoneService::stop);
+            try {
+                stopping.join(QUIT_DAEMON_WAIT.toMillis());
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
         statusPollTimer.stop();
         activeTabPollTimer.stop();

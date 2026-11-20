@@ -564,8 +564,17 @@ public final class PhoneServer implements AutoCloseable {
                 hold.viewers++;
                 hold.phoneColumns = columns;
                 hold.phoneRows = rows;
-                if (view.get().columns() != columns || view.get().rows() != rows) {
+            }
+            // the daemon call stays outside the lock: a slow daemon must not stall every
+            // other stream's hold and release (and the server's close)
+            if (view.get().columns() != columns || view.get().rows() != rows) {
+                try {
                     backend.resize(name, columns, rows);
+                } catch (RuntimeException e) {
+                    // no stream will release this hold: count the viewer out again, or the
+                    // session never gets its size back
+                    release(name);
+                    throw e;
                 }
             }
             return name;
@@ -584,33 +593,40 @@ public final class PhoneServer implements AutoCloseable {
             if (hold == null || --hold.viewers > 0) {
                 return;
             }
-            if (!running || giveBackAfter.isZero()) {
-                giveBack(name);
+            if (running && !giveBackAfter.isZero()) {
+                hold.giveBack = giveBacks.schedule(() -> giveBack(name), giveBackAfter.toMillis(),
+                        java.util.concurrent.TimeUnit.MILLISECONDS);
                 return;
             }
-            hold.giveBack = giveBacks.schedule(() -> giveBack(name), giveBackAfter.toMillis(),
-                    java.util.concurrent.TimeUnit.MILLISECONDS);
         }
+        giveBack(name); // at once, and outside the lock (it calls the daemon)
     }
 
     /** Gives {@code name} its size from before the phones came, unless something else (the
      * app's window) has resized it since, or a phone is watching it again. */
     private void giveBack(String name) {
+        Hold hold;
         synchronized (holds) {
-            Hold hold = holds.get(name);
+            hold = holds.get(name);
             if (hold == null || hold.viewers > 0) {
                 return;
             }
             holds.remove(name);
-            try {
-                Optional<ScreenView> view = backend.screen(name);
-                if (view.isPresent() && view.get().columns() == hold.phoneColumns
-                        && view.get().rows() == hold.phoneRows) {
-                    backend.resize(name, hold.columns, hold.rows);
+        }
+        // the daemon calls stay outside the lock (see hold)
+        try {
+            Optional<ScreenView> view = backend.screen(name);
+            synchronized (holds) {
+                if (holds.containsKey(name)) {
+                    return; // a phone came back meanwhile and sized it: leave its size
                 }
-            } catch (RuntimeException e) {
-                LOG.debug("could not give {} its size back", name, e);
             }
+            if (view.isPresent() && view.get().columns() == hold.phoneColumns
+                    && view.get().rows() == hold.phoneRows) {
+                backend.resize(name, hold.columns, hold.rows);
+            }
+        } catch (RuntimeException e) {
+            LOG.debug("could not give {} its size back", name, e);
         }
     }
 

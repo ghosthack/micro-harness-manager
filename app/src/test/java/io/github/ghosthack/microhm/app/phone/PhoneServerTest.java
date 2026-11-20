@@ -58,12 +58,17 @@ class PhoneServerTest {
 
         @Override
         public void resize(String session, int c, int r) {
+            if (failResizes.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+                throw new IllegalStateException("daemon restarting");
+            }
             resizes.add(session + " " + c + "x" + r);
             columns = c;
             rows = r;
         }
 
         volatile boolean failSessions;
+        /** How many coming resizes fail. */
+        final java.util.concurrent.atomic.AtomicInteger failResizes = new java.util.concurrent.atomic.AtomicInteger();
         final List<String> closed = Collections.synchronizedList(new ArrayList<>());
 
         @Override
@@ -293,6 +298,30 @@ class PhoneServerTest {
             Thread.sleep(20);
         }
         assertEquals(List.of("hm-a 45x30", "hm-a 50x28", "hm-a 120x40"), backend.resizes);
+    }
+
+    /** A phone whose resize fails is counted out again; otherwise the session would keep a
+     * phantom viewer and never get its size back after the next phone leaves. */
+    @Test
+    void aFailedResizeDoesNotLeaveAPhantomViewer() throws Exception {
+        backend.failResizes.set(1);
+        HttpResponse<java.io.InputStream> failed = http.send(HttpRequest.newBuilder(
+                uri("/api/stream?session=hm-a&cols=45&rows=30")).header("Cookie", COOKIE).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        nextData(new BufferedReader(new InputStreamReader(failed.body(), StandardCharsets.UTF_8)));
+        assertEquals(List.of(), backend.resizes);
+
+        HttpResponse<java.io.InputStream> next = http.send(HttpRequest.newBuilder(
+                uri("/api/stream?session=hm-a&cols=50&rows=28")).header("Cookie", COOKIE).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        nextData(new BufferedReader(new InputStreamReader(next.body(), StandardCharsets.UTF_8)));
+        next.body().close();
+        failed.body().close();
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (backend.resizes.size() < 2 && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
+        assertEquals(List.of("hm-a 50x28", "hm-a 120x40"), backend.resizes);
     }
 
     @Test
