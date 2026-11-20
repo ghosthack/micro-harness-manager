@@ -175,7 +175,7 @@ final class ClientConnection implements Runnable {
                     log.warn("request {} failed", op, e);
                     reply = Json.error("internal error handling " + op + ": " + e);
                 }
-                codec.write(response(reply != null ? reply : Json.error("unknown op: " + op)));
+                codec.write(replyFrame(op, reply != null ? reply : Json.error("unknown op: " + op)));
                 return true;
         }
     }
@@ -335,6 +335,19 @@ final class ClientConnection implements Runnable {
                 log.debug("ignoring {} frame in attach mode", frame.type());
                 return true;
         }
+    }
+
+    /** The reply as a frame, or an error reply when it is over {@link Frame#MAX_PAYLOAD}
+     * (a capture of a very wide session with long history) — an answer the client can
+     * report, where a refused frame would close the connection and read as no server. */
+    static Frame replyFrame(String op, ObjectNode reply) {
+        byte[] body = Json.bytes(reply);
+        if (body.length > Frame.MAX_PAYLOAD) {
+            log.warn("reply to {} is {} bytes, over the frame limit", op, body.length);
+            return response(Json.error(op + " reply too large (" + body.length
+                    + " bytes); ask for less history"));
+        }
+        return Frame.of(FrameType.RESPONSE, body);
     }
 
     private static Frame response(ObjectNode body) {

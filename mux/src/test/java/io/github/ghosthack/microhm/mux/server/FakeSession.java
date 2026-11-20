@@ -299,7 +299,8 @@ final class FakeSession implements Session {
             if (columns != this.columns || rows != this.rows) {
                 resize(columns, rows, client);
             }
-            client.onOutput(SNAPSHOT);
+            byte[] snapshot = attachSnapshot;
+            client.onOutput(snapshot != null ? snapshot : SNAPSHOT);
             clients.add(client);
             attached.add(client);
         }
@@ -322,7 +323,9 @@ final class FakeSession implements Session {
         }
     }
 
-    volatile byte[] liveBeforeSnapshot;
+    /** What attach hands over instead of {@link #SNAPSHOT}, when set. */
+    volatile byte[] attachSnapshot;
+        volatile byte[] liveBeforeSnapshot;
     volatile byte[] liveAfterSnapshot;
 
     @Override

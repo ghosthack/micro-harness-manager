@@ -283,6 +283,59 @@ class SessionServerTest {
         await(() -> fake.writtenText().equals("ls -la\rx"));
     }
 
+    /** A snapshot past the 16 MiB frame limit (a wide truecolor screen with its history)
+     * arrives whole, in several frames, instead of ending the attach. */
+    @Test
+    void attachSnapshotLargerThanAFrameArrivesWhole() throws Exception {
+        client.newSession("big", home, 80, 24, null);
+        FakeSession fake = manager.session("big");
+        byte[] snapshot = new byte[Frame.MAX_PAYLOAD + 3 * 1024 * 1024 + 7];
+        for (int i = 0; i < snapshot.length; i++) {
+            snapshot[i] = (byte) ('a' + i % 26);
+        }
+        fake.attachSnapshot = snapshot;
+        AttachedSession attached = attach("big", 80, 24);
+        byte[] got = new byte[snapshot.length];
+        int off = 0;
+        while (off < got.length) {
+            int n = attached.read(got, off, got.length - off);
+            assertTrue(n > 0, "stream ended after " + off + " bytes");
+            off += n;
+        }
+        assertTrue(java.util.Arrays.equals(snapshot, got));
+        fake.push("live");
+        assertEquals("live", readText(attached, 4));
+        assertTrue(attached.isConnected());
+    }
+
+    /** A reply past the frame limit becomes an error the client can report, not a closed
+     * connection the client reads as "no server". */
+    @Test
+    void replyLargerThanAFrameBecomesAnError() {
+        String huge = "x".repeat(Frame.MAX_PAYLOAD + 10);
+        Frame ok = ClientConnection.replyFrame("capture", Json.object().put("text", "small"));
+        assertEquals(FrameType.RESPONSE, ok.type());
+        Frame refused = ClientConnection.replyFrame("capture", Json.object().put("text", huge));
+        assertEquals(FrameType.RESPONSE, refused.type());
+        String body = new String(refused.payload(), StandardCharsets.UTF_8);
+        assertTrue(body.contains("reply too large"), body);
+        assertTrue(refused.payload().length < 1024);
+    }
+
+    /** A paste past the frame limit reaches the session whole, not silently dropped. */
+    @Test
+    void dataInLargerThanAFrameReachesTheSessionWhole() throws Exception {
+        client.newSession("paste", home, 80, 24, null);
+        FakeSession fake = manager.session("paste");
+        AttachedSession attached = attach("paste", 80, 24);
+        readText(attached, FakeSession.SNAPSHOT.length);
+        byte[] paste = new byte[Frame.MAX_PAYLOAD + 1024 * 1024 + 3];
+        java.util.Arrays.fill(paste, (byte) 'p');
+        attached.write(paste);
+        attached.write("!".getBytes(StandardCharsets.UTF_8));
+        await(() -> fake.writtenText().length() == paste.length + 1 && fake.writtenText().endsWith("p!"));
+    }
+
     @Test
     void resizeReachesSessionWithThisClientExcepted() throws Exception {
         client.newSession("r", home, 80, 24, null);

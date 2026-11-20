@@ -47,8 +47,14 @@ final class AttachedClient implements Session.Client {
     private static final Duration ERROR_DELIVERY_GRACE = Duration.ofSeconds(1);
 
     /** Upper bound on the payload of one DATA_OUT frame assembled from several queued
-     * chunks; a single larger chunk (e.g. a snapshot) still goes out whole. */
+     * chunks; a single larger chunk (e.g. a snapshot) leaves the queue whole. */
     static final int MAX_BATCH_BYTES = 64 * 1024;
+
+    /** Largest single DATA_OUT payload: a bigger chunk (a snapshot of a wide, truecolor
+     * screen and its history can pass {@link Frame#MAX_PAYLOAD}) leaves the queue whole, as
+     * before, and goes out as consecutive frames of this size. DATA_OUT is a byte stream,
+     * so where it is cut does not matter. */
+    static final int MAX_CHUNK_BYTES = 1024 * 1024;
 
     private final Session session;
     private final SocketChannel channel;
@@ -174,6 +180,7 @@ final class AttachedClient implements Session.Client {
         try {
             while (true) {
                 Frame next = null;
+                byte[] data = null;
                 boolean resnapshot = false;
                 lock.lock();
                 try {
@@ -182,7 +189,7 @@ final class AttachedClient implements Session.Client {
                             return;
                         }
                         if (!queue.isEmpty()) {
-                            next = Frame.of(FrameType.DATA_OUT, pollBatch());
+                            data = pollBatch();
                             break;
                         }
                         if (behind && !resyncRequested) {
@@ -210,6 +217,14 @@ final class AttachedClient implements Session.Client {
                         // Leave resyncRequested set: the terminal frame (if any) goes out on
                         // the next pass, and otherwise the watchdog drops the client.
                         log.warn("re-snapshot for a client of {} failed", session.name(), e);
+                    }
+                    continue;
+                }
+                if (data != null) {
+                    for (int off = 0; off < data.length; off += MAX_CHUNK_BYTES) {
+                        codec.write(Frame.of(FrameType.DATA_OUT, data.length <= MAX_CHUNK_BYTES ? data
+                                : java.util.Arrays.copyOfRange(data, off, Math.min(data.length, off + MAX_CHUNK_BYTES))));
+                        markProgress();
                     }
                     continue;
                 }
