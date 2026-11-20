@@ -1,0 +1,25 @@
+after op 100 e850d481fe90d17c
+after op 200 1a92fd2f88d3b942
+after op 300 fbf00986b0ebf5cd
+after op 400 33ba3d79b1021c56
+after op 500 10a20beaff29d55e
+after op 600 bc3bee34125633e0
+after op 700 157b09ebf6e6f8bf
+after op 800 fb9fb21928067007
+after op 900 89ab198bd2355d39
+after op 1000 19edfd25c54d561a
+after op 1100 bc62aad5e3f5a41f
+after op 1200 0f757bcc33e1d580
+after op 1300 eeed5e13b976c163
+after op 1400 4b62eb7940cb7baf
+after op 1500 180f7082c9b46457
+size 132x6 history 0
+state cursor=3,0 pen=fg=default bg=idx80 underline=1 inverse visible=true shape=3 blink=false alt=true paste=true ckm=true keypad=false mouse=BUTTON_MOTION/DEFAULT focus=true sync=false rv=false awm=true decom=true irm=false lnm=false region=0-5 kitty=0 charsets=0 title=icon+title tabs=24,
+modes Modes[cursorVisible=true, cursorShape=3, bracketedPaste=true, applicationCursorKeys=true, applicationKeypad=false, mouseTrackingMode=1002, mouseSgr=false, focusReporting=true, alternateScreen=true, autoWrap=true, originMode=true, scrollTop=1, scrollBottom=6, title=icon+title]
+  0 |                                                                                                                                    |
+  1 |                                                                                                                                    |
+  2 |                        C6J%                                                                    dVjV5한中&                          |
+    cols 24-27 fg=default bg=default underline=1 inverse
+  3 |                                                                                     +Smz日5'文?                                    |
+  4 |                                                                                                                                    |
+  5 |                                                                                                                                    |

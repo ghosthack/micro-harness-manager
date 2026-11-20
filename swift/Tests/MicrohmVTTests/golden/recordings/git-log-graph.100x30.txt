@@ -1,0 +1,96 @@
+byte 256 a5f019b5a8be493f
+byte 512 3f66128e59547469
+byte 768 79350391e1d33a80
+byte 1024 17cc4ca05e3add61
+byte 1280 7fdd756050ef41a2
+byte 1536 7c14edd4249f469c
+byte 1792 342da8f5d8b2fd35
+byte 2048 937342211bf115b9
+byte 2304 9cbf399f5c165916
+byte 2560 e9be7ce389b0835d
+byte 2816 d790527f0efc1779
+byte 3072 4efdb5d186991232
+byte 3328 9e18a8e16497f5aa
+byte 3584 8edc611ee5ba9f31
+byte 3840 0796e2ddbfa25a91
+byte 4096 6a353d7ef535e467
+byte 4352 72729852ef38a134
+byte 4608 7d267271b186a18f
+byte 4864 bb4fdc9e574432cb
+byte 5120 84ce6df08e8b4c86
+byte 5376 e829abba2852f598
+byte 5632 e06dbabc1422e11b
+byte 5888 567187714e7eb0b9
+byte 6144 6460110fbadaeff5
+byte 6400 73c001f17adaf1b1
+byte 6656 3890f18a9f5a5224
+byte 6912 77c860f71bc0066b
+byte 7168 bfe2703e1d8847e6
+byte 7424 3e88f19edd6feb74
+byte 7680 3a68d0e38d1b6c2d
+byte 7936 92a1ff6ac3c7d9bf
+byte 8192 b9fd998a54d3a9dd
+byte 8448 7374701daf771a08
+byte 8704 f2b2449d075555ae
+byte 8960 08fec3f6f9321154
+byte 9192 8bfc76191b9212cc
+size 100x30 history 98
+state cursor=29,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-29 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,64,72,80,88,96,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=30, title=]
+  0 |* fa4975c reschedule hyperlink highlightings if the terminal is resized horizontally                |
+    cols 2-8 fg=idx3 bg=default
+  1 |* 30eed67 Rename .java to .kt                                                                       |
+    cols 2-8 fg=idx3 bg=default
+  2+|* caeb5d0 clarify `AsyncHyperlinkFilter` API more; fix `AsyncHyperlinkFilter -> HyperlinkFilter` ada|
+    cols 2-8 fg=idx3 bg=default
+  3 |pter                                                                                                |
+  4 |* f7c7234 clarify `AsyncHyperlinkFilter` API                                                        |
+    cols 2-8 fg=idx3 bg=default
+  5 |* 2c7d471 use thread-safe `myHyperlinkFilters`                                                      |
+    cols 2-8 fg=idx3 bg=default
+  6 |* 7e459e1 introduce `AsyncHyperlinkFilter`                                                          |
+    cols 2-8 fg=idx3 bg=default
+  7 |* ecbb72a IJPL-176215 Increment version                                                             |
+    cols 2-8 fg=idx3 bg=default
+  8 |* 6638174 IJPL-176215 Fire lines changed if new lines were created inside TerminalTextBuffer.getLine|
+    cols 2-8 fg=idx3 bg=default
+  9 |* 70b6720 IJPL-173814 Increment version                                                             |
+    cols 2-8 fg=idx3 bg=default
+ 10 |* be8f9b2 IJPL-173814 Add separate text buffer event for clearing history                           |
+    cols 2-8 fg=idx3 bg=default
+ 11 |* 5803caa Fix TerminalTextBuffer constructor                                                        |
+    cols 2-8 fg=idx3 bg=default
+ 12+|* 14e3d12 move `addTypeAheadModelListener` / `removeTypeAheadModelListener` to `JediTermTypeAheadMod|
+    cols 2-8 fg=idx3 bg=default
+ 13 |el`                                                                                                 |
+ 14 |* 5ecd4d0 reduce visibility of `TerminalTextBuffer` primary constructor                             |
+    cols 2-8 fg=idx3 bg=default
+ 15 |* 50c1b97 reduce visibility of `com.jediterm.terminal.model.TerminalTextBuffer#textProcessing`      |
+    cols 2-8 fg=idx3 bg=default
+ 16 |* 722896d IJPL-159930 Increment version                                                             |
+    cols 2-8 fg=idx3 bg=default
+ 17 |* 14eda35 IJPL-159930 Report text buffer width resized event                                        |
+    cols 2-8 fg=idx3 bg=default
+ 18 |* 9c057d7 IJPL-159930 Report lines discarded from history event                                     |
+    cols 2-8 fg=idx3 bg=default
+ 19 |* edfe540 IJPL-159930 Report lines changed event when any line is somehow changed                   |
+    cols 2-8 fg=idx3 bg=default
+ 20 |* f5c4a52 IJPL-159930 Create a separate listener to listen for detailed text buffer changes         |
+    cols 2-8 fg=idx3 bg=default
+ 21 |* 5c5d41c IJPL-159930 Refactor: do not modify line content outside of TerminalTextBuffer            |
+    cols 2-8 fg=idx3 bg=default
+ 22 |* dfc9bc0 IJPL-159930 Refactor: change wrapped line status only inside TerminalTextBuffer           |
+    cols 2-8 fg=idx3 bg=default
+ 23 |* 7756943 Cleanup: remove deprecated method from TerminalTextBuffer                                 |
+    cols 2-8 fg=idx3 bg=default
+ 24 |* 438409e Refactor: use LinesStorage instead of LinesBuffer                                         |
+    cols 2-8 fg=idx3 bg=default
+ 25 |* 2f4b0f0 Refactor: translate TerminalTextBuffer to Kotlin                                          |
+    cols 2-8 fg=idx3 bg=default
+ 26 |* 2ae8ef9 Refactor: rename .java to .kt                                                             |
+    cols 2-8 fg=idx3 bg=default
+ 27 |* c1cb74d provide ability to set default cursor in `TerminalPanel`                                  |
+    cols 2-8 fg=idx3 bg=default
+ 28 |* 0f93b21 IJPL-159869 Improve performance of decodeUsingGraphicalState                              |
+    cols 2-8 fg=idx3 bg=default
+ 29 |                                                                                                    |

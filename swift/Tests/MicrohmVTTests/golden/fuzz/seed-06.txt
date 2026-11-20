@@ -1,0 +1,26 @@
+after op 100 46339653b5d33521
+after op 200 c950f83328e20f41
+after op 300 d030f6f5c66ffa7f
+after op 400 43abf3511ae2fdeb
+after op 500 7b07e5b20ee9d8bf
+after op 600 e6c38ddc19eb75dd
+after op 700 34998fa14bb2eb88
+after op 800 d6d12a5abee784d8
+after op 900 73c7af1d884c34eb
+after op 1000 0abaa54f1b035209
+after op 1100 3bbc73c7aae0bcdd
+after op 1200 7026eb85f387a0cc
+after op 1300 bb038eb3aa3e06d5
+after op 1400 66f7d81cc02473d0
+after op 1500 d25dc0532bc06fa6
+size 20x8 history 41
+state cursor=7,10 pen=fg=default bg=default visible=false shape=4 blink=false alt=false paste=true ckm=true keypad=true mouse=NORMAL/DEFAULT focus=false sync=false rv=false awm=true decom=true irm=false lnm=false region=0-7 kitty=0 charsets=0 title=title 55 tabs=
+modes Modes[cursorVisible=false, cursorShape=4, bracketedPaste=true, applicationCursorKeys=true, applicationKeypad=true, mouseTrackingMode=1000, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=true, scrollTop=1, scrollBottom=8, title=title 55]
+  0+|SＷH'^»üc+a`~}n(j한n|
+  1+|^+<«x@d字Czo語fb.*oY|
+  2+|i<yéñUJt,dé語$buoykI|
+  3+|-}%*한YLvd.l€kqßjp+X|
+  4+|中SYVqHRＷSw+lλ!r2^~|
+  5 |=vZ{ßFb Vr)h}日s.   |
+  6+|                 dWh|
+  7 |┌.2Dn文z+~          |

@@ -1,0 +1,43 @@
+byte 256 bd934b19531fa1f9
+byte 512 ead2c25aec42513f
+byte 690 6d02863a122fc84b
+size 80x24 history 0
+state cursor=16,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=]
+  0 |                                                                                |
+  1 |The default interactive shell is now zsh.                                       |
+  2 |To update your account to use zsh, please run `chsh -s /bin/zsh`.               |
+  3 |For more details, please visit https://support.apple.com/kb/HT208050.           |
+  4 |demo:~$ echo hello                                                              |
+    cols 0-3 fg=idx2 bg=default bold
+    cols 5-5 fg=idx4 bg=default
+  5 |hello                                                                           |
+  6+|demo:~$ printf "\u{5c}033[38;5;208morange\u{5c}033[0m \u{5c}033[4munder\u{5c}033[24m \u{5c}033[7minverse\u{5c}|
+    cols 0-3 fg=idx2 bg=default bold
+    cols 5-5 fg=idx4 bg=default
+  7 |033[27m\u{5c}n"                                                                      |
+  8 |orange under inverse                                                            |
+    cols 0-5 fg=idx208 bg=default
+    cols 7-11 fg=default bg=default underline=1
+    cols 13-19 fg=default bg=default inverse
+  9 |demo:~$ printf "%-90s|\u{5c}n" wide-line                                             |
+    cols 0-3 fg=idx2 bg=default bold
+    cols 5-5 fg=idx4 bg=default
+ 10+|wide-line                                                                       |
+ 11 |          |                                                                     |
+ 12 |demo:~$ echo -e "tab\u{5c}tseparated\u{5c}tvalues"                                        |
+    cols 0-3 fg=idx2 bg=default bold
+    cols 5-5 fg=idx4 bg=default
+ 13 |tab     separated       values                                                  |
+ 14 |demo:~$ exit                                                                    |
+    cols 0-3 fg=idx2 bg=default bold
+    cols 5-5 fg=idx4 bg=default
+ 15 |exit                                                                            |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                                                                                |
