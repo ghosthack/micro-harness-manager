@@ -1,0 +1,37 @@
+byte 256 e5d56261bc1feb21
+byte 312 be5bc73eaee5cafe
+size 80x24 history 0
+state cursor=3,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-23 kitty=0 charsets=0 title= tabs=8,16,24,32,40,48,56,64,72,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=24, title=]
+  0 |./              build/          notes.txt       sample.java                     |
+    cols 0-0 fg=idx4 bg=default
+    cols 16-20 fg=idx4 bg=default
+  1 |../             docs/           README.md       src/                            |
+    cols 0-1 fg=idx4 bg=default
+    cols 16-19 fg=idx4 bg=default
+    cols 48-50 fg=idx4 bg=default
+  2 |.hidden/        link-to-readme@ run.sh*         unicode.txt                     |
+    cols 0-6 fg=idx4 bg=default
+    cols 16-29 fg=idx5 bg=default
+    cols 32-37 fg=idx1 bg=default
+  3 |                                                                                |
+  4 |                                                                                |
+  5 |                                                                                |
+  6 |                                                                                |
+  7 |                                                                                |
+  8 |                                                                                |
+  9 |                                                                                |
+ 10 |                                                                                |
+ 11 |                                                                                |
+ 12 |                                                                                |
+ 13 |                                                                                |
+ 14 |                                                                                |
+ 15 |                                                                                |
+ 16 |                                                                                |
+ 17 |                                                                                |
+ 18 |                                                                                |
+ 19 |                                                                                |
+ 20 |                                                                                |
+ 21 |                                                                                |
+ 22 |                                                                                |
+ 23 |                                                                                |

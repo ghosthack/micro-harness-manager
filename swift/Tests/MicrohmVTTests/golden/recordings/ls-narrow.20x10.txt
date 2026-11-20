@@ -1,0 +1,19 @@
+byte 250 fa02751b51942788
+size 20x10 history 3
+state cursor=9,0 pen=fg=default bg=default visible=true shape=0 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-9 kitty=0 charsets=0 title= tabs=8,16,
+modes Modes[cursorVisible=true, cursorShape=0, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=false, focusReporting=false, alternateScreen=false, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=10, title=]
+  0 |build/              |
+    cols 0-4 fg=idx4 bg=default
+  1 |docs/               |
+    cols 0-3 fg=idx4 bg=default
+  2 |link-to-readme@     |
+    cols 0-13 fg=idx5 bg=default
+  3 |notes.txt           |
+  4 |README.md           |
+  5 |run.sh*             |
+    cols 0-5 fg=idx1 bg=default
+  6 |sample.java         |
+  7 |src/                |
+    cols 0-2 fg=idx4 bg=default
+  8 |unicode.txt         |
+  9 |                    |

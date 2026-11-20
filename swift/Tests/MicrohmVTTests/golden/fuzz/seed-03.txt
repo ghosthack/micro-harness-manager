@@ -1,0 +1,38 @@
+after op 100 9823483cf1f0f8f5
+after op 200 55f168ebefe0d47f
+after op 300 c26a3bfd2b4eddbb
+after op 400 8a2c9421651e37f7
+after op 500 ece906a61d30f6b5
+after op 600 f2707550193f947f
+after op 700 27c3718c7014f68a
+after op 800 05df30a58e9ba44d
+after op 900 3f0850dea73804ed
+after op 1000 2a9210e878a20e63
+after op 1100 f1a3861ba64518ab
+after op 1200 e5239a552abf6025
+after op 1300 a702896f553138da
+after op 1400 ab181ead53949ac0
+after op 1500 32150f7db7b05344
+size 40x12 history 134
+state cursor=10,2 pen=fg=#cf3a7b bg=idx123 underline=4 strike visible=true shape=6 blink=false alt=false paste=false ckm=false keypad=false mouse=NONE/SGR focus=true sync=false rv=false awm=false decom=true irm=false lnm=false region=10-11 kitty=0 charsets=0 title=icon+title tabs=
+modes Modes[cursorVisible=true, cursorShape=6, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=false, mouseTrackingMode=0, mouseSgr=true, focusReporting=true, alternateScreen=false, autoWrap=false, originMode=true, scrollTop=11, scrollBottom=12, title=icon+title]
+  0 |dHλ`d?5e4s%v⌚?",GL(Y字$ЖXñ>W!,W<U«j<i9<|
+    cols 0-39 fg=idx79 bg=idx11 underline=1 rapidBlink
+  1 ||文~gv?x#HA本d]Жi                       |
+    cols 0-16 fg=idx79 bg=default underline=1 rapidBlink
+  2 |                                        |
+  3 |                                        |
+  4 |                                        |
+  5 |                                        |
+  6 |                                        |
+  7 |                             日本rVG[字$|
+    cols 29-39 fg=idx79 bg=default underline=1 rapidBlink
+  8 |                                        |
+  9 |中p가~2sLu^`k0';C:=%"~(1%»r8[m          |
+    cols 0-29 fg=idx79 bg=idx11 underline=1 rapidBlink
+    cols 30-39 fg=default bg=idx11
+ 10 |(R                                      |
+    cols 0-1 fg=#cf3a7b bg=idx123 underline=4 strike
+ 11 |─O:h&⌚h]éñG7ts文#文G字{vUATkYFЖJ66gh文P|
+    cols 0-6 fg=#cf3a7b bg=default underline=4 strike
+    cols 7-26 fg=idx3 bg=default strike

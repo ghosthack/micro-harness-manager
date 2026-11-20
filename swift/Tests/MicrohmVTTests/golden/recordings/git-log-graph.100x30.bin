@@ -1,0 +1,120 @@
+* [33m9eb8052[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mghosthack/base-3.76[m[33m, [m[1;33mtag: [m[1;33mv3.76-ghosthack.2[m[33m, [m[1;31morigin/ghosthack/base-3.76[m[33m, [m[1;32mghosthack/central-publishing[m[33m)[m Run upstream test fixtures on JDK 21 in CI
+* [33m1e327c3[m Publish core and UI to Maven Central with Apache 2.0 notices
+* [33m5dcf1ac[m Point the downstream bump step at harness-manager's jediterm.version
+* [33m549331c[m Document publishing jediterm-ui alongside jediterm-core
+* [33mfd91ddb[m Rebase fork onto upstream 3.76
+* [33mdfed256[m Keep cursor character and paint coordinates consistent
+* [33m6f5b0bd[m Consume unknown DCS quietly and preserve sequence diagnostics
+* [33mc326a14[m Document how to publish a new fork version
+* [33m8a87fb5[m Support DECXCPR (CSI ?6n) extended cursor position report
+* [33mc22bf79[m Don't log a full stack trace for a routine EOF mid-synchronized-output
+* [33m59776fb[m Don't WARN on a Kitty graphics protocol capability probe
+* [33m33c38b6[m Synchronize CyclicBufferLinesStorage to fix a cross-thread NPE
+* [33m222af75[m Stop leaking APC content and reply to XTGETTCAP instead of going silent
+* [33m6c35855[m Publish to a private GitHub Packages registry for this fork
+* [33m4c6c3a2[m Support DECXCPR-style dark/light color-scheme query (CSI ?996n)
+* [33m752ea48[m Log raw sequence for unsupported DEC-specific Device Status Report
+* [33m1b354a6[m[33m ([m[1;31mupstream/master[m[33m, [m[1;31mupstream/HEAD[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m start sync block by `CSI ? 2026 h` only
+* [33m11e5fcd[m Optimize double-width character check based on WcWidth
+* [33m377b76e[m Fix mouse scrolling direction encoding
+* [33m3f9607e[m Increment of JediTerm VERSION
+* [33mad4df0a[m Migrate terminal key encoding to modifiersEx
+* [33mf0a246f[m Create tests for TerminalKeyEventProcessor
+* [33mcf733bf[m Move key processing exception handling to TerminalPanel
+* [33mba19f8b[m Refactor key input handling
+* [33m7e1b6be[m Create tests for TerminalMouseEventEncoder
+* [33m1cc63bf[m Refactor terminal mouse handling
+* [33mfd5a679[m Refactor mouse input model
+* [33m5b81edd[m Fix exception on height resize
+* [33m3dcc464[m update Kotlin to latest (2.4.0)
+* [33m665c5fb[m update Gradle to latest (9.6.0)
+* [33m97c49c8[m Fix double-width handling for surrogate pairs
+* [33m94e2c77[m update double-width character detection logic; fix emoji alignment
+* [33m0110050[m Allow providing TtyConnector resize strategy
+* [33mb86df65[m bump version
+* [33mca434c3[m prevent crash when printing text with cursor outside screen bounds
+* [33mf8b91e4[m bump version 3.67
+* [33ma6b3787[m preserve SGR style changes made inside an OSC8 hyperlink
+* [33mf472c5e[m store hyperlink styling in the parent `TextStyle`
+* [33mae7cc89[m DECSTR (Soft Terminal Reset) shouldn't clear buffer or change cursor position
+* [33mc35c822[m configure JediTerm app to support OSC8 hyperlinks
+* [33m4e13416[m bump version to 3.66
+* [33mcc44c76[m Update mouse reporting to include motion flag in mouseMoved as per spec (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Any-event-tracking)
+* [33maeb67c3[m Fix incorrect scrolling behavior in tmux
+* [33m2c03a49[m send correct response to Secondary Device Attributes (`ESC[>c`)
+* [33md9659d2[m rename `TerminalColor.fromColor` to `TerminalColor.color` for consistency
+* [33m37d77b7[m respect the alpha component of the color in `TerminalColor.fromColor`
+* [33m11fad36[m deprecate `TerminalColor(int r, int g, int b)` constructor
+* [33m985e58c[m IJPL-232180 Increment version
+* [33m7be6369[m IJPL-232180 Add more tests for text buffer resize
+* [33m2a707e5[m IJPL-232180 Refactor: translate BufferResizeTest to Kotlin
+* [33md0bacb3[m IJPL-232180 Rename .java to .kt
+* [33m893130b[m IJPL-232180 Rework alternate buffer resize
+* [33m57cb0af[m IJPL-232180 Refactor: handle main and alternate buffer resize in separate functions
+* [33mc42b2b4[m IJPL-232180 Refactor: drop USE_CONPTY_COMPATIBLE_RESIZE
+* [33m0b89db3[m IJPL-232180 Refactor: move text buffer resize logic to the separate file
+* [33m72b0a41[m fix UI freeze by parsing OSC8 links using URL filter directly
+* [33mad1f460[m IJPL-231668 Increment version
+* [33m1273975[m IJPL-231668 Make missing ControlSequence starting chars visible in toString
+* [33m4f1e21d[m IJPL-231668 Fix printing sudden `<` when Kitty keyboard protocol disabling is requested
+* [33m6f9d6d2[m IJPL-221848 Increment version
+* [33mc8a16b2[m IJPL-221848 Add an ability to send Esc+CR on Shift+Enter shortcut
+* [33m71a87e1[m ensure text buffer is not accessed during applying synchronized output
+* [33md039dc4[m do not fall to the next `case` label after processing `CSI ? 2026 h`
+* [33ma141a14[m support synchronized output mode
+* [33mb3e4613[m improve performance of `ArrayTerminalDataStream.pushBackBuffer(char[], int)`
+* [33mf1f7234[m fix control sequence parsing of parameter bytes
+* [33mb35b57f[m sync `UrlFilter` with `com.intellij.execution.filters.UrlFilter`
+* [33mb03afe5[m emit "Unhandled Control Sequence" warnings only when the log level for "com.jediterm.terminal.emulator.JediEmulator" is set to debug (#313)
+* [33m5e51673[m ensure `CSI ? Pp m` is not processed as `CSI Pp m` (character attributes, SGR)
+* [33me1f6ebf[m keep `UserSettingsProvider.sendArrowKeysInAlternativeMode` in case of external usages
+* [33m902104f[m ignore scroll events with Shift modifier
+* [33m142a0ab[m rename `sendArrowKeysInAlternativeMode` -> `simulateMouseScrollWithArrowKeysInAlternativeScreen`
+* [33mfb0f77c[m input: improve touchpad scroll event handling (#312)
+* [33m2cc29c7[m ignore `.kotlin/`
+* [33m0c4524f[m emulator: fix control sequence parsing of intermediates (#311)
+* [33mf3c97e5[m Fix ED erasing not erasing the last line (#309)
+* [33m6065c6e[m Avoid `myCursorX` dropping below 0 (#307)
+* [33mde701a9[m fix failed "build (ubuntu-latest)" in Java CI: improve `.github/workflows/test.yml`
+* [33md89291d[m support Cmd+Left/Right on macOS
+* [33m792c039[m fix missing string part in visualizer
+* [33m4cef284[m bump version to 3.54
+* [33mb55c231[m process `CSI 1 t` and `CSI 2 t` to suppress warnings about unhandled escape sequences
+* [33m1f3b657[m suppress excessive logging for non-standard SGR codes
+* [33m0ebd995[m Don't send arrow up/down for mouse wheel if already sent SCROLL
+* [33m40ca5c6[m update Kotlin to latest (2.1.21)
+* [33mdcecde4[m update pty4j to 0.13.8 for the example app (:JediTerm)
+* [33m080d570[m Increment version
+* [33madbd583[m IJPL-187738 Add space to the end if a DWC char doesn't fit
+* [33m1a15ec3[m IJPL-187738 Fix DWC truncation in JediEmulator
+* [33m56615a1[m [LLM-15739] Increment version
+* [33m11848b1[m [LLM-15739] add selection update methods
+* [33md17291f[m [LLM-15739] Introduce Selection Listener for TerminalPanel
+* [33mce32766[m fix `.travis.yml`
+* [33mfa4975c[m reschedule hyperlink highlightings if the terminal is resized horizontally
+* [33m30eed67[m Rename .java to .kt
+* [33mcaeb5d0[m clarify `AsyncHyperlinkFilter` API more; fix `AsyncHyperlinkFilter -> HyperlinkFilter` adapter
+* [33mf7c7234[m clarify `AsyncHyperlinkFilter` API
+* [33m2c7d471[m use thread-safe `myHyperlinkFilters`
+* [33m7e459e1[m introduce `AsyncHyperlinkFilter`
+* [33mecbb72a[m IJPL-176215 Increment version
+* [33m6638174[m IJPL-176215 Fire lines changed if new lines were created inside TerminalTextBuffer.getLine
+* [33m70b6720[m IJPL-173814 Increment version
+* [33mbe8f9b2[m IJPL-173814 Add separate text buffer event for clearing history
+* [33m5803caa[m Fix TerminalTextBuffer constructor
+* [33m14e3d12[m move `addTypeAheadModelListener` / `removeTypeAheadModelListener` to `JediTermTypeAheadModel`
+* [33m5ecd4d0[m reduce visibility of `TerminalTextBuffer` primary constructor
+* [33m50c1b97[m reduce visibility of `com.jediterm.terminal.model.TerminalTextBuffer#textProcessing`
+* [33m722896d[m IJPL-159930 Increment version
+* [33m14eda35[m IJPL-159930 Report text buffer width resized event
+* [33m9c057d7[m IJPL-159930 Report lines discarded from history event
+* [33medfe540[m IJPL-159930 Report lines changed event when any line is somehow changed
+* [33mf5c4a52[m IJPL-159930 Create a separate listener to listen for detailed text buffer changes
+* [33m5c5d41c[m IJPL-159930 Refactor: do not modify line content outside of TerminalTextBuffer
+* [33mdfc9bc0[m IJPL-159930 Refactor: change wrapped line status only inside TerminalTextBuffer
+* [33m7756943[m Cleanup: remove deprecated method from TerminalTextBuffer
+* [33m438409e[m Refactor: use LinesStorage instead of LinesBuffer
+* [33m2f4b0f0[m Refactor: translate TerminalTextBuffer to Kotlin
+* [33m2ae8ef9[m Refactor: rename .java to .kt
+* [33mc1cb74d[m provide ability to set default cursor in `TerminalPanel`
+* [33m0f93b21[m IJPL-159869 Improve performance of decodeUsingGraphicalState

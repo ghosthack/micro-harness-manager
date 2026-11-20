@@ -1,0 +1,23 @@
+after op 100 a8c45a1f3c8e2485
+after op 200 680a2814c61bbf6e
+after op 300 8884da381acd4837
+after op 400 784971f51213ac7f
+after op 500 8f1fb9931a7e79d9
+after op 600 19e974927a4d1980
+after op 700 094be8a804113528
+after op 800 6cdf2181d5e2d642
+after op 900 603defc31eb9cb1b
+after op 1000 ce5adba7c15e2541
+after op 1100 dfa479b85244c6a2
+after op 1200 8b96fb22e0a08b84
+after op 1300 2e00a1e51fc8fae2
+after op 1400 56ecd426bce6c346
+after op 1500 040e382f45ffb77b
+size 13x5 history 0
+state cursor=3,7 pen=fg=default bg=default visible=true shape=2 blink=false alt=true paste=false ckm=false keypad=true mouse=ANY_MOTION/DEFAULT focus=false sync=false rv=false awm=true decom=false irm=false lnm=false region=0-4 kitty=0 charsets=0 title=icon+title tabs=
+modes Modes[cursorVisible=true, cursorShape=2, bracketedPaste=false, applicationCursorKeys=false, applicationKeypad=true, mouseTrackingMode=1003, mouseSgr=false, focusReporting=false, alternateScreen=true, autoWrap=true, originMode=false, scrollTop=1, scrollBottom=5, title=icon+title]
+  0 |             |
+  1 |             |
+  2 |             |
+  3+|D日d3^>kKsf4)|
+  4 |#Nymq&S      |
