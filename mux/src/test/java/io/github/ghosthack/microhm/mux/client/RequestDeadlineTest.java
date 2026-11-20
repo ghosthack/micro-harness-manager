@@ -25,7 +25,7 @@ final class RequestDeadlineTest {
     @Test
     void aRequestToAServerThatNeverAnswersFailsAtItsDeadline() throws Exception {
         // short: a Unix socket path must stay under ~104 bytes
-        Path socket = Files.createTempDirectory(Path.of("/tmp"), "mhd").resolve("s");
+        Path socket = Files.createTempDirectory(shortTemp(), "mhd").resolve("s");
         try (ServerSocketChannel wedged = ServerSocketChannel.open(StandardProtocolFamily.UNIX)) {
             wedged.bind(UnixDomainSocketAddress.of(socket));
             ServerConnection connection = ServerConnection.open(socket).orElseThrow();
@@ -52,5 +52,12 @@ final class RequestDeadlineTest {
                 SessionServerClient.timeoutFor(Protocol.OP_LIST, null));
         assertEquals(ServerConnection.REQUEST_TIMEOUT.plusMillis(30_000),
                 SessionServerClient.timeoutFor(Protocol.OP_WAIT, Json.object().put(Protocol.F_TIMEOUT_MS, 30_000)));
+    }
+
+    /** {@code /tmp} where there is one (macOS's own temp directory is too deep for a
+     * socket path), else the JVM's temp directory (Windows). */
+    private static Path shortTemp() {
+        Path tmp = Path.of("/tmp");
+        return Files.isDirectory(tmp) ? tmp : Path.of(System.getProperty("java.io.tmpdir"));
     }
 }
