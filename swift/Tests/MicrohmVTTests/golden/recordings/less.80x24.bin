@@ -1,0 +1,117 @@
+[?1049h[24;1H[?1h=package io.github.ghosthack.microhm.vt;
+
+import java.nio.charset.StandardCharsets;
+
+/**
+ * One complete unit of a terminal output stream, as split by {@link VtTokenizer }. The
+ * bytes are the exact original bytes, so concatenating a token sequence reprodu ces the
+ * input verbatim (minus any incomplete tail the tokenizer is still holding).
+ *
+ * <p>{@code alreadyForwarded} is non-zero only for STRING/OSC tokens whose body  was
+ * streamed to clients in fragments before the terminator arrived (see
+ * {@link VtTokenizer.Batch}): the broadcast for this token is {@code bytes[alre adyForwarded..]}.
+ * The emulator and the mode tracker always get the whole token.
+ */
+public record VtToken(Kind kind, byte[] bytes, int alreadyForwarded) {
+
+    public VtToken(Kind kind, byte[] bytes) {
+        this(kind, bytes, 0);
+    }
+[7msample.java[27m[K[K
+    public enum Kind {
+        /** Printable text: one or more complete UTF-8 code points, no C0 contro ls. */
+        TEXT,
+        /** A single C0 control byte (BEL, BS, HT, LF, CR, SO, SI, ...) other th an ESC, or DEL. */
+        CONTROL,
+        /** {@code ESC [ params intermediates final} — final byte 0x40..0x7E. */
+        CSI,
+        /** {@code ESC ] ... (BEL | ESC \)} — includes the terminator. */
+        OSC,
+        /** {@code ESC P ... ESC \} (DCS), and likewise APC ({@code ESC _}), PM  ({@code ESC ^}),
+         * SOS ({@code ESC X}) — includes the terminator. */
+        STRING,
+        /** Any other {@code ESC x} sequence: two-byte escapes (ESC c, ESC 7, ES C =, ...) and
+         * the intermediate forms ({@code ESC ( B}, {@code ESC # 8}). */
+        ESCAPE,
+    }
+
+    public String asString() {
+:[K[K...skipping...
+        }
+        byte[] rest = new byte[bytes.length - alreadyForwarded];
+        System.arraycopy(bytes, alreadyForwarded, rest, 0, rest.length);
+        return rest;
+    }
+
+    /** For CSI tokens: the parameter/intermediate bytes between {@code ESC [} a nd the
+     * final byte (e.g. {@code "?996"} for {@code CSI ?996n}); empty for other k inds. */
+    public String csiBody() {
+        if (kind != Kind.CSI || bytes.length < 3) {
+            return "";
+        }
+        return new String(bytes, 2, bytes.length - 3, StandardCharsets.US_ASCII) ;
+    }
+
+    /** For CSI tokens: the final byte; 0 for other kinds. */
+    public char csiFinal() {
+        return kind == Kind.CSI ? (char) (bytes[bytes.length - 1] & 0xff) : 0;
+    }
+}
+[7m(END)[27m[K[K[H[2J[HM    }
+[HM        this(kind, bytes, 0);
+[HM    public VtToken(Kind kind, byte[] bytes) {
+[HM
+[HMpublic record VtToken(Kind kind, byte[] bytes, int alreadyForwarded) {
+[HM */
+[HM * The emulator and the mode tracker always get the whole token.
+[HMadyForwarded..]}.
+[HM * {@link VtTokenizer.Batch}): the broadcast for this token is {@code bytes[alre[HM * streamed to clients in fragments before the terminator arrived (see
+[HM was
+[HM * <p>{@code alreadyForwarded} is non-zero only for STRING/OSC tokens whose body[HM *
+[HM * input verbatim (minus any incomplete tail the tokenizer is still holding).
+[HMces the
+[HM * bytes are the exact original bytes, so concatenating a token sequence reprodu[HM}. The
+[HM * One complete unit of a terminal output stream, as split by {@link VtTokenizer[HM/**
+[HM
+[HMimport java.nio.charset.StandardCharsets;
+[HM
+[HMpackage io.github.ghosthack.microhm.vt;
+[24;1H[K:[K[K/[Kcc[Kll[Kaa[Kss[Kss[K[1;1H[Kpackage io.github.ghosthack.microhm.vt;
+[2;1H[K
+[3;1H[Kimport java.nio.charset.StandardCharsets;
+[4;1H[K
+[5;1H[K/**
+[6;1H[K * One complete unit of a terminal output stream, as split by {@link VtTokenizer [7;1H[K}. The
+[8;1H[K * bytes are the exact original bytes, so concatenating a token sequence reprodu [9;1H[Kces the
+[10;1H[K * input verbatim (minus any incomplete tail the tokenizer is still holding).
+[11;1H[K *
+[12;1H[K * <p>{@code alreadyForwarded} is non-zero only for STRING/OSC tokens whose body [13;1H[K was
+[14;1H[K * streamed to clients in fragments before the terminator arrived (see
+[15;1H[K * {@link VtTokenizer.Batch}): the broadcast for this token is {@code bytes[alre [16;1H[KadyForwarded..]}.
+[17;1H[K * The emulator and the mode tracker always get the whole token.
+[18;1H[K */
+[19;1H[Kpublic record VtToken(Kind kind, byte[] bytes, int alreadyForwarded) {
+[20;1H[K
+[21;1H[K    public VtToken(Kind kind, byte[] bytes) {
+[22;1H[K        this(kind, bytes, 0);
+[23;1H[K    }
+[24;1H[1;1H[Kpackage io.github.ghosthack.microhm.vt;
+[2;1H[K
+[3;1H[Kimport java.nio.charset.StandardCharsets;
+[4;1H[K
+[5;1H[K/**
+[6;1H[K * One complete unit of a terminal output stream, as split by {@link VtTokenizer [7;1H[K}. The
+[8;1H[K * bytes are the exact original bytes, so concatenating a token sequence reprodu [9;1H[Kces the
+[10;1H[K * input verbatim (minus any incomplete tail the tokenizer is still holding).
+[11;1H[K *
+[12;1H[K * <p>{@code alreadyForwarded} is non-zero only for STRING/OSC tokens whose body [13;1H[K was
+[14;1H[K * streamed to clients in fragments before the terminator arrived (see
+[15;1H[K * {@link VtTokenizer.Batch}): the broadcast for this token is {@code bytes[alre [16;1H[KadyForwarded..]}.
+[17;1H[K * The emulator and the mode tracker always get the whole token.
+[18;1H[K */
+[19;1H[Kpublic record VtToken(Kind kind, byte[] bytes, int alreadyForwarded) {
+[20;1H[K
+[21;1H[K    public VtToken(Kind kind, byte[] bytes) {
+[22;1H[K        this(kind, bytes, 0);
+[23;1H[K    }
+[24;1H[K[7mPattern not found  (press RETURN)[27m[24;1H[K[K[?1l>[?1049l

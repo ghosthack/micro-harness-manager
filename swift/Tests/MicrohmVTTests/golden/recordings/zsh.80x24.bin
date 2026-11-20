@@ -1,0 +1,35 @@
+[1m[7m%[27m[1m[0m                                                                                [0m[27m[24m[J[32mdemo[39m:[34m~[39m % [K[?2004heecho hello[?2004l
+hello
+[1m[7m%[27m[1m[0m                                                                                [0m[27m[24m[J[32mdemo[39m:[34m~[39m % [K[?2004hpprintf "\033[1;31mred\033[0m \033[42mbg\033[0m\n"[?2004l
+[1;31mred[0m [42mbg[0m
+[1m[7m%[27m[1m[0m                                                                                [0m[27m[24m[J[32mdemo[39m:[34m~[39m % [K[?2004hlls[?2004l
+README.md	docs		notes.txt	sample.java	unicode.txt
+build		link-to-readme	run.sh		src
+[1m[7m%[27m[1m[0m                                                                                [0m[27m[24m[J[32mdemo[39m:[34m~[39m % [K[?2004hffor i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 [K  25 26; do echo line $i; done[?2004l
+line 1
+line 2
+line 3
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+line 11
+line 12
+line 13
+line 14
+line 15
+line 16
+line 17
+line 18
+line 19
+line 20
+line 21
+line 22
+line 23
+line 24
+line 25
+line 26
+[1m[7m%[27m[1m[0m                                                                                [0m[27m[24m[J[32mdemo[39m:[34m~[39m % [K[?2004heexit[?2004l
