@@ -16,6 +16,10 @@ agent in one session list, read, type into and wait on the others.
 Runs on macOS, Linux and Windows 10 (1809+) / 11. Needs Java 25+ and Maven 3.6.3+.
 Tested on macOS and Windows 11 with JDK 26, and on Ubuntu 24.04 with JDK 25 and Maven 3.8.
 
+A native macOS port in Swift and AppKit lives in its own repo,
+[microhm-appkit](https://github.com/ghosthack/microhm-appkit). It keeps copies of the
+phone page, its tests and the icon from this repo; change those files here.
+
 ## Features
 
 - **Sidebar.** Sessions with their state (working, waiting for input, idle, dead), sort by

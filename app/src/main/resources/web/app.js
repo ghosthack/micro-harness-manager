@@ -21,6 +21,7 @@ let sessions = []; // running, from the server
 let ended = []; // saved sessions that are not running
 let renderedList = null;
 const screens = new Map(); // the last screen seen of each session, shown at once on return
+const startedAs = new Map(); // names given in the New form, shown until the server's views arrive
 let listTimer = null;
 let stream = null;
 let current = null; // the session being shown
@@ -396,7 +397,7 @@ function showSession(name) {
   show("session-view");
   problem("session-problem", "");
   const known = screens.get(name) || sessions.find((s) => s.name === name);
-  $("session-title").textContent = known ? (known.display || known.name) : name;
+  $("session-title").textContent = known ? (known.display || known.name) : (startedAs.get(name) || name);
   setSessionState(known ? known.state : "");
   drawnStyled = null;
   $("scroller").style.background = "";
@@ -1153,6 +1154,7 @@ async function startSession(event) {
     $("new-prompt").value = "";
     // the reply reads "<name> started (...)"; the session takes the form's place in history
     const started = result.text.split(" ")[0];
+    if (name) startedAs.set(started, name);
     replaceView("s=" + encodeURIComponent(started));
   } catch (e) {
     failed("new-problem", e);
