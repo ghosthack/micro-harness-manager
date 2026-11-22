@@ -152,7 +152,12 @@ export function load({ hash = "", storage = new Map(), storageFails = false, ser
     head: new FakeElement("head"),
     visibilityState: "visible",
     getElementById: byId,
-    createElement: (tag) => new FakeElement(tag),
+    createElement: (tag) => {
+      const el = new FakeElement(tag);
+      // a canvas measures text as if every character were 7px wide
+      if (el.tagName === "CANVAS") el.getContext = () => ({ font: "", measureText: (text) => ({ width: 7 * text.length }) });
+      return el;
+    },
     querySelectorAll: (selector) => [...elements.values()].filter((el) => el.matches(selector)),
     addEventListener() {},
   };
@@ -172,9 +177,13 @@ export function load({ hash = "", storage = new Map(), storageFails = false, ser
     addEventListener() {}
     close() { this.readyState = EventSource.CLOSED; }
   }
+  // like a browser's: the hash reads with its "#" (or as "" when empty), set with or without
+  let fragment = hash.replace(/^#/, "");
   const location = {
-    hash, pathname: "/",
-    replace(url) { page.steps.push(["replace", url]); location.hash = url.replace(/^#/, ""); },
+    get hash() { return fragment ? "#" + fragment : ""; },
+    set hash(value) { fragment = String(value).replace(/^#/, ""); },
+    pathname: "/",
+    replace(url) { page.steps.push(["replace", url]); location.hash = url; },
   };
   // new Option(text, value), as a select or datalist holds them
   function Option(text, value) {

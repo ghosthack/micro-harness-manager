@@ -282,7 +282,7 @@ test("a stop tap from the list opens the session to ask there", () => {
   const page = load();
   const row = page.window.row({ ...SESSIONS[1], name: "mhm a/1", ended: false });
   row.querySelectorAll("button")[0].onclick();
-  assert.equal(page.location.hash, "s=mhm%20a%2F1");
+  assert.equal(page.location.hash, "#s=mhm%20a%2F1");
 });
 
 test("folder names come from Mac and Windows paths alike", () => {
@@ -421,6 +421,37 @@ test("starting a session takes the form's place, so back from it is the list", a
   page.window.route();
   page.$("back-button").onclick();
   assert.deepEqual(plain(page.steps), [["replace", "#s=mhm-new"], ["back"]]);
+});
+
+test("a link to a session opens its view, titled by its name until the server says more", () => {
+  const page = load({ hash: "s=mhm-a" });
+  page.window.route();
+  assert.equal(page.$("session-view").hidden, false);
+  assert.equal(page.$("list-view").hidden, true);
+  assert.equal(page.$("session-title").textContent, "mhm-a");
+  assert.equal(page.app.current, "mhm-a");
+});
+
+test("a session from the list is titled by its display name at once", () => {
+  const page = load();
+  page.app.sessions = [{ name: "mhm-a", display: "fix the login", state: "WAITING" }];
+  page.location.hash = "s=mhm-a";
+  page.window.route();
+  assert.equal(page.$("session-title").textContent, "fix the login");
+});
+
+test("a session started with a name shows that name before its first screen arrives", async () => {
+  const page = load({ server: (path) => ({ body: path === "/api/spawn" ? { ok: true, text: "mhm-new started (shell in /tmp)" } : { sessions: [], ended: [], harnesses: ["shell"] } }) });
+  page.window.route();
+  page.$("new-button").onclick();
+  page.window.route();
+  await page.settle();
+  page.$("new-project").value = "/tmp";
+  page.$("new-name").value = "my-shell";
+  await page.window.startSession({ preventDefault() {} });
+  page.window.route();
+  assert.equal(page.$("session-view").hidden, false);
+  assert.equal(page.$("session-title").textContent, "my-shell");
 });
 
 test("a session reached by a link or a reload has no list below: its entry becomes the list", () => {
