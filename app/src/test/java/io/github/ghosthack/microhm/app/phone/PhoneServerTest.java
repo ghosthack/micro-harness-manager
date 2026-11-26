@@ -427,8 +427,19 @@ class PhoneServerTest {
                 .header("Cookie", COOKIE)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[(int) PhoneUploads.MAX_BYTES + 1])).build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertEquals(413, big.statusCode());
+        assertEquals(413, big.statusCode(), "answered, not reset: the server reads the refused body first");
         assertFalse(Files.exists(uploads) && Files.list(uploads).findAny().isPresent(), "nothing kept");
+    }
+
+    @Test
+    void thePageRefusesATooLargeFileAtTheServersLimit() throws Exception {
+        String js;
+        try (var in = PhoneServer.class.getResourceAsStream("/web/app.js")) {
+            js = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        var limit = java.util.regex.Pattern.compile("const MAX_UPLOAD_BYTES = (\\d+) \\* 1024 \\* 1024;").matcher(js);
+        assertTrue(limit.find(), "app.js states its upload limit");
+        assertEquals(PhoneUploads.MAX_BYTES, Long.parseLong(limit.group(1)) * 1024 * 1024);
     }
 
     @Test

@@ -27,6 +27,10 @@ let stream = null;
 let current = null; // the session being shown
 let retryDelay = 1000; // reconnecting backs off, so a failing server is not hammered
 const MAX_RETRY_DELAY = 15000;
+// The largest file Microhm keeps (PhoneUploads.MAX_BYTES). Checked here before sending:
+// the server refuses a larger one without reading it, and a phone still sending can lose
+// that answer to the closed connection, leaving only a vague network error.
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 // ------------------------------------------------------------------ server calls
 
@@ -994,6 +998,10 @@ async function attachFiles() {
 }
 
 async function uploadFile(file) {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error((file.name || "That file") + " is " + size(file.size) + "; Microhm keeps files up to "
+        + size(MAX_UPLOAD_BYTES) + ".");
+  }
   let response;
   try {
     // into the session's project, where its agent can read it without asking
