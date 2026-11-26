@@ -718,6 +718,7 @@ public final class PhoneServer implements AutoCloseable {
         if (length != null) {
             try {
                 if (Long.parseLong(length.trim()) > PhoneUploads.MAX_BYTES) {
+                    discardBody(ex);
                     sendError(ex, 413, new PhoneUploads.TooLarge().getMessage());
                     return;
                 }
@@ -730,6 +731,7 @@ public final class PhoneServer implements AutoCloseable {
             saved = uploadsFor(query(ex, "session"))
                     .save(body, query(ex, "name"), ex.getRequestHeaders().getFirst("Content-Type"));
         } catch (PhoneUploads.TooLarge e) {
+            discardBody(ex);
             sendError(ex, 413, e.getMessage());
             return;
         } catch (IOException e) {
@@ -739,6 +741,30 @@ public final class PhoneServer implements AutoCloseable {
         }
         LOG.info("kept a file from the phone page at {}", saved);
         sendJson(ex, 200, json.createObjectNode().put("ok", true).put("path", saved.toString()));
+    }
+
+    /** At most this much of a refused upload is read and dropped (see {@link #discardBody}). */
+    static final long DISCARD_LIMIT = 2 * PhoneUploads.MAX_BYTES;
+
+    /**
+     * Reads and drops what is left of a refused upload's body, up to {@link #DISCARD_LIMIT}.
+     * The server sends no answer until the body is read, and closing with bytes still unread
+     * resets the connection, which can take the 413 with it: the client would see only a
+     * dropped connection. The page checks the size before sending, so this is for other
+     * clients and costs nothing in normal use.
+     */
+    private static void discardBody(HttpExchange ex) {
+        try {
+            InputStream body = ex.getRequestBody();
+            byte[] buffer = new byte[64 * 1024];
+            long read = 0;
+            int n;
+            while (read < DISCARD_LIMIT && (n = body.read(buffer)) > 0) {
+                read += n;
+            }
+        } catch (IOException ignored) {
+            // The client went away; nobody is left to answer.
+        }
     }
 
     /** The session's project's uploads, else the folder beside the registry. */
