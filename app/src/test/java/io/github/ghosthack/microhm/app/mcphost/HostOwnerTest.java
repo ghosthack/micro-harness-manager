@@ -69,4 +69,15 @@ class HostOwnerTest {
         assertTrue(HostOwner.stop(registry, java.time.Duration.ofSeconds(1)));
         assertTrue(HostOwner.read(registry).isEmpty());
     }
+
+    @Test
+    void aStopRequestCountsOnlyForTheHostItNames() throws Exception {
+        Path registry = dir.resolve("sessions.json");
+        HostOwner.Record host = new HostOwner.Record(4242, 1_000_000);
+        assertFalse(HostOwner.stopRequested(registry, host), "no request yet");
+        java.nio.file.Files.writeString(HostOwner.stopFile(registry), host.encode());
+        assertTrue(HostOwner.stopRequested(registry, host));
+        assertFalse(HostOwner.stopRequested(registry, new HostOwner.Record(4242, 9_000_000)),
+                "a stale request for an earlier host with the same pid");
+    }
 }

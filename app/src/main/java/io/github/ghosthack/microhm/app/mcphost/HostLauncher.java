@@ -89,6 +89,38 @@ public final class HostLauncher {
         return openedApp != null;
     }
 
+    /** How long the tray probe may take; a JVM start, so seconds, not milliseconds. */
+    static final Duration TRAY_PROBE_WAIT = Duration.ofSeconds(15);
+
+    /**
+     * Whether the desktop has a tray, asked by a throwaway process ({@link McpHost#probeTray})
+     * so this one never connects to the display. No answer in time counts as no tray: the
+     * host then runs headless, which keeps MCP and the phone page safe from a logout.
+     */
+    static boolean trayAvailable() {
+        List<String> command = new ArrayList<>(launcher());
+        command.add(McpHost.TRAY_PROBE_FLAG);
+        try {
+            Process probe = new ProcessBuilder(command)
+                    .directory(new File(System.getProperty("user.home")))
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            if (!probe.waitFor(TRAY_PROBE_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
+                probe.destroyForcibly();
+                LOG.info("the tray probe did not answer within {} s; no tray icon", TRAY_PROBE_WAIT.toSeconds());
+                return false;
+            }
+            return probe.exitValue() == McpHost.TRAY_PRESENT;
+        } catch (IOException e) {
+            LOG.warn("could not run the tray probe: {}", e.toString());
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
     /** The started process, or null when it could not be started. */
     private static Process start(List<String> command, String logName, String what) {
         Path log = RegistryPaths.resolve().toAbsolutePath().resolveSibling(logName);

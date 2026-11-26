@@ -56,6 +56,10 @@ public final class MicroHarnessManagerApp {
             PackageSmoke.run();
             return;
         }
+        if (args.length == 1 && args[0].equals(McpHost.TRAY_PROBE_FLAG)) {
+            McpHost.probeTray();
+            return;
+        }
         if (args.length >= 1 && args[0].equals(McpHost.FLAG)) {
             McpHost.run(args);
             return;

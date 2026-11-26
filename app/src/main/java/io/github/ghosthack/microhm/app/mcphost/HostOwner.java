@@ -14,6 +14,11 @@ import java.util.function.LongFunction;
  * Who the background host is: an {@code mcp-host.pid} file beside the registry holding
  * the host's pid and its start instant. The pair, not the pid alone, identifies the
  * process, so the app never signals an unrelated process that reused the number.
+ *
+ * <p>The app stops the host with a stop request ({@code mcp-host.stop}, naming the host's
+ * record) as well as a signal: on Windows the only signal Java can send ends the process
+ * outright, so the host would never run its shutdown hook or take its tray icon down. The
+ * host watches for the request ({@link #stopRequested}) and exits cleanly.
  */
 public final class HostOwner {
 
@@ -43,6 +48,21 @@ public final class HostOwner {
 
     public static Path file(Path registryFile) {
         return registryFile.toAbsolutePath().resolveSibling("mcp-host.pid");
+    }
+
+    public static Path stopFile(Path registryFile) {
+        return registryFile.toAbsolutePath().resolveSibling("mcp-host.stop");
+    }
+
+    /** Whether the app has asked the host named by {@code record} to stop. A request for
+     * another host (a stale file left by one that ended first) does not count. */
+    public static boolean stopRequested(Path registryFile, Record record) {
+        try {
+            return Record.decode(Files.readString(stopFile(registryFile), StandardCharsets.UTF_8))
+                    .filter(record::equals).isPresent();
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /** This process's record, or empty when the platform does not report a start time. */
@@ -106,7 +126,10 @@ public final class HostOwner {
             clear(registryFile, record.get());
             return true;
         }
-        host.get().destroy(); // SIGTERM: its shutdown hook stops the server and clears the file
+        requestStop(registryFile, record.get());
+        if (!WINDOWS) {
+            host.get().destroy(); // SIGTERM: its shutdown hook stops the server and clears the file
+        } // On Windows destroy() is TerminateProcess: no hook would run, the tray icon would stay.
         long deadline = System.nanoTime() + timeout.toNanos();
         while (host.get().isAlive() && System.nanoTime() - deadline < 0) {
             Thread.sleep(50);
@@ -116,8 +139,26 @@ public final class HostOwner {
             Thread.sleep(200);
         }
         clear(registryFile, record.get());
+        try {
+            Files.deleteIfExists(stopFile(registryFile));
+        } catch (IOException ignored) {
+            // A stale request names a host that is gone, so no later host acts on it.
+        }
         return !host.get().isAlive();
     }
+
+    private static void requestStop(Path registryFile, Record record) {
+        Path target = stopFile(registryFile);
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        try {
+            Files.writeString(tmp, record.encode(), StandardCharsets.UTF_8);
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException ignored) {
+            // The signal (or, on Windows, the forcible end after the wait) still stops it.
+        }
+    }
+
+    private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase().startsWith("windows");
 
     /** For log lines. */
     static String describe(Record record) {

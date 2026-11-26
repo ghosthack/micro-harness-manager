@@ -145,6 +145,19 @@ final class StatusIcon {
         });
     }
 
+    /** {@link #remove} for a shutdown hook: waits (at most {@code wait}) for the icon to be
+     * gone, since the JVM may halt before a queued removal runs. */
+    void removeAndWait(java.time.Duration wait) {
+        java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        remove();
+        EventQueue.invokeLater(done::countDown);
+        try {
+            done.await(wait.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     static String sessionsLabel(int sessions) {
         return sessions == 1 ? "1 session running" : sessions + " sessions running";
     }
