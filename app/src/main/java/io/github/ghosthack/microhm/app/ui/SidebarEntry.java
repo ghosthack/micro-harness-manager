@@ -27,6 +27,16 @@ final class SidebarEntry {
      * mid-redraw must not make the name flicker off. */
     private String paneTitle = "";
 
+    /** The live status mark the harness leads its title with ({@code ✳}, a braille or
+     * half-circle spinner frame, …), exactly as last written; empty when it writes none.
+     * Shown before the name but never part of it, so a new frame repaints the row
+     * without renaming it or moving it in a name sort. */
+    private String titleMark = "";
+
+    /** Whether a title has arrived from the live stream: from then on the stream owns
+     * the mark, and the poll (a sample a few seconds old) only keeps the name fresh. */
+    private boolean liveTitleSeen;
+
     private SidebarEntry(Status status, SessionEntry sessionEntry, String sessionName) {
         this.status = status;
         this.sessionEntry = sessionEntry;
@@ -84,23 +94,89 @@ final class SidebarEntry {
         return paneTitle;
     }
 
-    void setPaneTitle(String paneTitle) {
-        String name = paneTitle == null ? "" : withoutStatusGlyph(paneTitle);
-        if (!name.isBlank()) {
-            this.paneTitle = name;
+    String titleMark() {
+        return titleMark;
+    }
+
+    /** A title the status poll sampled. Updates the name; updates the mark only until
+     * the live stream has delivered one, since its frames are newer than any sample. */
+    void setPaneTitle(String polledTitle) {
+        if (polledTitle == null || polledTitle.isBlank()) {
+            return;
+        }
+        TitleParts parts = TitleParts.of(polledTitle);
+        if (!parts.name().isBlank()) {
+            this.paneTitle = parts.name();
+        }
+        if (!liveTitleSeen) {
+            this.titleMark = parts.mark();
         }
     }
 
-    /** Harnesses prefix their terminal title with a live status mark: Claude Code's
-     * {@code ✳} when idle, a braille spinner frame while working. The row already shows
-     * status in its badge, and a mark that changes every frame would make the name (and
-     * a name sort) flicker, so it is dropped from the name. */
-    static String withoutStatusGlyph(String title) {
-        return STATUS_GLYPH.matcher(title).replaceFirst("").strip();
+    /**
+     * A title as the harness just wrote it (the live stream). The mark follows it frame
+     * for frame, cleared when the harness stops writing one. The name follows too,
+     * except for Codex, whose name is its saved chat name (the poll resolves it) rather
+     * than its title. A title with no name in it keeps the previous name.
+     */
+    void setLiveTitle(String title) {
+        liveTitleSeen = true;
+        TitleParts parts = TitleParts.of(title == null ? "" : title);
+        this.titleMark = parts.mark();
+        if (!parts.name().isBlank() && harnessType() != HarnessType.CODEX) {
+            this.paneTitle = parts.name();
+        }
     }
 
-    private static final java.util.regex.Pattern STATUS_GLYPH =
-            java.util.regex.Pattern.compile("^\\s*[\\u2800-\\u28FF\\u2722-\\u273D\\u00B7\\u2022\\u25CF]+(\\s+|$)");
+    /** Takes over {@code previous}'s title state when the sidebar is rebuilt. */
+    void carryTitleFrom(SidebarEntry previous) {
+        this.paneTitle = previous.paneTitle;
+        this.titleMark = previous.titleMark;
+        this.liveTitleSeen = previous.liveTitleSeen;
+    }
+
+    /**
+     * A harness title split into its leading status mark and the name after it. The
+     * mark is a run of non-ASCII symbols (Unicode {@code So}/{@code Sm}, plus {@code ·}
+     * and {@code •}, which Claude Code cycles through) ending at a space or the end of
+     * the title; joiners and variation selectors may sit inside it so an emoji stays
+     * whole. Whatever the harness's spinner glyphs are, they need no listing here.
+     * Anything else (no mark, or symbols glued to a word) is all name.
+     */
+    record TitleParts(String mark, String name) {
+
+        static TitleParts of(String title) {
+            String t = title.strip();
+            int i = 0;
+            int marks = 0;
+            while (i < t.length()) {
+                int cp = t.codePointAt(i);
+                if (isMarkSymbol(cp)) {
+                    marks++;
+                } else if (marks == 0 || !isMarkJoiner(cp)) {
+                    break;
+                }
+                i += Character.charCount(cp);
+            }
+            if (marks == 0 || (i < t.length() && !Character.isWhitespace(t.codePointAt(i)))) {
+                return new TitleParts("", t);
+            }
+            return new TitleParts(t.substring(0, i), t.substring(i).strip());
+        }
+
+        private static boolean isMarkSymbol(int cp) {
+            if (cp == 0x00B7 || cp == 0x2022) {
+                return true;
+            }
+            int type = Character.getType(cp);
+            return cp > 0x7F && (type == Character.OTHER_SYMBOL || type == Character.MATH_SYMBOL);
+        }
+
+        private static boolean isMarkJoiner(int cp) {
+            int type = Character.getType(cp);
+            return cp == 0x200D || type == Character.NON_SPACING_MARK || type == Character.ENCLOSING_MARK;
+        }
+    }
 
     /** The session's name as shown to the user: an explicit persisted rename, then the
      * harness-set OSC title (e.g. Claude Code's /rename), then the session name. */
@@ -127,12 +203,19 @@ final class SidebarEntry {
     }
 
     /**
-     * The row's top line: the session's name (a persisted rename, then the harness-set
-     * OSC title, then the session name). The harness isn't named
+     * The row's top line: the harness's live status mark, if any, then the session's
+     * name (a persisted rename, then the harness-set OSC title, then the session
+     * name). The harness isn't named
      * here — the renderer badges the row with {@link #harnessType()}'s glyph instead.
      */
     String nameText() {
-        return displayName();
+        return markedName();
+    }
+
+    /** {@link #displayName()} led by the harness's current status mark, if any: the name
+     * as every title-showing surface presents it. */
+    String markedName() {
+        return titleMark.isEmpty() ? displayName() : titleMark + " " + displayName();
     }
 
     /** The row's muted second line: the project dir. The renderer clips this from the
@@ -152,7 +235,7 @@ final class SidebarEntry {
     String tooltipText() {
         String fullDisplayName = displayName();
         StringBuilder html = new StringBuilder("<html><b>")
-                .append(escapeHtml(fullDisplayName)).append("</b>");
+                .append(escapeHtml(markedName())).append("</b>");
         if (!fullDisplayName.equals(sessionName)) {
             html.append("<br>").append(escapeHtml(sessionName));
         }

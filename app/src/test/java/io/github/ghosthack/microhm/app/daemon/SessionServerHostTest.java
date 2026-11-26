@@ -255,6 +255,28 @@ class SessionServerHostTest {
         assertDoesNotThrow(() -> host.killSession(name));
     }
 
+    /** Every OSC title a program writes reaches {@code watchTitles} as written, frame by
+     * frame, with no capture in between; a dead home has no stream to open. */
+    @Test
+    void watchTitlesStreamsEachTitleFrameAsWritten() throws Exception {
+        String name = "mhm-title";
+        host.newSession(name, workdir, 100, 30);
+        List<String> titles = new java.util.concurrent.CopyOnWriteArrayList<>();
+        try (var watch = host.watchTitles((session, title) -> {
+            if (session.equals(name)) {
+                titles.add(title);
+            }
+        }).orElseThrow()) {
+            assertTrue(watch.isOpen());
+            host.sendKeys(name, "printf '\\033]0;\\342\\227\\220 build\\007'; sleep 0.2; "
+                    + "printf '\\033]0;\\342\\227\\221 build\\007'");
+            awaitUntil("both frames to arrive", () -> titles.contains("◑ build"), titles::toString);
+            assertEquals(List.of("◐ build", "◑ build"), titles);
+        }
+        SessionServerHost dead = new SessionServerHost(new SessionServerClient(deadHome, false));
+        assertThrows(SessionHostException.class, () -> dead.watchTitles((session, title) -> { }));
+    }
+
     /** Hermeticity pin: the session's cwd is the requested workdir and its foreground
      * process is {@code sh}, whatever {@code $SHELL} and its login files say — so no
      * developer dotfile can move the cwd or replace the foreground process under the

@@ -11,7 +11,11 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 
 /**
  * In-memory session host: the test sets up live sessions and screens directly; no
@@ -207,5 +211,56 @@ public final class FakeSessionHost implements SessionHost {
                 open = false;
             }
         };
+    }
+
+    // ------------------------------------------------------------------ title stream
+
+    private volatile boolean titleStream;
+    private final AtomicInteger titleWatchFailures = new AtomicInteger();
+    private final List<BiConsumer<String, String>> titleWatchers = new CopyOnWriteArrayList<>();
+    /** How many title streams {@link #watchTitles} opened. */
+    public final AtomicInteger titleWatchOpens = new AtomicInteger();
+
+    /** Makes {@link #watchTitles} stream titles (it reports no stream until called). */
+    public void enableTitleStream() {
+        titleStream = true;
+    }
+
+    /** The next {@code count} {@link #watchTitles} calls throw, like a missing daemon. */
+    public void failTitleWatches(int count) {
+        titleWatchFailures.set(count);
+    }
+
+    /** Delivers a title change to every open title stream. */
+    public void emitTitle(String session, String title) {
+        titleWatchers.forEach(w -> w.accept(session, title));
+    }
+
+    /** Ends every open title stream, like a daemon going away. */
+    public void endTitleStreams() {
+        titleWatchers.clear();
+    }
+
+    @Override
+    public Optional<TitleWatch> watchTitles(BiConsumer<String, String> onTitle) {
+        if (!titleStream) {
+            return Optional.empty();
+        }
+        if (titleWatchFailures.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+            throw new SessionHostException("no session server is running", null);
+        }
+        titleWatchers.add(onTitle);
+        titleWatchOpens.incrementAndGet();
+        return Optional.of(new TitleWatch() {
+            @Override
+            public boolean isOpen() {
+                return titleWatchers.contains(onTitle);
+            }
+
+            @Override
+            public void close() {
+                titleWatchers.remove(onTitle);
+            }
+        });
     }
 }

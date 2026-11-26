@@ -232,6 +232,16 @@ public final class MainWindow extends JFrame {
      * stopping: a tick that finds nothing pulsing stops the timer, and
      * {@link #ensurePulsing()} restarts it wherever states or attachment change. */
     private final Timer pulseTimer = new Timer(PULSE_FRAME_MS, e -> repaintPulsingDots());
+
+    /** Each session's title as its harness writes it, frame by frame (see
+     * {@link #onLiveTitles}); the status poll's sampled title is the fallback. */
+    private final LiveTitles liveTitles;
+
+    /** The window title follows the selected session's live status mark, but no faster
+     * than this: a native title-bar update per spinner frame costs more than it shows. */
+    static final int WINDOW_TITLE_MARK_MIN_MS = 250;
+    private final Timer windowTitleTimer = new Timer(WINDOW_TITLE_MARK_MIN_MS,
+            e -> updateWindowTitle(sidebarList.getSelectedValue()));
     private final KeyEventDispatcher keyEventDispatcher = this::handleGlobalKeyEvent;
     private final JButton sidebarButton = new JButton();
     private final JButton openButton = new JButton("Open…");
@@ -586,6 +596,8 @@ public final class MainWindow extends JFrame {
         this.gracefulCloser = new GracefulCloser(host, Duration.ofMillis(250),
                 Duration.ofSeconds(10), Duration.ofSeconds(5));
         this.statusPollTimer = new Timer(statusPollIntervalMs, e -> pollLiveSessions());
+        this.liveTitles = new LiveTitles(host, SwingUtilities::invokeLater, this::onLiveTitles);
+        windowTitleTimer.setRepeats(false);
         statusPollTimer.setInitialDelay(500);
         if (statusPollingEnabled) {
             statusPollTimer.start();
@@ -606,6 +618,7 @@ public final class MainWindow extends JFrame {
         sessionEvents.addSessionRunEndedListener(sessionRunEndedListener);
 
         refreshSidebar(null);
+        liveTitles.start();
     }
 
     /**
@@ -681,6 +694,8 @@ public final class MainWindow extends JFrame {
         statusPollTimer.stop();
         activeTabPollTimer.stop();
         pulseTimer.stop();
+        liveTitles.stop();
+        windowTitleTimer.stop();
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyEventDispatcher);
         backgroundExecutor.shutdownNow();
         settingsExecutor.shutdown();
@@ -1079,7 +1094,7 @@ public final class MainWindow extends JFrame {
                 if (previous.state() != null) {
                     sidebarEntry.setState(previous.state(), previous.stateReason());
                 }
-                sidebarEntry.setPaneTitle(previous.paneTitle());
+                sidebarEntry.carryTitleFrom(previous);
             }
             allSidebarEntries.add(sidebarEntry);
         }
@@ -1240,6 +1255,9 @@ public final class MainWindow extends JFrame {
         }
         String path = entry.abbreviatedPath();
         String sessionName = ellipsizeRight(entry.displayName(), WINDOW_TITLE_SESSION_MAX_CHARS);
+        if (!entry.titleMark().isEmpty()) {
+            sessionName = entry.titleMark() + " " + sessionName;
+        }
         setTitle(sessionName + (path.isEmpty() ? "" : " — " + path) + " — " + APP_NAME);
     }
 
@@ -1519,6 +1537,7 @@ public final class MainWindow extends JFrame {
                 SessionState oldState = entry.state();
                 String oldReason = entry.stateReason();
                 String oldPaneTitle = entry.paneTitle();
+                String oldTitleMark = entry.titleMark();
                 if (result.stateConfirmed()) {
                     entry.setState(result.classification().state(), result.classification().reason());
                 }
@@ -1527,7 +1546,8 @@ public final class MainWindow extends JFrame {
                 // tooltip can show differently afterwards
                 boolean changed = oldState != entry.state()
                         || !Objects.equals(oldReason, entry.stateReason())
-                        || !Objects.equals(oldPaneTitle, entry.paneTitle());
+                        || !Objects.equals(oldPaneTitle, entry.paneTitle())
+                        || !oldTitleMark.equals(entry.titleMark());
                 SidebarView.FilterStatus newStatus = SidebarView.filterStatus(entry);
                 boolean filterMembershipMayChange = oldStatus != newStatus
                         && visibleStatuses.size() != SidebarView.FilterStatus.values().length;
@@ -1555,6 +1575,48 @@ public final class MainWindow extends JFrame {
         }
         // the session went dead/was removed between the poll firing and this result
         // landing — nothing to update, and the next refreshSidebar() already dropped it
+    }
+
+    /**
+     * Titles just written by harnesses (on the EDT, newest per session). A new status
+     * mark repaints only its row; a new name may also re-sort the sidebar, as a polled
+     * rename does. The selected session's window title follows at most every
+     * {@link #WINDOW_TITLE_MARK_MIN_MS}.
+     */
+    private void onLiveTitles(Map<String, String> titles) {
+        if (disposed) {
+            return;
+        }
+        boolean resort = false;
+        boolean selectedChanged = false;
+        SidebarEntry selected = sidebarList.getSelectedValue();
+        for (SidebarEntry entry : allSidebarEntries) {
+            String title = titles.get(entry.sessionName());
+            if (title == null || entry.status() != SidebarEntry.Status.LIVE) {
+                continue;
+            }
+            String oldDisplayName = entry.displayName();
+            String oldMark = entry.titleMark();
+            entry.setLiveTitle(title);
+            if (oldMark.equals(entry.titleMark()) && oldDisplayName.equals(entry.displayName())) {
+                continue;
+            }
+            if (sidebarSort == SidebarView.SortMode.SESSION_NAME && !oldDisplayName.equals(entry.displayName())) {
+                resort = true;
+            } else {
+                int index = indexOfSessionName(entry.sessionName());
+                if (index >= 0) {
+                    sidebarList.repaint(sidebarList.getCellBounds(index, index));
+                }
+            }
+            selectedChanged |= entry.equals(selected);
+        }
+        if (resort) {
+            rebuildVisibleSidebar(lastSelectedSessionName, false);
+        }
+        if (selectedChanged && !windowTitleTimer.isRunning()) {
+            windowTitleTimer.start();
+        }
     }
 
     /** Moves the sidebar's hover highlight to {@code index} (-1 for none), repainting

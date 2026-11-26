@@ -10,6 +10,7 @@ import io.github.ghosthack.microhm.app.state.Screen;
 import io.github.ghosthack.microhm.mux.client.AttachedSession;
 import io.github.ghosthack.microhm.mux.client.SessionServerClient;
 import io.github.ghosthack.microhm.mux.client.SessionServerException;
+import io.github.ghosthack.microhm.mux.protocol.Protocol;
 import io.github.ghosthack.microhm.mux.session.Session;
 
 import java.nio.file.Path;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -148,6 +150,31 @@ public final class SessionServerHost implements SessionHost, DirectSessionStarte
         AttachedSession attached = call(() -> client.attach(session, columns, rows));
         return new SessionServerConnection(attached);
     }
+
+    /** The daemon's event stream for every session (later ones too), filtered to its
+     * {@code title} events. The quiet period only paces {@code quiet} events, which this
+     * ignores, so it is set long to keep them rare. */
+    @Override
+    public Optional<TitleWatch> watchTitles(BiConsumer<String, String> onTitle) {
+        SessionServerClient.Watch watch = call(() -> client.watch(null, TITLE_WATCH_QUIET_MS, event -> {
+            if (Protocol.EVENT_TITLE.equals(event.type())) {
+                onTitle.accept(event.name(), event.title() == null ? "" : event.title());
+            }
+        }));
+        return Optional.of(new TitleWatch() {
+            @Override
+            public boolean isOpen() {
+                return watch.isOpen();
+            }
+
+            @Override
+            public void close() {
+                watch.close();
+            }
+        });
+    }
+
+    private static final long TITLE_WATCH_QUIET_MS = 60_000;
 
     /** One daemon request, with its failure translated for the seam: same message, the
      * daemon's exception kept as the cause so a log still shows which side failed. */
