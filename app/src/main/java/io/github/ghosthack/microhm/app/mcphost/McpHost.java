@@ -43,6 +43,13 @@ public final class McpHost {
 
     /** The command-line flag that selects this mode. */
     public static final String FLAG = "--mcp-host";
+    /** The flag for a throwaway process that only answers whether the desktop has a tray
+     * (see {@link #probeTray}). */
+    public static final String TRAY_PROBE_FLAG = "--tray-probe";
+    /** Exit status of a tray probe that found a tray. */
+    static final int TRAY_PRESENT = 0;
+    /** Exit status of a tray probe that found none. */
+    static final int TRAY_ABSENT = 3;
     /** The app's registry file, so the host finds the same settings, MCP configs and lock. */
     public static final String REGISTRY_OPTION = "--registry=";
     /** The app's daemon home, so the host talks to the same daemon. */
@@ -55,16 +62,23 @@ public final class McpHost {
     /** Consecutive checks that must find nothing live before exiting: one daemon hiccup
      * must not end the host. */
     static final int EMPTY_CHECKS_TO_EXIT = 2;
+    /** How often the host looks for the app's stop request ({@link HostOwner#stopRequested}). */
+    static final Duration STOP_POLL = Duration.ofMillis(250);
+    /** How long exit waits for the tray icon to be taken down. */
+    static final Duration ICON_REMOVE_WAIT = Duration.ofSeconds(1);
     /** The macOS glyph follows a dark/light switch about once a minute (every 4th check). */
     static final int APPEARANCE_CHECK_TICKS = 4;
 
     public static void run(String[] args) throws InterruptedException {
         applyStateOptions(args);
         boolean mcp = AppSettings.mcpServerEnabled();
-        boolean wantIcon = AppSettings.trayIconEnabled();
         boolean phone = AppSettings.phoneServerEnabled();
+        // On Linux, asking for a tray connects this process to the X/Wayland display, and
+        // that connection ends the process when the user logs out of the desktop, taking MCP
+        // with it. So a throwaway process asks, and this one stays headless when it finds none.
+        boolean wantIcon = AppSettings.trayIconEnabled() && (!isLinux() || HostLauncher.trayAvailable());
         if (!mcp && !wantIcon && !phone) {
-            LOG.info("neither the MCP server, the phone page nor the tray icon is on; nothing to host");
+            LOG.info("neither the MCP server, the phone page nor a tray icon is on (or the desktop has no tray); nothing to host");
             return;
         }
         // Before anything touches AWT: headless when there is no icon to show, else a
@@ -143,8 +157,20 @@ public final class McpHost {
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().unstarted(() -> {
             stack.service().stop();
             stack.phone().stop();
-            icon.ifPresent(StatusIcon::remove);
+            icon.ifPresent(i -> i.removeAndWait(ICON_REMOVE_WAIT));
             self.ifPresent(record -> HostOwner.clear(registryFile, record));
+        }));
+        // The app's way to stop this host cleanly where a signal cannot (Windows).
+        self.ifPresent(record -> Thread.ofPlatform().daemon().name("mhm-host-stop-watch").start(() -> {
+            try {
+                while (!HostOwner.stopRequested(registryFile, record)) {
+                    Thread.sleep(STOP_POLL);
+                }
+            } catch (InterruptedException e) {
+                return;
+            }
+            LOG.info("the app asked the background host to stop; exiting");
+            System.exit(0);
         }));
         LOG.info("background host running while the app is closed: {}, {} ({})",
                 (servingPort > 0 ? "MCP on 127.0.0.1:" + servingPort : "no MCP")
@@ -154,10 +180,12 @@ public final class McpHost {
 
         int empty = 0;
         long ticks = 0;
+        boolean iconRemoved = false;
         while (empty < EMPTY_CHECKS_TO_EXIT) {
-            if (icon.isPresent()) {
+            if (icon.isPresent() && !iconRemoved) {
                 if (iconHidden.get()) {
                     icon.get().remove();
+                    iconRemoved = true;
                 } else {
                     icon.get().update(live, servingPort, ticks % APPEARANCE_CHECK_TICKS == 0 && ticks > 0);
                 }
@@ -169,6 +197,24 @@ public final class McpHost {
         }
         LOG.info("no registered session is live any more; background host exiting");
         System.exit(0);
+    }
+
+    /**
+     * The {@link #TRAY_PROBE_FLAG} process: exits {@link #TRAY_PRESENT} when the desktop has
+     * a tray, else {@link #TRAY_ABSENT}. Its display connection ends with it.
+     */
+    public static void probeTray() {
+        boolean present;
+        try {
+            present = !java.awt.GraphicsEnvironment.isHeadless() && java.awt.SystemTray.isSupported();
+        } catch (RuntimeException | Error e) {
+            present = false;
+        }
+        System.exit(present ? TRAY_PRESENT : TRAY_ABSENT);
+    }
+
+    private static boolean isLinux() {
+        return System.getProperty("os.name", "").toLowerCase().startsWith("linux");
     }
 
     /** Applies {@link #REGISTRY_OPTION} and {@link #MUX_HOME_OPTION} as the overrides every

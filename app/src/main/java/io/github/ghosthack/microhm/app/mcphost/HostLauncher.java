@@ -45,7 +45,7 @@ public final class HostLauncher {
         if (!anyLive(() -> McpHost.liveRegistered(registry, host), wait)) {
             return false;
         }
-        return start(withState(launcher(), McpHost.FLAG), "mcp-host.log", "the background host");
+        return start(withState(launcher(), McpHost.FLAG), "mcp-host.log", "the background host") != null;
     }
 
     /**
@@ -72,24 +72,69 @@ public final class HostLauncher {
         }
     }
 
-    /** Opens the app (from the tray menu); it stops this host as it starts. */
-    static boolean openApp() {
-        return start(withState(launcher()), "app.log", "the app");
+    /** The app this host last started from its tray menu, while it may still be starting. */
+    private static Process openedApp;
+
+    /**
+     * Opens the app (from the tray menu); it stops this host as it starts. A second Open
+     * while the app started by the first is still running does nothing: that app is about
+     * to take over, and another would only find the registry taken and say so.
+     */
+    static synchronized boolean openApp() {
+        if (openedApp != null && openedApp.isAlive()) {
+            LOG.info("the app is already starting; not opening another");
+            return false;
+        }
+        openedApp = start(withState(launcher()), "app.log", "the app");
+        return openedApp != null;
     }
 
-    private static boolean start(List<String> command, String logName, String what) {
+    /** How long the tray probe may take; a JVM start, so seconds, not milliseconds. */
+    static final Duration TRAY_PROBE_WAIT = Duration.ofSeconds(15);
+
+    /**
+     * Whether the desktop has a tray, asked by a throwaway process ({@link McpHost#probeTray})
+     * so this one never connects to the display. No answer in time counts as no tray: the
+     * host then runs headless, which keeps MCP and the phone page safe from a logout.
+     */
+    static boolean trayAvailable() {
+        List<String> command = new ArrayList<>(launcher());
+        command.add(McpHost.TRAY_PROBE_FLAG);
+        try {
+            Process probe = new ProcessBuilder(command)
+                    .directory(new File(System.getProperty("user.home")))
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            if (!probe.waitFor(TRAY_PROBE_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
+                probe.destroyForcibly();
+                LOG.info("the tray probe did not answer within {} s; no tray icon", TRAY_PROBE_WAIT.toSeconds());
+                return false;
+            }
+            return probe.exitValue() == McpHost.TRAY_PRESENT;
+        } catch (IOException e) {
+            LOG.warn("could not run the tray probe: {}", e.toString());
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /** The started process, or null when it could not be started. */
+    private static Process start(List<String> command, String logName, String what) {
         Path log = RegistryPaths.resolve().toAbsolutePath().resolveSibling(logName);
         try {
-            new ProcessBuilder(command)
+            Process process = new ProcessBuilder(command)
                     .directory(new File(System.getProperty("user.home")))
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile()))
                     .start();
             LOG.info("started {}", what);
-            return true;
+            return process;
         } catch (IOException e) {
             LOG.warn("could not start {} ({}): {}", what, String.join(" ", command), e.toString());
-            return false;
+            return null;
         }
     }
 
