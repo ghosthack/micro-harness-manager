@@ -209,18 +209,73 @@ class SidebarViewTest {
     }
 
     @Test
-    void harnessStatusGlyphsAreDroppedFromPaneTitleNames() {
+    void harnessStatusMarksAreKeptApartFromPaneTitleNames() {
         SidebarEntry entry = live("mhm-glyph", "/work/project");
         entry.setPaneTitle("✳ Refactor auth middleware");
         assertEquals("Refactor auth middleware", entry.displayName());
+        assertEquals("✳", entry.titleMark());
+        assertEquals("✳ Refactor auth middleware", entry.nameText());
         entry.setPaneTitle("⠼ Refactor auth middleware");
         assertEquals("Refactor auth middleware", entry.displayName());
+        assertEquals("⠼", entry.titleMark());
         // a bare mark carries no name: the previous one stays rather than blanking
         entry.setPaneTitle("✳");
         assertEquals("Refactor auth middleware", entry.displayName());
+        assertEquals("✳", entry.titleMark());
         // only a leading mark followed by a space is a status mark
         entry.setPaneTitle("v2 · draft");
         assertEquals("v2 · draft", entry.displayName());
+        assertEquals("", entry.titleMark());
+        assertEquals("v2 · draft", entry.nameText());
+    }
+
+    @Test
+    void anyLeadingSymbolRunIsAMarkWithoutListingSpinnerGlyphs() {
+        for (String frame : List.of("◐", "◓", "◑", "◒", "◴", "⠋", "·", "•", "●", "✻", "🤖", "❤️")) {
+            SidebarEntry.TitleParts parts = SidebarEntry.TitleParts.of(frame + " Architecture html page server");
+            assertEquals(frame, parts.mark(), frame);
+            assertEquals("Architecture html page server", parts.name(), frame);
+        }
+        // ASCII punctuation, symbols glued to a word, and plain names are all name
+        for (String title : List.of("~/Projects", "+ add tests", "◑draft", "#12 fix", "Plain name")) {
+            SidebarEntry.TitleParts parts = SidebarEntry.TitleParts.of(title);
+            assertEquals("", parts.mark(), title);
+            assertEquals(title, parts.name(), title);
+        }
+    }
+
+    @Test
+    void liveTitlesDriveTheMarkFrameByFrameAndOutrankPolledSamples() {
+        SidebarEntry entry = live("mhm-live", "/work/project");
+        entry.setLiveTitle("◐ Architecture html page server");
+        assertEquals("◐ Architecture html page server", entry.nameText());
+        entry.setLiveTitle("◓ Architecture html page server");
+        assertEquals("◓", entry.titleMark());
+        // a poll sample (older than the stream) keeps the name fresh but not the mark
+        entry.setPaneTitle("◐ Architecture html page server");
+        assertEquals("◓", entry.titleMark());
+        // the harness stops writing a mark: so does the row
+        entry.setLiveTitle("Architecture html page server");
+        assertEquals("", entry.titleMark());
+        assertEquals("Architecture html page server", entry.nameText());
+        // a persisted rename keeps showing the harness's live mark
+        SidebarEntry renamed = SidebarEntry.live(session("mhm-live", "/work/project", HarnessType.CLAUDE_CODE)
+                .withDisplayName("Mine"));
+        renamed.setLiveTitle("⠼ Harness name");
+        assertEquals("⠼ Mine", renamed.nameText());
+        // a rebuilt row takes the whole title state over
+        SidebarEntry rebuilt = live("mhm-live", "/work/project");
+        rebuilt.carryTitleFrom(entry);
+        rebuilt.setPaneTitle("✳ Architecture html page server");
+        assertEquals("", rebuilt.titleMark());
+    }
+
+    @Test
+    void codexLiveTitlesMoveTheMarkButNotTheSavedChatName() {
+        SidebarEntry entry = SidebarEntry.live(session("mhm-codex", "/work/project", HarnessType.CODEX));
+        entry.setPaneTitle("saved Codex name");
+        entry.setLiveTitle("⠼ project-directory");
+        assertEquals("⠼ saved Codex name", entry.nameText());
     }
 
     @Test

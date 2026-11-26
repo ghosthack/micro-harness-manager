@@ -4,6 +4,8 @@ import io.github.ghosthack.microhm.app.state.Screen;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
 /**
  * The substrate that hosts named sessions — the app's session daemon. This is the seam
@@ -49,4 +51,25 @@ public interface SessionHost {
      * therefore never called on the EDT.
      */
     SessionConnection attach(String session, int columns, int rows);
+
+    /** An open title stream from {@link #watchTitles}. */
+    interface TitleWatch extends AutoCloseable {
+        /** False once the stream has ended (the daemon went away or dropped it). */
+        boolean isOpen();
+
+        @Override
+        void close();
+    }
+
+    /**
+     * Streams every session's OSC title as the program in it sets it, frame by frame: a
+     * spinner a harness animates in its title arrives as each frame it writes. {@code
+     * onTitle} gets {@code (sessionName, title)} on a background thread. Empty when this
+     * host cannot stream titles (callers fall back to {@link #capture}'s title); throws
+     * {@link SessionHostException} when it could but the stream would not open now (no
+     * server, or one too old to watch).
+     */
+    default Optional<TitleWatch> watchTitles(BiConsumer<String, String> onTitle) {
+        return Optional.empty();
+    }
 }
