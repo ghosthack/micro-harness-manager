@@ -50,7 +50,9 @@ final class StatusIcon {
     private final MenuItem sessionsItem;
     private final MenuItem mcpItem;
     private final boolean mac;
+    /** Touched only on the AWT event thread. */
     private boolean dark;
+    private boolean removed;
     private int sessions = -1;
     private int mcpPort = -1;
 
@@ -99,7 +101,11 @@ final class StatusIcon {
 
         TrayIcon icon = new TrayIcon(image(mac, dark, tray.getTrayIconSize().height), APP_NAME, menu);
         icon.setImageAutoSize(true);
-        icon.addActionListener(e -> actions.open()); // double-click on Windows
+        if (!mac) {
+            // A double-click on Windows. macOS fires this on the single click that opens the
+            // menu, so there it would launch the app (and end this host) at every glance.
+            icon.addActionListener(e -> actions.open());
+        }
         try {
             tray.add(icon);
         } catch (AWTException e) {
@@ -110,9 +116,12 @@ final class StatusIcon {
 
     /** Refreshes the menu, the tooltip and (on macOS, after an appearance change) the glyph. */
     void update(int liveSessions, int servingPort, boolean recheckAppearance) {
-        boolean nowDark = mac && recheckAppearance ? macDarkMenuBar() : dark;
+        Boolean nowDark = mac && recheckAppearance ? macDarkMenuBar() : null;
         EventQueue.invokeLater(() -> {
-            if (nowDark != dark) {
+            if (removed) {
+                return;
+            }
+            if (nowDark != null && nowDark != dark) {
                 dark = nowDark;
                 icon.setImage(image(true, dark, tray.getTrayIconSize().height));
             }
@@ -126,8 +135,14 @@ final class StatusIcon {
         });
     }
 
+    /** Takes the icon out of the tray; later calls (and updates) do nothing. */
     void remove() {
-        EventQueue.invokeLater(() -> tray.remove(icon));
+        EventQueue.invokeLater(() -> {
+            if (!removed) {
+                removed = true;
+                tray.remove(icon);
+            }
+        });
     }
 
     static String sessionsLabel(int sessions) {
@@ -223,12 +238,13 @@ final class StatusIcon {
         try {
             Process p = new ProcessBuilder("defaults", "read", "-g", "AppleInterfaceStyle")
                     .redirectErrorStream(true).start();
-            String out = new String(p.getInputStream().readAllBytes()).trim();
+            // Wait first: reading blocks until the process ends, so a hung `defaults` would
+            // hang the host's main loop. The output ("Dark", or a short error) fits the pipe.
             if (!p.waitFor(2, TimeUnit.SECONDS)) {
                 p.destroyForcibly();
                 return true;
             }
-            return out.equalsIgnoreCase("Dark");
+            return new String(p.getInputStream().readAllBytes()).trim().equalsIgnoreCase("Dark");
         } catch (IOException e) {
             return true;
         } catch (InterruptedException e) {

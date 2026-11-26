@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.function.LongFunction;
 
 /**
- * Who the headless MCP host is: an {@code mcp-host.pid} file beside the registry holding
+ * Who the background host is: an {@code mcp-host.pid} file beside the registry holding
  * the host's pid and its start instant. The pair, not the pid alone, identifies the
  * process, so the app never signals an unrelated process that reused the number.
  */

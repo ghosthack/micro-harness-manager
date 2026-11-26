@@ -154,10 +154,12 @@ public final class McpHost {
 
         int empty = 0;
         long ticks = 0;
+        boolean iconRemoved = false;
         while (empty < EMPTY_CHECKS_TO_EXIT) {
-            if (icon.isPresent()) {
+            if (icon.isPresent() && !iconRemoved) {
                 if (iconHidden.get()) {
                     icon.get().remove();
+                    iconRemoved = true;
                 } else {
                     icon.get().update(live, servingPort, ticks % APPEARANCE_CHECK_TICKS == 0 && ticks > 0);
                 }

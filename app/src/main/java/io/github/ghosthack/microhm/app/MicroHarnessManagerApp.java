@@ -102,7 +102,7 @@ public final class MicroHarnessManagerApp {
         startMcpServer(mcpService);
         startPhoneServer(stack.phone());
         // However the app ends, agents keep their MCP tools while sessions live: a
-        // headless host takes over the server (and the registry) until the app is back.
+        // background host takes over the server (and the registry) until the app is back.
         // Bounded: it asks the daemon for its sessions, and the JVM waits on its hooks, so a
         // daemon that has stopped answering would otherwise hold the exit. No answer in
         // time still starts the host, which checks for itself.
@@ -179,7 +179,7 @@ public final class MicroHarnessManagerApp {
     }
 
     /**
-     * Takes the registry's instance lock. A headless MCP host holding it (the app was
+     * Takes the registry's instance lock. The background host holding it (the app was
      * closed while sessions ran) is stopped and the lock taken over; anything else holding
      * it is another app. A lock that cannot even be attempted runs unguarded.
      */
