@@ -197,15 +197,12 @@ a.row-main:active { background: var(--fill); }
   background: var(--term-bg); color: var(--term-text); padding: 10px 10px 12px;
 }
 .screen, .history { margin: 0; font: 12px/15px var(--mono); }
-/* Box and block characters are drawn as shapes filling their cell (see "cell glyphs" in
-   app.js): exactly one character wide and one line tall, in the text colour. The line
-   height is whole pixels so rows meet on pixel edges, with no seams. */
-.g {
-  display: inline-block; height: 15px; vertical-align: top; /* width: the run's cells, set inline */
-  background-color: currentColor;
-  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-}
+/* Tile runs reserve space in the text flow. The shared layer paints shapes and cell
+   backgrounds below the text. */
+.screen { position: relative; isolation: isolate; }
+.tile-run { display: inline-block; height: 1lh; vertical-align: top; }
+.tile-ruler { position: fixed; width: 100ch; visibility: hidden; }
+.tile-layer { position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none; }
 
 /* Until the first screen arrives: a quiet spinner in the middle of the dark area. */
 .connecting {
