@@ -50,6 +50,21 @@ final class AppSettingsTest {
     }
 
     @Test
+    void macPermissionsReviewPersistsPerVersionAlongsideExistingSettings() throws IOException {
+        settings("toolbar.labels=off\n");
+        assertFalse(AppSettings.macPermissionsReviewed("1.2.0"));
+
+        AppSettings.saveMacPermissionsReviewed("1.2.0");
+        assertTrue(AppSettings.macPermissionsReviewed("1.2.0"));
+        assertFalse(AppSettings.macPermissionsReviewed("1.3.0"));
+
+        AppSettings.saveMacPermissionsReviewed("1.3.0");
+        assertTrue(AppSettings.macPermissionsReviewed("1.2.0"));
+        assertTrue(AppSettings.macPermissionsReviewed("1.3.0"));
+        assertFalse(AppSettings.toolbarLabels());
+    }
+
+    @Test
     void concurrentSavesOfDifferentKeysNeitherLoseAChangeNorLeaveTempFiles() throws Exception {
         for (int round = 0; round < 50; round++) {
             settings("");

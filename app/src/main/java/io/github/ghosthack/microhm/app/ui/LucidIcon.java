@@ -23,6 +23,10 @@ import java.awt.geom.Path2D;
  */
 final class LucidIcon implements Icon {
 
+    static LucidIcon shield(int size) {
+        return new LucidIcon("M12 2 20 5v7a11 11 0 0 1-8 10 11 11 0 0 1-8-10V5z", size);
+    }
+
     /** The kotlin-mosaic {@code Icon.Screensaver} crescent, path data verbatim. */
     static LucidIcon moon(int size) {
         return new LucidIcon("M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z", size);

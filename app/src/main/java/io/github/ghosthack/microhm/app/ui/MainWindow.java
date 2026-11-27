@@ -261,6 +261,7 @@ public final class MainWindow extends JFrame {
     private final JButton removeDeadButton = new JButton();
     private final JButton themeButton = new JButton();
     private final JButton usageButton = new JButton();
+    private final JButton macPermissionsButton = new JButton();
     private final JButton settingsButton = new JButton();
     private final JButton sortButton = new JButton();
     private final JButton filterButton = new JButton();
@@ -282,6 +283,10 @@ public final class MainWindow extends JFrame {
     /** The active look; the toolbar sun/moon toggles it. Seeded from settings, which is
      * also what {@code MicroHarnessManagerApp} set up the initial LaF from. */
     private AppSettings.UiTheme uiTheme = AppSettings.uiTheme();
+
+    private final boolean mac = MacWindowAppearance.isMac();
+    private final String appVersion = mac ? MainWindow.class.getPackage().getImplementationVersion() : null;
+    private boolean permissionsReviewPending = appVersion != null && !AppSettings.macPermissionsReviewed(appVersion);
 
     /** Whether toolbar buttons carry text next to their glyph (the settings dialog's
      * toggle); tooltips carry the long form either way. */
@@ -542,6 +547,13 @@ public final class MainWindow extends JFrame {
         usageButton.setToolTipText("Show harness usage and limits");
         usageButton.addActionListener(e -> openUsageLimitsDialog());
         addControlButton(toolBar, usageButton);
+        if (mac) {
+            configureControlButton(macPermissionsButton);
+            macPermissionsButton.setFocusable(true);
+            macPermissionsButton.setIcon(LucidIcon.shield(16));
+            macPermissionsButton.addActionListener(e -> openMacPermissionsDialog());
+            addControlButton(toolBar, macPermissionsButton);
+        }
         settingsButton.setIcon(LucidIcon.settings(16));
         settingsButton.setToolTipText("Settings");
         settingsButton.addActionListener(e -> openSettingsDialog());
@@ -2578,6 +2590,15 @@ public final class MainWindow extends JFrame {
     // Settings dialog
     // ------------------------------------------------------------------
 
+    private void openMacPermissionsDialog() {
+        if (MacPermissionsDialog.show(this, permissionsReviewPending)) {
+            permissionsReviewPending = false;
+            applyMacPermissionsButtonFace();
+            applyToolbarBackground();
+            settingsExecutor.execute(() -> AppSettings.saveMacPermissionsReviewed(appVersion));
+        }
+    }
+
     /**
      * Opens the settings dialog and, on Save, persists the choices (off the EDT — see
      * {@link #toggleTheme}) and applies what can be applied immediately: attached
@@ -2720,6 +2741,9 @@ public final class MainWindow extends JFrame {
             if (child instanceof JButton button) {
                 Color background = toolbarMatchesSidebar
                         ? sidebarList.getBackground() : UIManager.getColor("Button.background");
+                if (button == macPermissionsButton && permissionsReviewPending) {
+                    background = uiTheme == AppSettings.UiTheme.LIGHT ? new Color(0xd6ebff) : new Color(0x193c59);
+                }
                 Map<String, Object> style = new LinkedHashMap<>();
                 if (outline || toolbarMatchesSidebar) {
                     Color border = toolbarBorderColor(background);
@@ -2849,6 +2873,9 @@ public final class MainWindow extends JFrame {
         batchCloseButton.setText(toolbarLabels ? "Batch close…" : null);
         removeDeadButton.setText(toolbarLabels ? "Remove dead…" : null);
         usageButton.setText(toolbarLabels ? "Usage" : null);
+        if (mac) {
+            applyMacPermissionsButtonFace();
+        }
         settingsButton.setText(toolbarLabels ? "Settings" : null);
         applyPageButtonsVisibility();
         applyStopLadderVisibility();
@@ -2856,6 +2883,13 @@ public final class MainWindow extends JFrame {
         updateSidebarControlLabels();
         applySidebarButtonFace();
         applyThemeButtonFace();
+    }
+
+    private void applyMacPermissionsButtonFace() {
+        macPermissionsButton.setText(toolbarLabels ? "Access" : null);
+        String description = permissionsReviewPending ? "Review macOS permissions for this version" : "macOS Permissions";
+        macPermissionsButton.setToolTipText(description);
+        macPermissionsButton.getAccessibleContext().setAccessibleName(description);
     }
 
     /** Hides the optional page-button group cleanly, without leaving two separators. */
