@@ -18,7 +18,7 @@ test("text is escaped before it goes into the screen's HTML", () => {
 test("styles become CSS, and each underline kind its line style", () => {
   const { window } = load();
   const css = (s) => window.textHtml({ text: "x", s, f: "#ff0000", b: "#000080" });
-  assert.equal(css(1 | 4), '<span style="color:#ff0000;background:#000080;font-weight:700;font-style:italic;">x</span>');
+  assert.equal(css(1 | 4), '<span data-bg="#000080" data-row="0" style="color:#ff0000;font-weight:700;font-style:italic;">x</span>');
   assert.match(css(8), /text-decoration: underline;/);
   assert.match(css(8 | 32), /text-decoration: underline double;/);
   assert.match(css(8 | 64), /text-decoration: underline wavy;/);
@@ -29,10 +29,10 @@ test("styles become CSS, and each underline kind its line style", () => {
   assert.doesNotMatch(css(64), /text-decoration/);
 });
 
-test("a space on a coloured background is drawn as a block in that colour", () => {
+test("spaces on a coloured background stay in the text run", () => {
   const { window } = load();
-  const html = window.rowHtml([{ t: "a" }, { t: "  ", b: "#ff0000" }], "#000000");
-  assert.match(html, /^a<span class="g g\w+" style="width:2ch;color:#ff0000;"><\/span>$/);
+  const html = window.rowHtml([{ t: "a" }, { t: " a b ", b: "#ff0000" }], "#000000", [], 3);
+  assert.equal(html, 'a<span data-bg="#ff0000" data-row="3"> a b </span>');
 });
 
 test("a background equal to the screen's is no background, so its cells join their neighbours", () => {
@@ -40,8 +40,8 @@ test("a background equal to the screen's is no background, so its cells join the
   // Claude's logo: block characters in one colour, then a space on an explicit black
   const html = window.rowHtml([{ t: "██", f: "#d77757" }, { t: " ", b: "#000000" }, { t: "█", f: "#d77757" }], "#000000");
   // the black space is plain text, not a black block; the blocks around it stay one shape each
-  assert.equal((html.match(/class="g /g) || []).length, 2);
-  assert.match(html, /width:2ch;color:#d77757;/);
+  assert.equal((html.match(/class="tile-run"/g) || []).length, 2);
+  assert.match(html, /width:2ch;" data-tiles="██" data-row="0" data-fg="#d77757"/);
   assert.doesNotMatch(html, /#000000/);
 });
 
@@ -49,7 +49,7 @@ test("neighbouring box cells of one colour from different runs become one shape"
   const { window } = load();
   const html = window.rowHtml([{ t: "──", f: "#888888" }, { t: "──", f: "#888888", s: 1 }], "#000000");
   // bold does not matter to a shape; only dim does
-  assert.equal((html.match(/class="g /g) || []).length, 1);
+  assert.equal((html.match(/class="tile-run"/g) || []).length, 1);
   assert.match(html, /width:4ch;/);
 });
 
@@ -104,9 +104,11 @@ test("a link's pieces keep their own colours", () => {
 
 // ------------------------------------------------------------------ cell glyphs
 
-/** The solid rectangles of a glyph mask's path, as [x, y, w, h]. */
+const glyph = (window, cp) => window.tileShapes(String.fromCodePoint(cp), 0, 0, 8, 16, 1);
+
+/** The solid rectangles of a tile path, as [x, y, w, h]. */
 function solidRects(svg) {
-  const d = /<path d="([^"]*)"\/>/.exec(svg);
+  const d = /<path d="([^"]*)" shape-rendering="crispEdges"\/>/.exec(svg);
   if (!d) return [];
   return [...d[1].matchAll(/M([\d.-]+) ([\d.-]+)h([\d.-]+)v([\d.-]+)h[\d.-]+z/g)].map((m) => m.slice(1).map(Number));
 }
@@ -117,77 +119,79 @@ function covers(rects, x, y) {
 
 test("Claude's ⏺ bullet is a dot in the text colour, one cell wide, never the emoji", () => {
   const { window } = load();
-  assert.match(window.glyphSvg(0x23fa), /<circle cx="4" cy="8.5" r="3"\/>/);
+  assert.match(glyph(window, 0x23fa), /<circle cx="4" cy="8.5" r="3"\/>/);
   const html = window.rowHtml([{ t: "⏺", f: "#4eba65" }, { t: " Bash(ls)" }], "#000000");
-  assert.match(html, /^<span class="g g\w+" style="width:1ch;color:#4eba65;"><\/span> Bash\(ls\)$/);
-  assert.doesNotMatch(html, /⏺/);
+  assert.equal(html, '<span class="tile-run" style="width:1ch;" data-tiles="⏺" data-row="0" data-fg="#4eba65"></span> Bash(ls)');
 });
 
 test("a full block fills its cell, and a run of them is one path", () => {
   const { window } = load();
-  const one = window.runSvg("█");
-  assert.match(one, /viewBox="0 0 8 16"/);
+  const one = glyph(window, 0x2588);
   assert.deepEqual(solidRects(one), [[0, 0, 8, 16]]);
-  const three = window.runSvg("███");
-  assert.match(three, /viewBox="0 0 24 16"/);
+  const three = window.tileShapes("███", 0, 0, 8, 16, 1);
   assert.equal((three.match(/<path /g) || []).length, 1, "one path: no seams between cells");
   assert.deepEqual(solidRects(three), [[0, 0, 8, 16], [8, 0, 8, 16], [16, 0, 8, 16]]);
 });
 
 test("half, eighth and quadrant blocks cover their part of the cell", () => {
   const { window } = load();
-  const upperHalf = solidRects(window.glyphSvg(0x2580));
+  const upperHalf = solidRects(glyph(window, 0x2580));
   assert.ok(covers(upperHalf, 4, 2) && !covers(upperHalf, 4, 12));
-  const lowerEighth = solidRects(window.glyphSvg(0x2581));
+  const lowerEighth = solidRects(glyph(window, 0x2581));
   assert.deepEqual(lowerEighth, [[0, 14, 8, 2]]);
-  const upperLeft = solidRects(window.glyphSvg(0x2598)); // ▘
+  const upperLeft = solidRects(glyph(window, 0x2598)); // ▘
   assert.ok(covers(upperLeft, 1, 1));
   assert.ok(!covers(upperLeft, 6, 1) && !covers(upperLeft, 1, 12) && !covers(upperLeft, 6, 12));
-  const threeQuarters = solidRects(window.glyphSvg(0x259b)); // ▛
+  const threeQuarters = solidRects(glyph(window, 0x259b)); // ▛
   assert.ok(covers(threeQuarters, 1, 1) && covers(threeQuarters, 6, 1) && covers(threeQuarters, 1, 12));
   assert.ok(!covers(threeQuarters, 6, 12));
 });
 
 test("shades are partly transparent rectangles", () => {
   const { window } = load();
-  assert.match(window.glyphSvg(0x2591), /fill-opacity="0.25"/);
-  assert.match(window.glyphSvg(0x2593), /fill-opacity="0.75"/);
+  assert.match(glyph(window, 0x2591), /fill-opacity="0.25"/);
+  assert.match(glyph(window, 0x2593), /fill-opacity="0.75"/);
 });
 
 test("box lines reach the cell edges they point to, and no others", () => {
   const { window } = load();
-  const horizontal = solidRects(window.glyphSvg(0x2500)); // ─
-  assert.ok(covers(horizontal, 0, 8) && covers(horizontal, 7.9, 8));
+  const horizontal = solidRects(glyph(window, 0x2500)); // ─
+  assert.ok(covers(horizontal, 0, 7) && covers(horizontal, 7.9, 7));
   assert.ok(!covers(horizontal, 4, 0) && !covers(horizontal, 4, 15.9));
-  const cross = solidRects(window.glyphSvg(0x253c)); // ┼
-  for (const [x, y] of [[0, 8], [7.9, 8], [4, 0], [4, 15.9], [4, 8]]) assert.ok(covers(cross, x, y), `┼ at ${x},${y}`);
-  const corner = solidRects(window.glyphSvg(0x250c)); // ┌
-  assert.ok(covers(corner, 7.9, 8) && covers(corner, 4, 15.9));
-  assert.ok(!covers(corner, 0, 8) && !covers(corner, 4, 0));
+  const cross = solidRects(glyph(window, 0x253c)); // ┼
+  for (const [x, y] of [[0, 7], [7.9, 7], [3, 0], [3, 15.9], [3, 7]]) assert.ok(covers(cross, x, y), `┼ at ${x},${y}`);
+  const corner = solidRects(glyph(window, 0x250c)); // ┌
+  assert.ok(covers(corner, 7.9, 7) && covers(corner, 3, 15.9));
+  assert.ok(!covers(corner, 0, 7) && !covers(corner, 3, 0));
 });
 
 test("heavy lines are twice as thick as light ones", () => {
   const { window } = load();
-  const [light] = solidRects(window.glyphSvg(0x2502)); // │ (one arm per half)
-  const [heavy] = solidRects(window.glyphSvg(0x2503)); // ┃
+  const [light] = solidRects(glyph(window, 0x2502)); // │ (one arm per half)
+  const [heavy] = solidRects(glyph(window, 0x2503)); // ┃
   assert.equal(heavy[2], 2 * light[2]);
 });
 
 test("double lines are two strokes", () => {
   const { window } = load();
-  const rects = solidRects(window.glyphSvg(0x2550)); // ═
+  const rects = solidRects(glyph(window, 0x2550)); // ═
   const rows = new Set(rects.map(([, y]) => y));
   assert.equal(rows.size, 2);
 });
 
-test("each run of glyphs gets one CSS class, made once", () => {
-  const page = load();
-  const a = page.window.runClass("──");
-  assert.equal(page.window.runClass("──"), a);
-  assert.notEqual(page.window.runClass("█"), a);
-  const sheet = page.window.document.head.children[0];
-  assert.equal(sheet.children.length, 2);
-  assert.match(sheet.children[0], /mask-image:url\('data:image\/svg\+xml;utf8,/);
+test("Braille dots stay on a fractional grid across cells, with the Unicode bit order", () => {
+  const { window } = load();
+  const dots = (text) => [...window.tileShapes(text, 0, 0, 7.2, 15, 3)
+    .matchAll(/M([\d.]+) ([\d.]+)a([\d.]+)/g)]
+    .map(([, x, y, r]) => [Number((Number(x) + Number(r)).toFixed(3)), Number(y)]);
+  assert.deepEqual(dots("⠀"), []);
+  assert.deepEqual(dots("⡁⢈"), [[1.8, 1.875], [1.8, 13.125], [12.6, 1.875], [12.6, 13.125]]);
+  const full = dots("⣿⣿");
+  for (const [i, x] of [1.8, 5.4, 9, 12.6].entries()) {
+    assert.deepEqual(full.slice(i * 4, i * 4 + 4), [1.875, 5.625, 9.375, 13.125].map((y) => [x, y]));
+  }
+  assert.match(window.rowHtml([{ t: "⣿⠀⣿", b: "#123456", s: 2 }], "#000000"),
+    /width:3ch;" data-tiles="⣿⠀⣿" data-row="0" data-bg="#123456" data-dim=""/);
 });
 
 // ------------------------------------------------------------------ the list

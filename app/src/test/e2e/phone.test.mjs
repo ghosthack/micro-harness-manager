@@ -218,6 +218,77 @@ test("a web link on the screen is a link that opens in a new tab", async () => {
     && href === "https://e2e.example/path-42" && target === "_blank"), JSON.stringify(links));
 });
 
+test("Braille, box edges and text backgrounds line up across styled runs and rows at 3×", async () => {
+  await send("printf '\\033[2J\\033[H  \\033[97m┌─────┐\\n  │ abc │\\n  │ \\033[1mxyz\\033[22m │\\n  └─────┘\\n"
+    + "  ██\\033[33m██\\n  \\033[97m⣿⣿\\033[96m⣿⣿\\n  \\033[97m⣿⣿⣿⣿\\033[0m\\n"
+    + "  \\033[48;2;65;65;65m> \\033[94m[Image #1]\\033[39m       \\033[0m\\n"
+    + "  \\033[48;2;65;65;65m> \\033[1msome words\\033[22m here\\033[0m\\n"
+    + "tiles-e2e\\n'");
+  await waitText("#screen", /^tiles-e2e$/m);
+  const layer = page.locator("#screen .tile-layer");
+  const png = await layer.screenshot({ scale: "device" });
+  const raster = await page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = "data:image/png;base64," + base64;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0);
+    const { data } = ctx.getImageData(0, 0, image.width, image.height);
+    const brightness = (x, y) => {
+      const i = (y * image.width + x) * 4;
+      return Math.max(data[i], data[i + 1], data[i + 2]);
+    };
+    const bright = (x, y) => brightness(x, y) > 128;
+    const firstRun = document.querySelector('.tile-run[data-tiles="┌─────┐"]');
+    const { width, height } = firstRun.getBoundingClientRect();
+    const cell = width * devicePixelRatio / 7, row = height * devicePixelRatio;
+    const columns = [2.5, 8.5].map((column) => {
+      const centre = Math.round(column * cell);
+      return Array.from({ length: 3 * row - 8 }, (_, i) =>
+        Array.from({ length: 9 }, (_, dx) => Number(bright(centre - 4 + dx, Math.round(row / 2) + 4 + i))).join(""));
+    });
+    const blocks = Array.from({ length: Math.floor(4 * cell) - 2 },
+      (_, i) => bright(Math.round(2 * cell) + 1 + i, Math.round(4.5 * row)));
+    let backgroundGaps = 0;
+    for (let y = 7 * row; y < 9 * row; y++) {
+      for (let x = Math.ceil(2.5 * cell); x < Math.floor(14 * cell); x++) {
+        if (brightness(x, y) < 56) backgroundGaps++;
+      }
+    }
+    function centres(start, end, lit) {
+      const results = [];
+      let first = -1;
+      for (let i = start; i <= end; i++) {
+        if (i < end && lit(i)) {
+          if (first === -1) first = i;
+        } else if (first !== -1) {
+          results.push((first + i - 1) / 2);
+          first = -1;
+        }
+      }
+      return results;
+    }
+    return { columns, blocks, backgroundGaps, cell, row,
+      xs: centres(Math.floor(2 * cell), Math.round(6 * cell), (x) => bright(x, Math.round(5.125 * row))),
+      ys: centres(5 * row, 7 * row, (y) => bright(Math.round(2.25 * cell), y)) };
+  }, png.toString("base64"));
+  for (const stroke of raster.columns) {
+    assert.match(stroke[0], /111/);
+    assert.equal(new Set(stroke).size, 1, "a vertical border keeps the same pixels through each row");
+  }
+  assert.ok(raster.blocks.every(Boolean), "no dark pixel at the colour boundary");
+  assert.equal(raster.backgroundGaps, 0, "the highlighted text and its spaces fill both rows");
+  for (const [centres, pitch] of [[raster.xs, raster.cell / 2], [raster.ys, raster.row / 4]]) {
+    assert.equal(centres.length, 8);
+    for (let i = 1; i < centres.length; i++) {
+      assert.ok(Math.abs(centres[i] - centres[i - 1] - pitch) <= 1, `uneven Braille dots: ${centres}`);
+    }
+  }
+});
+
 test("Close is refused while a command runs, and ⌃C from the keypad stops it", async () => {
   await send("sleep 60");
   await waitState("Working");

@@ -407,7 +407,7 @@ function showSession(name) {
   $("scroller").style.background = "";
   $("scroller").style.color = "";
   $("screen").textContent = known && known.text !== undefined ? known.text : "";
-  if (known && known.styled) drawStyled(known.styled);
+  if (known && known.styled) drawStyled(known.styled, known.columns);
   // nothing to show yet: say it is on its way rather than leave the area black
   $("connecting").hidden = !!(known && known.text && known.text.trim());
   $("progress").hidden = true;
@@ -552,14 +552,16 @@ function renderScreen(view) {
 let drawnStyled = null;
 
 function drawStyled(styled, columns) {
-  const key = JSON.stringify(styled.rows);
+  const key = JSON.stringify([styled, columns]);
   if (key === drawnStyled) return;
   drawnStyled = key;
   const scroller = $("scroller");
   scroller.style.background = styled.bg;
   scroller.style.color = styled.fg;
   const links = findLinks(styled.rows.map((runs) => runs.map((run) => run.t).join("")), columns);
-  $("screen").innerHTML = styled.rows.map((runs, i) => rowHtml(runs, styled.bg, links[i])).join("\n");
+  const screen = $("screen");
+  screen.innerHTML = styled.rows.map((runs, i) => rowHtml(runs, styled.bg, links[i], i)).join("\n");
+  drawCellGeometry(screen);
 }
 
 // Web links on the screen, tapped to open. A long link may run on over several rows: the
@@ -634,24 +636,18 @@ function trimLink(url) {
 }
 
 /**
- * One row as HTML. The row is taken apart into cells and put back together so that every
- * stretch of solid colour becomes one shape: a space on a coloured background is drawn as
- * a full block in that colour, and neighbouring box and block cells of the same colour join
- * into one run (see runSvg), whichever styled run they came from. Separate pieces meeting
- * off a device pixel leave a faint seam; Claude's logo mixes blocks and coloured spaces.
+ * One row as HTML. Adjacent tiles of the same style share a placeholder, which reserves
+ * their width among the text. Keep spaces in their text runs, including on a coloured
+ * background, so the space and the letters are painted on one continuous rectangle.
  */
-function rowHtml(runs, screenBackground, links = []) {
+function rowHtml(runs, screenBackground, links = [], row = 0) {
   const cells = [];
   for (const run of runs) {
     // a background the same as the screen's is no background: Claude's logo paints part of
     // its body on an explicit black, and that must still join the cells beside it
     const b = run.b && run.b !== screenBackground ? run.b : null;
     for (const ch of run.t) {
-      if (ch === " " && b) {
-        cells.push({ ch: "█", f: b, b: null, s: 0, tile: true });
-      } else {
-        cells.push({ ch, f: run.f || null, b, s: run.s || 0, tile: isTile(ch.codePointAt(0)) });
-      }
+      cells.push({ ch, f: run.f || null, b, s: run.s || 0, tile: isTile(ch.codePointAt(0)) });
     }
   }
   for (const link of links) {
@@ -661,7 +657,7 @@ function rowHtml(runs, screenBackground, links = []) {
   let group = null;
   const flush = () => {
     if (!group) return;
-    const inner = group.tile ? tileHtml(group) : textHtml(group);
+    const inner = group.tile ? tileHtml(group, row) : textHtml(group, row);
     html += group.link ? '<a href="' + escapeHtml(group.link) + '" target="_blank" rel="noopener noreferrer">' + inner + "</a>" : inner;
     group = null;
   };
@@ -678,26 +674,26 @@ function rowHtml(runs, screenBackground, links = []) {
   return html;
 }
 
-/** A run of box and block cells: one shape across all of them, in their colour. */
-function tileHtml(group) {
-  let css = "width:" + group.count + "ch;";
-  if (group.f) css += "color:" + group.f + ";";
-  if (group.s & 2) css += "opacity:.6;";
-  const shape = '<span class="g ' + runClass(group.text) + '" style="' + css + '"></span>';
-  return group.b ? '<span style="background:' + group.b + '">' + shape + "</span>" : shape;
+/** A placeholder for a run of tiles. The shared SVG layer paints the run at this position. */
+function tileHtml(group, row) {
+  const fg = group.f ? ' data-fg="' + group.f + '"' : "";
+  const bg = group.b ? ' data-bg="' + group.b + '"' : "";
+  const dim = group.s & 2 ? ' data-dim=""' : "";
+  return '<span class="tile-run" style="width:' + group.count + 'ch;" data-tiles="' + group.text + '" data-row="' + row + '"' + fg + bg + dim + '></span>';
 }
 
-function textHtml(group) {
+function textHtml(group, row = 0) {
   const text = escapeHtml(group.text);
   let css = "";
   if (group.f) css += "color:" + group.f + ";";
-  if (group.b) css += "background:" + group.b + ";";
   if (group.s & 1) css += "font-weight:700;";
   if (group.s & 2) css += "opacity:.6;";
   if (group.s & 4) css += "font-style:italic;";
   const lines = (group.s & 8 ? " underline" : "") + (group.s & 16 ? " line-through" : "");
   if (lines) css += "text-decoration:" + lines + underlineStyle(group.s) + ";";
-  return css ? '<span style="' + css + '">' + text + "</span>" : text;
+  const background = group.b ? ' data-bg="' + group.b + '" data-row="' + row + '"' : "";
+  const style = css ? ' style="' + css + '"' : "";
+  return background || style ? "<span" + background + style + ">" + text + "</span>" : text;
 }
 
 /** The underline's kind (double 32, curly 64, dotted 128, dashed 256) as a CSS line style. */
@@ -716,14 +712,11 @@ function escapeHtml(text) {
 
 // ------------------------------------------------------------------ cell glyphs
 
-// Box drawing (U+2500–257F) and block elements (U+2580–259F) are drawn as shapes that fill
-// their cell exactly, as the Mac window's BoxDrawing does: a font's glyph box is not the
-// cell, so stacked rows of blocks (Claude's logo) and box borders leave gaps and steps.
-// Each shape is an 8 × 16 SVG used as a mask over the text colour, one CSS class per
-// character, made the first time it appears. Light lines are an eighth of the cell wide,
-// heavy twice that, double lines two light strokes a light width apart.
+// Draw boxes, blocks and Braille from cell geometry, as the desktop BoxDrawing does.
+// Box and block edges snap to the same device-pixel grid across runs and rows. Braille
+// keeps its fractional dot centres for an even pitch across cell boundaries.
 
-const GW = 8, GH = 16, LIGHT = 1, HEAVY = 2;
+const GW = 8, GH = 16;
 // URDL arm weights (0 none, 1 light, 2 heavy, 3 double; "d" dashed), as in BoxDrawing.java
 const LINES_1 = ["0101", "0202", "1010", "2020", "d", "d", "d", "d", "d", "d", "d", "d",
   "0110", "0210", "0120", "0220", "0011", "0012", "0021", "0022",
@@ -747,134 +740,184 @@ const QUADRANTS = [4, 8, 1, 1 | 4 | 8, 1 | 8, 1 | 2 | 4, 1 | 2 | 8, 2, 2 | 4, 2 
 // so iPhone Safari falls back to Apple Color Emoji, a grey tile wider than the cell that
 // ignores the run's colour. Drawn as a dot in the text colour instead.
 const RECORD = 0x23fa;
+// Unicode dots 1-2-3-7 down the left column, 4-5-6-8 down the right.
+const BRAILLE_BITS = [[1, 2, 4, 64], [8, 16, 32, 128]];
 
 function isTile(cp) {
-  return (cp >= 0x2500 && cp <= 0x259f) || cp === RECORD;
+  return (cp >= 0x2500 && cp <= 0x259f) || (cp >= 0x2800 && cp <= 0x28ff) || cp === RECORD;
 }
 
-const runClasses = new Map(); // run text -> class name
-let glyphSheet = null;
+/** Paint cell backgrounds and tile glyphs behind the HTML text on a shared grid. */
+function drawCellGeometry(screen) {
+  const runs = screen.querySelectorAll("span[data-row]");
+  if (!runs.length) return;
+  screen.querySelector(".tile-layer")?.remove();
 
-/** The class that draws the run {@code text} as one shape, its CSS rule added on first use. */
-function runClass(text) {
-  let name = runClasses.get(text);
-  if (!name) {
-    name = "g" + runClasses.size.toString(36);
-    runClasses.set(text, name);
-    if (!glyphSheet) {
-      glyphSheet = document.createElement("style");
-      document.head.append(glyphSheet);
-    }
-    const url = "url('data:image/svg+xml;utf8," + encodeURIComponent(runSvg(text)) + "')";
-    glyphSheet.append("." + name + "{-webkit-mask-image:" + url + ";mask-image:" + url + "}\n");
+  // Measure ch in the DOM. The canvas font metrics can differ from Safari's text layout.
+  const ruler = document.createElement("span");
+  ruler.className = "tile-ruler";
+  screen.append(ruler);
+  const cellWidth = ruler.getBoundingClientRect().width / 100;
+  if (!cellWidth) {
+    ruler.remove();
+    return;
   }
-  return name;
-}
 
-/**
- * The mask for a run of tile characters side by side: one SVG spanning the whole run.
- * Every solid rectangle of every character goes into ONE path. Shapes drawn separately are
- * each antialiased on their own, and where two meet off a device-pixel boundary (a cell is
- * 7.2 px wide, 21.6 device pixels on an iPhone) their half-covered edges leave a faint dark
- * seam, every 4 or 5 cells. Within one path a shared edge is interior: no seam.
- */
-function runSvg(text) {
-  const out = { solid: "", parts: [] };
-  let i = 0;
-  for (const ch of text) {
-    glyphInto(ch.codePointAt(0), i * GW, out);
-    i++;
-  }
-  if (out.solid) out.parts.unshift('<path d="' + out.solid + '"/>');
-  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + (GW * i) + " " + GH
-    + '" preserveAspectRatio="none">' + out.parts.join("") + "</svg>";
-}
-
-function glyphSvg(cp) {
-  return runSvg(String.fromCodePoint(cp));
-}
-
-/** One character's shapes, {@code dx} units to the right, added to {@code out}. */
-function glyphInto(cp, dx, out) {
-  const parts = out.parts;
-  const rect = (x, y, w, h, opacity) => {
-    if (!(w > 0 && h > 0)) return;
-    if (opacity) {
-      parts.push('<rect x="' + (x + dx) + '" y="' + y + '" width="' + w + '" height="' + h + '" fill-opacity="' + opacity + '"/>');
-    } else {
-      out.solid += "M" + (x + dx) + " " + y + "h" + w + "v" + h + "h" + (-w) + "z";
-    }
+  const origin = screen.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  const snap = (px) => Math.round(px * scale) / scale;
+  const lineHeight = parseFloat(getComputedStyle(screen).lineHeight);
+  const onGrid = (px) => {
+    const grid = Math.round(px / cellWidth) * cellWidth;
+    // Inline boxes and text round slightly differently. Keep the measured position
+    // when it falls away from a column boundary, e.g. after a wider fallback glyph.
+    return Math.abs(px - grid) < .5 ? grid : px;
   };
-  const stroke = (d) => parts.push('<path transform="translate(' + dx + ' 0)" d="' + d
-    + '" fill="none" stroke="#000" stroke-width="' + LIGHT + '"/>');
-  if (cp === RECORD) {
-    // a dot about a lowercase letter wide, centred on the lowercase height
-    parts.push('<circle cx="' + (dx + GW / 2) + '" cy="8.5" r="3"/>');
-  } else if (cp >= 0x2580) {
-    block(cp, rect);
-  } else {
-    let arms = null;
-    if (cp <= 0x254b) arms = LINES_1[cp - 0x2500];
-    else if (cp >= 0x2550 && cp <= 0x256c) arms = LINES_2[cp - 0x2550];
-    else if (cp >= 0x2574) arms = LINES_3[cp - 0x2574];
-    if (arms && arms !== "d") {
-      const [u, r, d, l] = [...arms].map(Number);
-      if (u === 3 || r === 3 || d === 3 || l === 3) doubleLines(rect, u, r, d, l);
-      else lines(rect, u, r, d, l);
-    } else if ([0x2504, 0x2505, 0x2508, 0x2509, 0x254c, 0x254d].includes(cp)) {
-      dashes(rect, cp >= 0x254c ? 2 : cp >= 0x2508 ? 4 : 3, (cp & 1) === 0 ? LIGHT : HEAVY, true);
-    } else if ([0x2506, 0x2507, 0x250a, 0x250b, 0x254e, 0x254f].includes(cp)) {
-      dashes(rect, cp >= 0x254c ? 2 : cp >= 0x2508 ? 4 : 3, (cp & 1) === 0 ? LIGHT : HEAVY, false);
-    } else if (cp >= 0x256d && cp <= 0x2570) {
-      // ╭ ╮ ╯ ╰: straight to the cell edges, rounded through the centre
-      const cx = GW / 2, cy = GH / 2, radius = Math.min(GW, GH) / 2;
-      const toRight = cp === 0x256d || cp === 0x2570, toBottom = cp === 0x256d || cp === 0x256e;
-      const ex = toRight ? GW : 0, ey = toBottom ? GH : 0;
-      const sx = toRight ? Math.min(cx + radius, ex) : Math.max(cx - radius, ex);
-      const sy = toBottom ? Math.min(cy + radius, ey) : Math.max(cy - radius, ey);
-      stroke("M" + cx + " " + ey + "L" + cx + " " + sy + "Q" + cx + " " + cy + " " + sx + " " + cy + "L" + ex + " " + cy);
-    } else if (cp >= 0x2571 && cp <= 0x2573) {
-      if (cp !== 0x2572) stroke("M" + GW + " 0L0 " + GH);
-      if (cp !== 0x2571) stroke("M0 0L" + GW + " " + GH);
+  let width = 0;
+  let height = 0;
+  const backgrounds = [];
+  const shapes = [];
+  for (const run of runs) {
+    const bounds = run.getBoundingClientRect();
+    const { tiles, fg, bg, dim, row } = run.dataset;
+    const x = onGrid(bounds.left - origin.left);
+    const y = Number(row) * lineHeight;
+    const right = tiles ? x + tiles.length * cellWidth : onGrid(bounds.right - origin.left);
+    const bottom = y + lineHeight;
+    width = Math.max(width, right);
+    height = Math.max(height, bottom);
+    if (bg) {
+      backgrounds.push('<path shape-rendering="crispEdges" fill="' + bg + '" d="'
+        + rectPath(snap(x), snap(y), snap(right), snap(bottom)) + '"/>');
+    }
+    if (tiles) {
+      const color = fg ? ' color="' + fg + '"' : "";
+      const opacity = dim === undefined ? "" : ' opacity=".6"';
+      shapes.push('<g' + color + ' fill="currentColor"' + opacity + '>'
+        + tileShapes(tiles, x, y, cellWidth, lineHeight, scale) + "</g>");
     }
   }
+  ruler.remove();
+  screen.insertAdjacentHTML("beforeend", '<svg class="tile-layer" aria-hidden="true" width="' + Math.ceil(width)
+    + '" height="' + Math.ceil(height) + '">' + backgrounds.join("") + shapes.join("") + "</svg>");
 }
 
-function thickness(weight) {
-  return weight === 2 ? HEAVY : weight === 0 ? 0 : LIGHT;
+function rectPath(left, top, right, bottom) {
+  const width = right - left;
+  return width > 0 && bottom > top ? "M" + left + " " + top + "h" + width + "v" + (bottom - top) + "h" + (-width) + "z" : "";
+}
+
+function tileShapes(text, left, top, width, height, scale) {
+  let solid = "";
+  let dots = "";
+  const parts = [];
+  const sx = width / GW, sy = height / GH;
+  const radius = Math.max(1, Math.min(width / 2, height / 4) * .7) / 2;
+  const light = Math.max(1, Math.round(width * scale / GW));
+  const snap = (px) => Math.round(px * scale) / scale;
+  let column = 0;
+  for (const ch of text) {
+    const x = left + column++ * width;
+    const cp = ch.codePointAt(0);
+    if (cp >= 0x2800 && cp <= 0x28ff) {
+      for (let col = 0; col < 2; col++) {
+        const cx = x + (2 * col + 1) * width / 4;
+        for (let row = 0; row < 4; row++) {
+          if ((cp - 0x2800) & BRAILLE_BITS[col][row]) {
+            const cy = top + (2 * row + 1) * height / 8;
+            dots += "M" + (cx - radius) + " " + cy + "a" + radius + " " + radius + " 0 1 0 " + (2 * radius)
+              + " 0a" + radius + " " + radius + " 0 1 0 " + (-2 * radius) + " 0z";
+          }
+        }
+      }
+    } else if (cp === RECORD) {
+      // A dot about a lowercase letter wide, centred on the lowercase height.
+      parts.push('<circle cx="' + (x + width / 2) + '" cy="' + (top + 8.5 * sy) + '" r="' + (3 * sx) + '"/>');
+    } else if (cp >= 0x2580) {
+      const rect = (dx, dy, w, h, opacity) => {
+        const path = rectPath(snap(x + dx * sx), snap(top + dy * sy), snap(x + (dx + w) * sx), snap(top + (dy + h) * sy));
+        if (opacity) parts.push('<path shape-rendering="crispEdges" d="' + path + '" fill-opacity="' + opacity + '"/>');
+        else solid += path;
+      };
+      block(cp, rect);
+    } else {
+      // Box strokes keep a constant integer thickness even where two columns round
+      // to different widths. Use the same cell edges for adjoining arms.
+      const x0 = Math.round(x * scale), y0 = Math.round(top * scale);
+      const w = Math.round((left + column * width) * scale) - x0;
+      const h = Math.round((top + height) * scale) - y0;
+      const rect = (dx, dy, rw, rh) => {
+        solid += rectPath((x0 + dx) / scale, (y0 + dy) / scale, (x0 + dx + rw) / scale, (y0 + dy + rh) / scale);
+      };
+      const stroke = (d) => parts.push('<path transform="scale(' + 1 / scale + ') translate(' + x0 + ' ' + y0 + ')" d="' + d
+        + '" fill="none" stroke="currentColor" stroke-width="' + light + '"/>');
+      boxShape(cp, w, h, light, rect, stroke);
+    }
+  }
+  if (solid) parts.unshift('<path d="' + solid + '" shape-rendering="crispEdges"/>');
+  if (dots) parts.push('<path d="' + dots + '"/>');
+  return parts.join("");
+}
+
+function boxShape(cp, w, h, light, rect, stroke) {
+  let arms = null;
+  if (cp <= 0x254b) arms = LINES_1[cp - 0x2500];
+  else if (cp >= 0x2550 && cp <= 0x256c) arms = LINES_2[cp - 0x2550];
+  else if (cp >= 0x2574) arms = LINES_3[cp - 0x2574];
+  if (arms && arms !== "d") {
+    const [u, r, d, l] = [...arms].map(Number);
+    if (u === 3 || r === 3 || d === 3 || l === 3) doubleLines(rect, w, h, light, u, r, d, l);
+    else lines(rect, w, h, light, u, r, d, l);
+  } else if (arms === "d" || (cp >= 0x254c && cp <= 0x254f)) {
+    const horizontal = cp < 0x254c ? (cp & 2) === 0 : cp <= 0x254d;
+    const count = cp >= 0x254c ? 2 : cp >= 0x2508 ? 4 : 3;
+    dashes(rect, w, h, count, (cp & 1) === 0 ? light : 2 * light, horizontal);
+  } else if (cp >= 0x256d && cp <= 0x2570) {
+    // ╭ ╮ ╯ ╰: straight to the cell edges, rounded through the centre.
+    const cx = Math.floor((w - light) / 2) + light / 2;
+    const cy = Math.floor((h - light) / 2) + light / 2;
+    const radius = Math.min(w, h) / 2;
+    const toRight = cp === 0x256d || cp === 0x2570, toBottom = cp === 0x256d || cp === 0x256e;
+    const ex = toRight ? w : 0, ey = toBottom ? h : 0;
+    const sx = toRight ? Math.min(cx + radius, ex) : Math.max(cx - radius, ex);
+    const sy = toBottom ? Math.min(cy + radius, ey) : Math.max(cy - radius, ey);
+    stroke("M" + cx + " " + ey + "L" + cx + " " + sy + "Q" + cx + " " + cy + " " + sx + " " + cy + "L" + ex + " " + cy);
+  } else if (cp >= 0x2571 && cp <= 0x2573) {
+    if (cp !== 0x2572) stroke("M" + w + " 0L0 " + h);
+    if (cp !== 0x2571) stroke("M0 0L" + w + " " + h);
+  }
 }
 
 // Light and heavy arms: each reaches past the centre by the perpendicular strokes' half
 // width, so corners and junctions are filled.
-function lines(rect, u, r, d, l) {
-  const tu = thickness(u), tr = thickness(r), td = thickness(d), tl = thickness(l);
+function lines(rect, w, h, light, u, r, d, l) {
+  const tu = u * light, tr = r * light, td = d * light, tl = l * light;
   const vertical = Math.max(tu, td), horizontal = Math.max(tl, tr);
   if (tu > 0) {
     const band = horizontal > 0 ? horizontal : tu;
-    rect((GW - tu) / 2, 0, tu, (GH - band) / 2 + band);
+    rect(Math.floor((w - tu) / 2), 0, tu, Math.floor((h - band) / 2) + band);
   }
   if (td > 0) {
     const band = horizontal > 0 ? horizontal : td;
-    const start = (GH - band) / 2;
-    rect((GW - td) / 2, start, td, GH - start);
+    const start = Math.floor((h - band) / 2);
+    rect(Math.floor((w - td) / 2), start, td, h - start);
   }
   if (tl > 0) {
     const band = vertical > 0 ? vertical : tl;
-    rect(0, (GH - tl) / 2, (GW - band) / 2 + band, tl);
+    rect(0, Math.floor((h - tl) / 2), Math.floor((w - band) / 2) + band, tl);
   }
   if (tr > 0) {
     const band = vertical > 0 ? vertical : tr;
-    const start = (GW - band) / 2;
-    rect(start, (GH - tr) / 2, GW - start, tr);
+    const start = Math.floor((w - band) / 2);
+    rect(start, Math.floor((h - tr) / 2), w - start, tr);
   }
 }
 
 // A double arm is two light strokes at ±t from the single stroke; where it meets a
 // perpendicular arm its outer stroke runs to that arm's far stroke, its inner to the near.
-function doubleLines(rect, u, r, d, l) {
-  const t = LIGHT;
+function doubleLines(rect, w, height, t, u, r, d, l) {
   const up = u > 0, right = r > 0, down = d > 0, left = l > 0;
-  const vx = (GW - t) / 2, hy = (GH - t) / 2;
+  const vx = Math.floor((w - t) / 2), hy = Math.floor((height - t) / 2);
   const vDouble = u === 3 || d === 3, hDouble = l === 3 || r === 3;
   const xa = vDouble ? vx - t : vx, xb = vDouble ? vx + t : vx;
   const ya = hDouble ? hy - t : hy, yb = hDouble ? hy + t : hy;
@@ -885,28 +928,27 @@ function doubleLines(rect, u, r, d, l) {
     else v(vx, 0, left && right ? (down ? yb : ya) + t : yb + t);
   }
   if (down) {
-    if (d === 3) { v(xa, left ? yb : ya, GH); v(xb, right ? yb : ya, GH); }
-    else v(vx, left && right ? (up ? ya : yb) : ya, GH);
+    if (d === 3) { v(xa, left ? yb : ya, height); v(xb, right ? yb : ya, height); }
+    else v(vx, left && right ? (up ? ya : yb) : ya, height);
   }
   if (left) {
     if (l === 3) { h(ya, 0, (up ? xa : xb) + t); h(yb, 0, (down ? xa : xb) + t); }
     else h(hy, 0, up && down ? (right ? xb : xa) + t : xb + t);
   }
   if (right) {
-    if (r === 3) { h(ya, up ? xb : xa, GW); h(yb, down ? xb : xa, GW); }
-    else h(hy, up && down ? (left ? xa : xb) : xa, GW);
+    if (r === 3) { h(ya, up ? xb : xa, w); h(yb, down ? xb : xa, w); }
+    else h(hy, up && down ? (left ? xa : xb) : xa, w);
   }
 }
 
-function dashes(rect, n, t, horizontal) {
-  const length = horizontal ? GW : GH;
+function dashes(rect, w, h, n, t, horizontal) {
+  const length = horizontal ? w : h;
   const slot = length / n;
-  const gap = Math.max(0.5, slot / 3);
+  const dash = Math.max(1, Math.floor(slot - Math.max(1, slot / 3)));
   for (let i = 0; i < n; i++) {
-    const a = i * slot + gap / 2, b = (i + 1) * slot - gap / 2;
-    if (b <= a) continue;
-    if (horizontal) rect(a, (GH - t) / 2, b - a, t);
-    else rect((GW - t) / 2, a, t, b - a);
+    const start = Math.round((i + .5) * slot - dash / 2);
+    if (horizontal) rect(start, Math.floor((h - t) / 2), dash, t);
+    else rect(Math.floor((w - t) / 2), start, t, dash);
   }
 }
 
@@ -1230,8 +1272,9 @@ window.addEventListener("hashchange", route);
 // Turning the phone changes the width: ask for the new size. The keyboard only changes
 // the height, and must not shrink the session.
 window.addEventListener("resize", () => {
-  if (current && !$("session-view").hidden && stream && Math.abs(window.innerWidth - streamWidth) > 20) {
-    openStream();
+  if (current && !$("session-view").hidden) {
+    drawCellGeometry($("screen"));
+    if (stream && Math.abs(window.innerWidth - streamWidth) > 20) openStream();
   }
 });
 // Safari drops the stream while the phone sleeps; pick it up again on return
