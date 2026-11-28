@@ -117,6 +117,12 @@ installer per platform: a DMG for macOS (Apple silicon), an `.exe` for Windows x
 `.deb` for Linux x64, plus portable archives for Windows and Linux. They bundle their own
 Java runtime. See [packaging/README.md](packaging/README.md) for how releases are built.
 
+On macOS, the toolbar highlights **Access** the first time you run each version.
+Open it for shortcuts to macOS settings for protected files, local networking, the Phone
+page firewall, app automation, accessibility, and screen recording. Grant access in
+macOS as needed. **Done** clears the highlight for that version, and **Later** keeps the
+reminder. You can reopen the dialog any time.
+
 ## Run from source
 
 

@@ -218,6 +218,15 @@ public final class AppSettings {
         save(p -> p.setProperty("toolbar.labels", on ? "on" : "off"));
     }
 
+    /** Records which app versions the user has reviewed in the macOS permissions dialog. */
+    public static boolean macPermissionsReviewed(String version) {
+        return Boolean.parseBoolean(load().getProperty("mac.permissions-reviewed." + version));
+    }
+
+    public static void saveMacPermissionsReviewed(String version) {
+        save(p -> p.setProperty("mac.permissions-reviewed." + version, "true"));
+    }
+
     /**
      * Whether the toolbar shows its Page Up/Down controls:
      * {@code toolbar.page-buttons=on|off}. Off (unset, or anything but {@code on} —

@@ -54,7 +54,7 @@ public final class MacWindowAppearance {
         return osName != null && osName.toLowerCase(Locale.ROOT).contains("mac");
     }
 
-    private static boolean isMac() {
+    static boolean isMac() {
         return isMac(System.getProperty("os.name", ""));
     }
 
