@@ -19,7 +19,7 @@ final class MacPermissionsDialog {
     private static final String NETWORK_SETTINGS = "com.apple.Network-Settings.extension";
     private static final String LEGACY_SECURITY = "com.apple.preference.security";
 
-    private enum Pane {
+    enum Pane {
         FILES("Files & Folders", "Use projects in protected folders such as Desktop or Documents.",
                 "Privacy_FilesAndFolders"),
         DISK("Full Disk Access", "Add the app if your workflow needs broader access to protected files.",
@@ -46,7 +46,8 @@ final class MacPermissionsDialog {
         }
 
         String title(int macVersion) {
-            return this == SCREEN_RECORDING && macVersion < 14 ? "Screen Recording" : title;
+            // Sequoia (15) renamed the pane. Sonoma (14) still calls it Screen Recording.
+            return this == SCREEN_RECORDING && macVersion < 15 ? "Screen Recording" : title;
         }
 
         String settingsUrl(int macVersion) {

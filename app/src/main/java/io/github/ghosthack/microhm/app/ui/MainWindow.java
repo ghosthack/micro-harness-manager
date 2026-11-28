@@ -549,7 +549,6 @@ public final class MainWindow extends JFrame {
         addControlButton(toolBar, usageButton);
         if (mac) {
             configureControlButton(macPermissionsButton);
-            macPermissionsButton.setFocusable(true);
             macPermissionsButton.setIcon(LucidIcon.shield(16));
             macPermissionsButton.addActionListener(e -> openMacPermissionsDialog());
             addControlButton(toolBar, macPermissionsButton);
